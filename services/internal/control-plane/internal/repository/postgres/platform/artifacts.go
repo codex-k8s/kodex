@@ -410,23 +410,33 @@ func (repository *Repository) preflightArtifactUpload(
 // при наличии проекта разрешает точную цель и требует artifact.upload на ней либо организации.
 // Access-check errors скрываются как NotFound; helper не создаёт artifact и grant.
 func (repository *Repository) requireArtifactUploadAccess(ctx context.Context, tx pgx.Tx, current scope, projectRef string) error {
+	_, err := repository.requireArtifactUploadAccessUntil(ctx, tx, current, projectRef)
+	return err
+}
+
+// requireArtifactUploadAccessUntil reuses the canonical upload target and evaluator, retaining its
+// finite monotonic allowance. Zero means a currently winning unbounded alternative, not a grant.
+// Callers waiting on owner locks or returning delayed receipts must preserve the earliest bound.
+// requireArtifactUploadAccessUntil использует canonical upload target и evaluator с сохранением
+// finite monotonic allowance. Zero означает currently winning unbounded alternative, не grant.
+// Callers с owner-lock waits либо delayed receipts сохраняют самый ранний bound.
+func (repository *Repository) requireArtifactUploadAccessUntil(ctx context.Context, tx pgx.Tx, current scope, projectRef string) (time.Time, error) {
 	if current.authorityProjectID != "" && projectRef == "" {
-		return errs.ErrNotFound
+		return time.Time{}, errs.ErrNotFound
 	}
 	var target any = organizationTarget(current.organizationRef)
 	if projectRef != "" {
-		resolved, err := repository.resolveAccessTarget(ctx, tx, current.organizationID, entity.AccessScope{
-			ProjectRef: projectRef, ResourceKind: "PROJECT", ResourceRef: projectRef,
-		})
+		resolved, err := repository.resolveAccessTarget(ctx, tx, current.organizationID, entity.AccessScope{ProjectRef: projectRef, ResourceKind: "PROJECT", ResourceRef: projectRef})
 		if err != nil {
-			return err
+			return time.Time{}, err
 		}
 		target = resolved
 	}
-	if err := repository.requireAccess(ctx, tx, current, "artifact.upload", target); err != nil {
-		return errs.ErrNotFound
+	until, err := repository.requireAccessUntil(ctx, tx, current, "artifact.upload", target)
+	if err != nil {
+		return time.Time{}, errs.ErrNotFound
 	}
-	return nil
+	return until, nil
 }
 
 // authorizeArtifactUploadReceipt requires recorded artifact/project/run identity to match the
@@ -495,12 +505,16 @@ func mapObjectStorageError(err error) error {
 // revision/object-version inventory двухфазного purge; terminal persisted receipt сокращается до
 // artifact ref и PURGED state. Это replay metadata, не текущие полномочия purge.
 type artifactPurgeReceipt struct {
-	ArtifactRef    string                `json:"artifactRef"`
-	ArtifactID     string                `json:"artifactId"`
-	ProjectID      string                `json:"projectId"`
-	ProjectRef     string                `json:"projectRef"`
-	Objects        []artifactPurgeObject `json:"objects"`
-	LifecycleState string                `json:"lifecycleState"`
+	ArtifactRef        string                `json:"artifactRef"`
+	ArtifactID         string                `json:"artifactId"`
+	ProjectID          string                `json:"projectId"`
+	ProjectRef         string                `json:"projectRef"`
+	Objects            []artifactPurgeObject `json:"objects"`
+	LifecycleState     string                `json:"lifecycleState"`
+	ClaimOwner         string                `json:"claimOwner,omitempty"`
+	ClaimGeneration    int64                 `json:"claimGeneration,omitempty"`
+	ClaimUntil         time.Time             `json:"claimUntil,omitempty"`
+	DeleteAttemptCount int64                 `json:"deleteAttemptCount,omitempty"`
 }
 
 // artifactPurgeObject pins one revision content object key/version in the prepared purge inventory
@@ -513,18 +527,21 @@ type artifactPurgeObject struct {
 	ObjectVersion string `json:"objectVersion"`
 }
 
-// PurgeArtifact prepares an authorized impact-pinned purge receipt, returns immediately for a
-// terminal replay, otherwise deletes each exact object version and requires Head to confirm
-// absence before finalizing owner state. Partial external deletion leaves PURGE_PENDING for retry;
-// storage errors do not falsely mark the artifact PURGED.
-// PurgeArtifact готовит авторизованную impact-pinned purge receipt, сразу возвращает terminal
-// replay, иначе удаляет точную версию каждого объекта и требует подтверждения отсутствия через
-// Head до завершения owner state. Частичное внешнее удаление оставляет PURGE_PENDING для повтора;
-// storage errors не объявляют artifact PURGED.
+// PurgeArtifact issues actual bounded retention custody and admits each exact revision once in
+// the durable intent receipt before DeleteOnce. Unknown outcomes replay Head only; a stale claim
+// leaves reconciliation to the existing retention job. Current authority and confirmed absence
+// are required before canonical metadata scrub; no retry renews the original execution credit.
+// PurgeArtifact выдаёт actual bounded retention custody и допускает каждую exact revision один
+// раз в durable intent receipt до DeleteOnce. Unknown outcome повторяет только Head; stale claim
+// оставляет reconciliation существующему retention job. Canonical metadata scrub требует current
+// authority и confirmed absence; retry не продлевает original execution credit.
 func (repository *Repository) PurgeArtifact(ctx context.Context, principal value.Principal, mutation value.Mutation, artifactRef, impactDigest string) (string, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
 		return "", err
+	}
+	if mutation.Operation != "artifact.purge" {
+		return "", errs.ErrInvalid
 	}
 	receipt, err := repository.prepareArtifactPurge(ctx, scope, mutation, artifactRef, impactDigest)
 	if err != nil {
@@ -534,7 +551,14 @@ func (repository *Repository) PurgeArtifact(ctx context.Context, principal value
 		return receipt.LifecycleState, nil
 	}
 	for _, object := range receipt.Objects {
-		if err := repository.deleteArtifactObjectAndVerify(ctx, object.ObjectKey, object.ObjectVersion); err != nil {
+		admitted, until, err := repository.admitManualArtifactDelete(ctx, scope, mutation, receipt, object)
+		if err != nil {
+			return "", err
+		}
+		operation, cancel := context.WithDeadline(ctx, until)
+		err = repository.reconcileManualArtifactDelete(operation, object, admitted)
+		cancel()
+		if err != nil {
 			return "", err
 		}
 	}
@@ -579,6 +603,17 @@ func (repository *Repository) prepareArtifactPurge(ctx context.Context, scope sc
 		return artifactPurgeReceipt{}, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	_, initialTarget, err := repository.resolveCommandTarget(ctx, tx, scope, "artifact.purge", "ARTIFACT", artifactRef, "")
+	if err != nil {
+		return artifactPurgeReceipt{}, err
+	}
+	accessUntil, err := repository.requireAccessUntil(ctx, tx, scope, "artifact.purge", initialTarget)
+	if err != nil {
+		return artifactPurgeReceipt{}, concealAccessDenial(err, errs.ErrNotFound)
+	}
+	if err := lockManualPurgeProjectTx(ctx, tx, scope, initialTarget.projectID); err != nil {
+		return artifactPurgeReceipt{}, err
+	}
 	if _, err := tx.Exec(ctx, queryCommandsExecuteLockIdempotencyScope, scope.organizationID, scope.actorID, mutation.Operation, mutation.IdempotencyKey); err != nil {
 		return artifactPurgeReceipt{}, errs.ErrUnavailable
 	}
@@ -586,7 +621,12 @@ func (repository *Repository) prepareArtifactPurge(ctx context.Context, scope sc
 	if err != nil {
 		return artifactPurgeReceipt{}, err
 	}
-	if err := repository.requireAccess(ctx, tx, scope, "artifact.purge", target); err != nil {
+	freshUntil, err := repository.requireAccessUntil(ctx, tx, scope, "artifact.purge", target)
+	if err != nil {
+		return artifactPurgeReceipt{}, concealAccessDenial(err, errs.ErrNotFound)
+	}
+	accessUntil = earlierAccessDeadline(accessUntil, freshUntil)
+	if accessDeadlineExpired(accessUntil) {
 		return artifactPurgeReceipt{}, errs.ErrNotFound
 	}
 	var storedDigest string
@@ -602,8 +642,14 @@ func (repository *Repository) prepareArtifactPurge(ctx context.Context, scope sc
 			(receipt.LifecycleState != "PURGED" && len(receipt.Objects) == 0) {
 			return artifactPurgeReceipt{}, errs.ErrConflict
 		}
+		if accessDeadlineExpired(accessUntil) {
+			return artifactPurgeReceipt{}, errs.ErrNotFound
+		}
 		if err := tx.Commit(ctx); err != nil {
 			return artifactPurgeReceipt{}, errs.ErrConflict
+		}
+		if accessDeadlineExpired(accessUntil) {
+			return artifactPurgeReceipt{}, errs.ErrNotFound
 		}
 		return receipt, nil
 	}
@@ -639,20 +685,66 @@ func (repository *Repository) prepareArtifactPurge(ctx context.Context, scope sc
 	if impactState != receipt.LifecycleState || impact.Digest != impactDigest || !impact.Permitted {
 		return artifactPurgeReceipt{}, errs.ErrConflict
 	}
-	tag, err := tx.Exec(ctx, queryArtifactsPurgeMarkPending, pgx.StrictNamedArgs{
-		"artifact_id":      receipt.ArtifactID,
-		"expected_version": version,
-	})
-	if err != nil || tag.RowsAffected() != 1 {
+	accessUntil, err = repository.recheckManualPurgeAccess(ctx, tx, scope, target, accessUntil)
+	if err != nil {
+		return artifactPurgeReceipt{}, err
+	}
+	if err := repository.requireManualDeleteCapability(ctx); err != nil {
+		return artifactPurgeReceipt{}, err
+	}
+	receipt.ClaimOwner, err = newRef("apg")
+	if err != nil {
+		return artifactPurgeReceipt{}, errs.ErrUnavailable
+	}
+	var finiteUntil any
+	if !accessUntil.IsZero() {
+		finiteUntil = accessUntil
+	}
+	if err := tx.QueryRow(ctx, queryArtifactManualPurgeIssue, pgx.StrictNamedArgs{
+		"artifact_id": receipt.ArtifactID, "organization_id": scope.organizationID,
+		"expected_version": version, "access_until": finiteUntil,
+	}).Scan(&receipt.ClaimGeneration, &receipt.ClaimUntil); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return artifactPurgeReceipt{}, errs.ErrConflict
+		}
+		return artifactPurgeReceipt{}, mapWriteError(err)
+	}
+	if !time.Now().Before(receipt.ClaimUntil) {
 		return artifactPurgeReceipt{}, errs.ErrConflict
 	}
 	receipt.LifecycleState = "PURGE_PENDING"
-	encoded, _ := json.Marshal(receipt)
-	if _, err := tx.Exec(ctx, queryArtifactsUploadartifactInsertIdempotencyReceiptsOrganizationIdOperationIntentDigest,
-		scope.organizationID, scope.actorID, mutation.Operation, mutation.IdempotencyKey, mutation.IntentDigest, encoded); err != nil {
+	encoded, err := json.Marshal(receipt)
+	if err != nil {
+		return artifactPurgeReceipt{}, errs.ErrUnavailable
+	}
+	if _, err := tx.Exec(ctx, queryArtifactManualPurgeStore, pgx.StrictNamedArgs{
+		"organization_id": scope.organizationID, "actor_id": scope.actorID,
+		"idempotency_key": mutation.IdempotencyKey, "intent_digest": mutation.IntentDigest, "response_payload": encoded,
+	}); err != nil {
+		return artifactPurgeReceipt{}, mapWriteError(err)
+	}
+	tag, err := tx.Exec(ctx, queryArtifactsPurgeMarkPending, pgx.StrictNamedArgs{
+		"artifact_id": receipt.ArtifactID, "expected_version": version, "claim_owner": receipt.ClaimOwner,
+		"claim_generation": receipt.ClaimGeneration, "claim_until": receipt.ClaimUntil,
+		"actor_id": scope.actorID, "idempotency_key": mutation.IdempotencyKey,
+	})
+	if err != nil {
+		return artifactPurgeReceipt{}, mapWriteError(err)
+	}
+	if tag.RowsAffected() != 1 {
+		return artifactPurgeReceipt{}, errs.ErrConflict
+	}
+	accessUntil, err = repository.recheckManualPurgeAccess(ctx, tx, scope, target, accessUntil)
+	if err != nil {
+		return artifactPurgeReceipt{}, err
+	}
+	if !time.Now().Before(receipt.ClaimUntil) {
 		return artifactPurgeReceipt{}, errs.ErrConflict
 	}
 	if err := tx.Commit(ctx); err != nil {
+		return artifactPurgeReceipt{}, errs.ErrConflict
+	}
+	if !time.Now().Before(receipt.ClaimUntil) || accessDeadlineExpired(accessUntil) {
 		return artifactPurgeReceipt{}, errs.ErrConflict
 	}
 	return receipt, nil
@@ -674,6 +766,15 @@ func (repository *Repository) finalizeArtifactPurge(ctx context.Context, scope s
 		return "", errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	_, initialTarget, err := repository.resolveCommandTarget(ctx, tx, scope, "artifact.purge", "ARTIFACT", receipt.ArtifactRef, "")
+	if err != nil {
+		return "", err
+	}
+	accessUntil, err := repository.requireAccessUntil(ctx, tx, scope, "artifact.purge", initialTarget)
+	if err != nil {
+		return "", concealAccessDenial(err, errs.ErrNotFound)
+	}
+	accessUntil = earlierAccessDeadline(accessUntil, receipt.ClaimUntil)
 	if _, err := tx.Exec(ctx, queryCommandsExecuteLockIdempotencyScope, scope.organizationID, scope.actorID, mutation.Operation, mutation.IdempotencyKey); err != nil {
 		return "", errs.ErrUnavailable
 	}
@@ -681,8 +782,12 @@ func (repository *Repository) finalizeArtifactPurge(ctx context.Context, scope s
 	if err != nil {
 		return "", err
 	}
-	if err := repository.requireAccess(ctx, tx, scope, "artifact.purge", target); err != nil {
-		return "", errs.ErrNotFound
+	accessUntil, err = repository.recheckManualPurgeAccess(ctx, tx, scope, target, accessUntil)
+	if err != nil {
+		return "", err
+	}
+	if err := repository.lockManualArtifactPurge(ctx, tx, scope, mutation, receipt); err != nil {
+		return "", err
 	}
 	var artifactID, projectID, projectRef, lifecycle string
 	var version int64
@@ -690,7 +795,10 @@ func (repository *Repository) finalizeArtifactPurge(ctx context.Context, scope s
 	if err := tx.QueryRow(ctx, queryArtifactsPurgeSelectArtifactContentForUpdate, pgx.StrictNamedArgs{
 		"organization_id": scope.organizationID, "artifact_ref": receipt.ArtifactRef,
 	}).Scan(&artifactID, &projectID, &projectRef, &version, &lifecycle, &inventory); err != nil {
-		return "", errs.ErrNotFound
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", errs.ErrNotFound
+		}
+		return "", mapWriteError(err)
 	}
 	var objects []artifactPurgeObject
 	if json.Unmarshal(inventory, &objects) != nil || artifactID != receipt.ArtifactID || projectID != receipt.ProjectID || projectRef != receipt.ProjectRef || lifecycle != "PURGE_PENDING" {
@@ -720,10 +828,18 @@ func (repository *Repository) finalizeArtifactPurge(ctx context.Context, scope s
 	if _, err := tx.Exec(ctx, queryArtifactsPurgeDeleteRevisions, pgx.StrictNamedArgs{"artifact_id": receipt.ArtifactID}); err != nil {
 		return "", errs.ErrConflict
 	}
+	var deleteAttemptCount int64
+	if err := tx.QueryRow(ctx, queryArtifactManualPurgeAttemptCount, pgx.StrictNamedArgs{
+		"organization_id": scope.organizationID, "actor_id": scope.actorID, "idempotency_key": mutation.IdempotencyKey,
+		"intent_digest": mutation.IntentDigest,
+	}).Scan(&deleteAttemptCount); err != nil {
+		return "", errs.ErrConflict
+	}
 	receipt.LifecycleState = "PURGED"
 	storedReceipt := artifactPurgeReceipt{
-		ArtifactRef:    receipt.ArtifactRef,
-		LifecycleState: receipt.LifecycleState,
+		DeleteAttemptCount: deleteAttemptCount,
+		ArtifactRef:        receipt.ArtifactRef,
+		LifecycleState:     receipt.LifecycleState,
 	}
 	encoded, _ := json.Marshal(storedReceipt)
 	updated, err := tx.Exec(ctx, queryArtifactsPurgeUpdateIdempotencyReceipt, pgx.StrictNamedArgs{
@@ -753,8 +869,15 @@ func (repository *Repository) finalizeArtifactPurge(ctx context.Context, scope s
 	if err := repository.emitPlatformEvent(ctx, tx, scope, "ARTIFACT_CHANGED", receipt.ProjectRef, receipt.ArtifactRef, "i18n:ARTIFACT_PURGED"); err != nil {
 		return "", err
 	}
+	accessUntil, err = repository.recheckManualPurgeAccess(ctx, tx, scope, target, accessUntil)
+	if err != nil {
+		return "", err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return "", errs.ErrConflict
+	}
+	if accessDeadlineExpired(accessUntil) {
+		return "", errs.ErrNotFound
 	}
 	return receipt.LifecycleState, nil
 }

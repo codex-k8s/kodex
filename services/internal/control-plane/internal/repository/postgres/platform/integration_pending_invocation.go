@@ -50,6 +50,7 @@ type pendingInvocationRequest struct {
 	grantVersion                                           int64
 	idempotencyKey, intentDigest                           string
 	connectionSnapshotDigest                               string
+	definitionKey                                          string
 	intentParts                                            []string
 	allowPending                                           bool
 }
@@ -131,6 +132,11 @@ func (repository *Repository) rejoinPendingInvocationTx(ctx context.Context, tx 
 	if count > 1 || (aliasRef != "" && result == nil) {
 		return nil, errs.ErrConflict
 	}
+	if result != nil && request.definitionKey == "email" {
+		if _, err := repository.requireEmailInvocationMailboxTx(ctx, tx, current, result.ref); err != nil {
+			return nil, err
+		}
+	}
 	if result == nil || aliasRef != "" {
 		return result, nil
 	}
@@ -146,21 +152,23 @@ func (repository *Repository) rejoinPendingInvocationTx(ctx context.Context, tx 
 	if origin == nil || origin.InvocationRef != result.ref || origin.ConnectionSnapshotDigest != request.connectionSnapshotDigest {
 		return nil, errs.ErrConflict
 	}
-	choice, err := repository.selectPersonalInvocationCredentialTx(ctx, tx, current.organizationID, result.ref)
-	if err != nil {
-		return nil, err
-	}
-	if choice.context.policy == entity.IntegrationCredentialInitiatorRequired {
-		var matches bool
-		if err := tx.QueryRow(ctx, queryPendingInvocationPersonalPin, pgx.StrictNamedArgs{
-			"organization_id": current.organizationID, "invocation_ref": result.ref,
-			"binding_id": choice.bindingID, "binding_generation": choice.selection.BindingGeneration,
-			"credential_ref": choice.selection.Credential.Ref, "configuration_digest": choice.configurationDigest,
-			"resource_permission_profile": choice.selection.ResourcePermissionProfile,
-		}).Scan(&matches); err != nil {
-			return nil, serializableTransactionError(err, errs.ErrUnavailable)
-		} else if !matches {
-			return nil, errs.ErrForbidden
+	if request.definitionKey != "email" {
+		choice, err := repository.selectPersonalInvocationCredentialTx(ctx, tx, current.organizationID, result.ref)
+		if err != nil {
+			return nil, err
+		}
+		if choice.context.policy == entity.IntegrationCredentialInitiatorRequired {
+			var matches bool
+			if err := tx.QueryRow(ctx, queryPendingInvocationPersonalPin, pgx.StrictNamedArgs{
+				"organization_id": current.organizationID, "invocation_ref": result.ref,
+				"binding_id": choice.bindingID, "binding_generation": choice.selection.BindingGeneration,
+				"credential_ref": choice.selection.Credential.Ref, "configuration_digest": choice.configurationDigest,
+				"resource_permission_profile": choice.selection.ResourcePermissionProfile,
+			}).Scan(&matches); err != nil {
+				return nil, serializableTransactionError(err, errs.ErrUnavailable)
+			} else if !matches {
+				return nil, errs.ErrForbidden
+			}
 		}
 	}
 	if err := storePendingInvocationReceiptTx(ctx, tx, current, request, result.ref); err != nil {

@@ -5,6 +5,7 @@ import { runtimeSecretReauthSuggestionStorageKey } from "@/features/runtime-secr
 import { environmentDraftReauthKey } from "@/features/runtime/environment-draft-reauth";
 import { emailAttemptStorageKey } from "@/features/integrations/email-attempt";
 import { mailboxCredentialRecoveryKey } from "@/features/integrations/email-credential-recovery";
+import { mailboxSetupRecoveryKey } from "@/features/integrations/personal-email-recovery";
 import { gitSourceRecoveryKey } from "@/features/managed-configurations/git-source";
 import { clearWriteBackRecovery } from "@/features/managed-configurations/writeback/model";
 import { clearPublicationAttempts } from "@/features/runtime/publication-attempt";
@@ -355,6 +356,7 @@ export const useSessionStore = defineStore("session", () => {
     window.sessionStorage.removeItem(runtimeSecretReauthSuggestionStorageKey);
     window.sessionStorage.removeItem(emailAttemptStorageKey);
     window.sessionStorage.removeItem(mailboxCredentialRecoveryKey);
+    window.sessionStorage.removeItem(mailboxSetupRecoveryKey);
     window.sessionStorage.removeItem(gitSourceRecoveryKey);
     clearWriteBackRecovery(window.sessionStorage);
     clearPublicationAttempts(window.sessionStorage);

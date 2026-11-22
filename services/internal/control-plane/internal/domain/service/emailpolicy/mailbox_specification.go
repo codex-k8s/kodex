@@ -27,8 +27,8 @@ const maxMailboxPublicInteger int64 = 1<<53 - 1
 // MailboxBinding предоставляет точные server-owned pins mailbox, организации, подключения, ревизии
 // и поколения credentials после разрешения существующего владения.
 type MailboxBinding struct {
-	Ref, OrganizationRef, ConnectionRef string
-	Revision, CredentialGeneration      int64
+	Ref, OrganizationRef, ConnectionRef                       string
+	Revision, CredentialGeneration, CredentialOwnerGeneration int64
 }
 
 // BoundSpecification allows incomplete drafts while bounding nonnegative ports, public integers,
@@ -83,10 +83,14 @@ func MaterializeMailbox(spec entity.EmailMailboxSpecification, binding MailboxBi
 	if err := BoundSpecification(spec); err != nil {
 		return api.Mailbox{}, err
 	}
+	if err := ValidateProviderProfile(spec); err != nil {
+		return api.Mailbox{}, err
+	}
 	mailbox := api.Mailbox{
 		Id: binding.Ref, TenantId: binding.OrganizationRef, ConnectionId: binding.ConnectionRef,
 		Revision: binding.Revision, CredentialGeneration: binding.CredentialGeneration,
-		Enabled: spec.Enabled, ReceiveProtocol: spec.ReceiveProtocol,
+		CredentialOwnerGeneration: binding.CredentialOwnerGeneration,
+		Enabled:                   spec.Enabled, ReceiveProtocol: spec.ReceiveProtocol,
 		AllowedFolders: slices.Clone(spec.AllowedFolders), ArchiveFolder: spec.ArchiveFolder, DraftsFolder: spec.DraftsFolder,
 		Folder: spec.Folder, Sender: spec.Sender, EnvelopeFrom: spec.Sender, ReplyTo: spec.ReplyTo,
 		Recipients: slices.Clone(spec.Recipients), HelloName: spec.HelloName, Smtp: spec.SMTP,

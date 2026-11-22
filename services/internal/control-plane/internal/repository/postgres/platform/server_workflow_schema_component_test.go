@@ -71,6 +71,11 @@ func TestServerWorkflowMigrationProofComponent(t *testing.T) {
 			// Профили031+ отклоняют эти изменения до inverse projection; старые профили сохраняют
 			// явные false-поля. Другая ошибка SQL либо transport не считается успехом проверки.
 			version := workspaceComponentSchemaVersion(t, ctx, conn)
+			if version == workflowFileProvenanceFixtureVersion {
+				assertWorkflowFileProvenanceCatalog(t, ctx, conn, fixture.name == "canonical")
+				return
+			}
+
 			pdlcRejection := version >= 20261029000300 &&
 				(fixture.name == "disabled-workflow-guard" || fixture.name == "public-workflow-execute")
 			personalRejection := version >= 20261106000100 &&

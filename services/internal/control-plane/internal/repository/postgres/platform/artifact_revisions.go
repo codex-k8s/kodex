@@ -104,6 +104,11 @@ func (repository *Repository) GetArtifactRevision(ctx context.Context, principal
 	if err != nil {
 		return entity.ArtifactRevision{}, err
 	}
+	origin, err := readKubernetesCaptureOrigin(ctx, tx, current, ref, revisionRef)
+	if err != nil {
+		return entity.ArtifactRevision{}, err
+	}
+	item.CaptureOrigin = origin
 	if tx.Commit(ctx) != nil {
 		return entity.ArtifactRevision{}, errs.ErrUnavailable
 	}
@@ -188,6 +193,13 @@ func (repository *Repository) ListArtifactRevisions(ctx context.Context, princip
 	rows.Close()
 	if rowErr != nil {
 		return nil, 0, "", errs.ErrUnavailable
+	}
+	for index := range items {
+		origin, err := readKubernetesCaptureOrigin(ctx, tx, current, ref, items[index].Ref)
+		if err != nil {
+			return nil, 0, "", err
+		}
+		items[index].CaptureOrigin = origin
 	}
 	next := ""
 	if len(items) > int(page.Size) {

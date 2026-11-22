@@ -24,6 +24,8 @@ export interface IntegrationGrantSelection {
   capabilityKey: string;
   approvalPolicy: IntegrationGrantInput["approvalPolicy"];
   approvalScopePaths?: string[];
+  kubernetesNamespace?: string;
+  kubernetesGrantRef?: string;
 }
 
 type CandidatePage =

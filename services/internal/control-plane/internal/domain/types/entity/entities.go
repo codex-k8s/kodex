@@ -9,6 +9,7 @@ package entity
 import (
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
@@ -1025,6 +1026,8 @@ type RunGraph struct {
 // решениями и последствиями, происхождением вложений и необязательным намерением интеграции. Поля
 // State и Decision сами не являются серверным подтверждением.
 type OwnerGate struct {
+	KubernetesChild *KubernetesOwnerGateChild
+
 	// ResolutionKind separates supersession from an owner cancellation or expiry.
 	// ResolutionKind отличает supersession от owner cancellation либо expiry.
 	ResolutionKind                                                  string                 `json:",omitempty"`
@@ -1079,6 +1082,7 @@ type Artifact struct {
 	Bindings, NextActions                                                     []string
 	CreatedAt                                                                 time.Time
 	DeletedAt, PurgeAfter                                                     *time.Time
+	CaptureOrigin                                                             *KubernetesArtifactCaptureOrigin
 }
 
 // ArtifactRevision records one exact file revision's digest/size/media/scan/source metadata and
@@ -1090,6 +1094,7 @@ type ArtifactRevision struct {
 	Revision, SizeBytes                                              int64
 	PreviewAvailable                                                 bool
 	CreatedAt                                                        time.Time
+	CaptureOrigin                                                    *KubernetesArtifactCaptureOrigin
 }
 
 // ArtifactImpact summarizes a proposed artifact action under version/digest pins,
@@ -1258,6 +1263,7 @@ type IntegrationConfigurationField struct {
 // готовность адаптера, возможности, поля конфигурации и счётчики подключений. CredentialSecretKey —
 // имя поля, не содержимое секрета или право его загрузки.
 type IntegrationDefinition struct {
+	CredentialDelivery                                                 integrationpackage.CredentialDelivery
 	NextActions                                                        []string
 	Version, ConnectionCount, HealthyConnectionCount                   int64
 	Key, Name, Description, Category, SchemaVersion, DefinitionVersion string
@@ -1313,6 +1319,9 @@ type IntegrationGrant struct {
 // точную ревизию credentials, возможности, grants, проверки и жизненный цикл. Названия masked и public
 // сами произвольные вложенные значения автоматически не скрывают.
 type IntegrationConnection struct {
+	KubernetesSetupRequirements                                             *KubernetesIdentitySetupRequirements
+	CredentialDelivery                                                      integrationpackage.CredentialDelivery
+	BrokerIdentity                                                          *IntegrationBrokerIdentityRevision `json:"-"`
 	CredentialPolicy                                                        IntegrationCredentialPolicy
 	TestRequiresApproval                                                    bool
 	Ref, DefinitionKey, DefinitionName, Name, State, MaskedCredentialsState string

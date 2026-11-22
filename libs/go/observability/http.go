@@ -60,9 +60,16 @@ func (writer *httpStatusWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 // Flush forwards flushing only when supported by the underlying writer, without inspecting or buffering response data.
 // Flush передаёт сброс только при поддержке исходным writer без просмотра и буферизации данных ответа.
 func (writer *httpStatusWriter) Flush() {
-	if flusher, ok := writer.ResponseWriter.(http.Flusher); ok {
-		flusher.Flush()
+	_ = writer.FlushError()
+}
+
+// FlushError preserves native flush failures through the telemetry wrapper and records an implicit successful status without retaining response bytes.
+// FlushError сохраняет ошибки native flush через обёртку телеметрии и записывает неявный успешный статус без удержания байтов ответа.
+func (writer *httpStatusWriter) FlushError() error {
+	if writer.status == 0 {
+		writer.status = http.StatusOK
 	}
+	return http.NewResponseController(writer.ResponseWriter).Flush()
 }
 
 // HTTPMiddleware uses the caller's route normalizer and a closed method set for server spans, reports status and a fixed panic error, then rethrows the original panic without recording request data.

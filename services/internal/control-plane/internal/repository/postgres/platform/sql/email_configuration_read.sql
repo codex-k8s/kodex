@@ -6,6 +6,9 @@ JOIN control_plane.integration_connections c ON c.id=m.connection_id AND c.organ
 WHERE m.organization_id=$1::uuid AND m.ref=$2 AND ($3::bigint=0 OR m.revision=$3)
   AND m.enabled AND NOT m.removed AND m.document_revision=w.revision
   AND c.enabled AND c.definition_key='email'
+  AND c.mailbox_owner_state='ACTIVE'
+  AND m.safe_projection->>'credential_owner_generation'=c.mailbox_owner_generation::text
+  AND (m.safe_projection->>'credential_generation')::bigint>=c.mailbox_credential_version
   AND c.public_configuration->>'mailbox_id'=m.ref
   AND c.public_configuration->>'from_address'=m.safe_projection->>'sender'
 FOR SHARE OF m,w,c;

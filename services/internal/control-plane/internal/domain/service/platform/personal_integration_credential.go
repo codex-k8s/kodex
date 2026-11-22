@@ -65,28 +65,22 @@ func personalIntegrationCredentialCoordinate(value string) bool {
 func ResolveIntegrationCredential(
 	requirement entity.IntegrationCredentialRequirement,
 	initiator entity.IntegrationCredentialInitiator,
-	shared *entity.IntegrationCredentialRevision,
+	shared *entity.IntegrationCredentialSource,
 	personal *entity.PersonalIntegrationCredential,
 	now time.Time,
 ) (entity.IntegrationCredentialSelection, error) {
 	if requirement.ConnectionRef == "" || requirement.CapabilityKey == "" || now.IsZero() ||
 		initiator.OrganizationID == "" || !validIntegrationCredentialDigest(requirement.DefinitionDigest) ||
 		!validIntegrationCredentialDigest(requirement.ConfigurationDigest) ||
-		(requirement.Policy != entity.IntegrationCredentialProjectShared && requirement.Policy != entity.IntegrationCredentialInitiatorRequired) {
+		(requirement.Policy != entity.IntegrationCredentialProjectShared && requirement.Policy != entity.IntegrationCredentialInitiatorRequired) ||
+		!validIntegrationCredentialRequirementKind(requirement) {
 		return entity.IntegrationCredentialSelection{}, errs.ErrInvalid
 	}
 	if !requirement.CredentialRequired {
 		return entity.IntegrationCredentialSelection{}, nil
 	}
 	if requirement.Policy == entity.IntegrationCredentialProjectShared {
-		if shared == nil {
-			return entity.IntegrationCredentialSelection{Problem: entity.IntegrationCredentialMissing}, nil
-		}
-		if !validStoredIntegrationCredential(shared) {
-			return entity.IntegrationCredentialSelection{}, errs.ErrUnavailable
-		}
-		copy := *shared
-		return entity.IntegrationCredentialSelection{Credential: &copy}, nil
+		return selectIntegrationCredentialSource(requirement, shared, now)
 	}
 	resourceContract, resourceCheck := integrationpackage.CredentialResourcePermissionContractForProfile(requirement.DefinitionKey, requirement.CapabilityKey, requirement.ResourcePermissionProfile)
 	if resourceCheck && requirement.ResourcePermissionProfile != resourceContract.Profile || !resourceCheck && requirement.ResourcePermissionProfile != "" {
@@ -124,14 +118,27 @@ func ResolveIntegrationCredential(
 	if personal.ExpiresAt != nil && !personal.ExpiresAt.After(now) {
 		return entity.IntegrationCredentialSelection{Problem: entity.IntegrationCredentialExpired}, nil
 	}
-	if personal.Credential == nil {
-		return entity.IntegrationCredentialSelection{Problem: entity.IntegrationCredentialMissing}, nil
-	}
-	if !validStoredIntegrationCredential(personal.Credential) {
+	if personal.Kind != entity.IntegrationCredentialToken && personal.Kind != entity.IntegrationCredentialBrokerIdentity {
 		return entity.IntegrationCredentialSelection{}, errs.ErrUnavailable
 	}
-	if personal.VerifiedCredentialRef != personal.Credential.Ref ||
-		personal.VerifiedDefinitionDigest != requirement.DefinitionDigest ||
+	if personal.Kind != requirement.Kind {
+		return entity.IntegrationCredentialSelection{Problem: entity.IntegrationCredentialCheckRequired}, nil
+	}
+	if personal.Kind == entity.IntegrationCredentialToken && personal.BrokerPurpose != "" ||
+		personal.Kind == entity.IntegrationCredentialBrokerIdentity && personal.BrokerPurpose != requirement.BrokerPurpose {
+		return entity.IntegrationCredentialSelection{}, errs.ErrUnavailable
+	}
+	selection, err := selectIntegrationCredentialSource(requirement, &entity.IntegrationCredentialSource{
+		Kind: personal.Kind, Credential: personal.Credential, BrokerIdentity: personal.BrokerIdentity,
+	}, now)
+	if err != nil || selection.Problem != "" {
+		return selection, err
+	}
+	verified := personal.Kind == entity.IntegrationCredentialToken && personal.VerifiedBrokerIdentityRef == "" &&
+		personal.VerifiedCredentialRef == selection.Credential.Ref ||
+		personal.Kind == entity.IntegrationCredentialBrokerIdentity && personal.VerifiedCredentialRef == "" &&
+			personal.VerifiedBrokerIdentityRef == selection.BrokerIdentity.Ref
+	if !verified || personal.VerifiedDefinitionDigest != requirement.DefinitionDigest ||
 		personal.VerifiedConfigurationDigest != requirement.ConfigurationDigest {
 		return entity.IntegrationCredentialSelection{Problem: entity.IntegrationCredentialCheckRequired}, nil
 	}
@@ -153,9 +160,10 @@ func ResolveIntegrationCredential(
 	} else if !containsString(personal.VerifiedCapabilities, requirement.CapabilityKey) {
 		return entity.IntegrationCredentialSelection{Problem: entity.IntegrationCredentialUnconfirmed}, nil
 	}
-	copy := *personal.Credential
-	return entity.IntegrationCredentialSelection{Credential: &copy, PersonalBindingRef: personal.Ref, BindingGeneration: personal.Generation,
-		ResourcePermissionProfile: requirement.ResourcePermissionProfile}, nil
+	selection.PersonalBindingRef = personal.Ref
+	selection.BindingGeneration = personal.Generation
+	selection.ResourcePermissionProfile = requirement.ResourcePermissionProfile
+	return selection, nil
 }
 
 // PreflightIntegrationCredentials reports every known unusable requirement in stable owner order.
@@ -167,7 +175,7 @@ func ResolveIntegrationCredential(
 func PreflightIntegrationCredentials(
 	requirements []entity.IntegrationCredentialRequirement,
 	initiator entity.IntegrationCredentialInitiator,
-	shared map[string]*entity.IntegrationCredentialRevision,
+	shared map[string]*entity.IntegrationCredentialSource,
 	personal map[string]*entity.PersonalIntegrationCredential,
 	now time.Time,
 ) ([]entity.IntegrationCredentialPreflightIssue, error) {
@@ -185,7 +193,8 @@ func PreflightIntegrationCredentials(
 		seen[key] = struct{}{}
 		if previous, exists := connections[requirement.ConnectionRef]; exists &&
 			(previous.DefinitionDigest != requirement.DefinitionDigest || previous.ConfigurationDigest != requirement.ConfigurationDigest ||
-				previous.Policy != requirement.Policy || previous.CredentialRequired != requirement.CredentialRequired) {
+				previous.Policy != requirement.Policy || previous.CredentialRequired != requirement.CredentialRequired ||
+				previous.Kind != requirement.Kind || previous.BrokerPurpose != requirement.BrokerPurpose || previous.BrokerTargetRef != requirement.BrokerTargetRef) {
 			return nil, errs.ErrInvalid
 		}
 		connections[requirement.ConnectionRef] = requirement
@@ -198,6 +207,64 @@ func PreflightIntegrationCredentials(
 		}
 	}
 	return issues, nil
+}
+
+// validIntegrationCredentialRequirementKind accepts one closed transport selected by the pinned
+// definition and current owner target; neither generic tokens nor unknown purposes become broker identities.
+// validIntegrationCredentialRequirementKind принимает один closed transport из pinned definition
+// и current owner target; generic tokens и неизвестные purposes не становятся broker identities.
+func validIntegrationCredentialRequirementKind(requirement entity.IntegrationCredentialRequirement) bool {
+	switch requirement.Kind {
+	case entity.IntegrationCredentialToken:
+		return requirement.BrokerPurpose == "" && requirement.BrokerTargetRef == ""
+	case entity.IntegrationCredentialBrokerIdentity:
+		return requirement.BrokerPurpose.Valid() && personalIntegrationCredentialCoordinate(requirement.BrokerTargetRef)
+	default:
+		return false
+	}
+}
+
+// selectIntegrationCredentialSource validates and copies a single representation without reading a
+// Secret. Broker metadata can never satisfy the generic token branch or select a different target.
+// selectIntegrationCredentialSource проверяет и копирует одно представление без чтения Secret.
+// Broker metadata не удовлетворяют generic token branch и не выбирают другой target.
+func selectIntegrationCredentialSource(requirement entity.IntegrationCredentialRequirement, source *entity.IntegrationCredentialSource, now time.Time) (entity.IntegrationCredentialSelection, error) {
+	if source == nil {
+		return entity.IntegrationCredentialSelection{Problem: entity.IntegrationCredentialMissing}, nil
+	}
+	if source.Kind != requirement.Kind || source.Credential != nil && source.BrokerIdentity != nil {
+		return entity.IntegrationCredentialSelection{}, errs.ErrUnavailable
+	}
+	switch source.Kind {
+	case entity.IntegrationCredentialToken:
+		if source.BrokerIdentity != nil {
+			return entity.IntegrationCredentialSelection{}, errs.ErrUnavailable
+		}
+		if source.Credential == nil {
+			return entity.IntegrationCredentialSelection{Problem: entity.IntegrationCredentialMissing}, nil
+		}
+		if !validStoredIntegrationCredential(source.Credential) {
+			return entity.IntegrationCredentialSelection{}, errs.ErrUnavailable
+		}
+		copy := *source.Credential
+		return entity.IntegrationCredentialSelection{Kind: source.Kind, Credential: &copy}, nil
+	case entity.IntegrationCredentialBrokerIdentity:
+		if source.Credential != nil {
+			return entity.IntegrationCredentialSelection{}, errs.ErrUnavailable
+		}
+		if source.BrokerIdentity == nil {
+			return entity.IntegrationCredentialSelection{Problem: entity.IntegrationCredentialMissing}, nil
+		}
+		identity := source.BrokerIdentity
+		if !identity.ValidMetadata() || identity.CreatedAt.After(now) ||
+			identity.Purpose != requirement.BrokerPurpose || identity.TargetRef != requirement.BrokerTargetRef {
+			return entity.IntegrationCredentialSelection{}, errs.ErrUnavailable
+		}
+		copy := *identity
+		return entity.IntegrationCredentialSelection{Kind: source.Kind, BrokerIdentity: &copy}, nil
+	default:
+		return entity.IntegrationCredentialSelection{}, errs.ErrUnavailable
+	}
 }
 
 // validIntegrationCredentialDigest accepts only canonical SHA256 pins, never normalized input.

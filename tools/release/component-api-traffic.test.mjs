@@ -1,6 +1,15 @@
+import {workflowFileUnboundRestoreIntent} from './workflow-file-provenance-migration-contract.mjs';
+import {workflowFileUnboundAPISchema} from './workflow-file-provenance-unbound-api.mjs';
+import {validateMigrationAPITerminal} from './component-migration-api-terminal.mjs';
 import {authorityReadbackContract} from './authority-readback-targets.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {existsSync,mkdtempSync,readFileSync,rmSync,writeFileSync} from 'node:fs';
+import {execFileSync,spawnSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {readMigrationAPIAdmission} from './component-migration-api-admission.mjs';
 import {fingerprint} from './scoped-release.mjs';
 import {telegramPolicyTransition} from './authority-telegram-transition.mjs';
 import {verifyCatalogAdmission,authorityPolicyReadbackContract,catalogPolicyTransition} from './authority-catalog-transition.mjs';
@@ -250,4 +259,265 @@ test('refresh не меняет authority outcome и не разрешает п�
       gate:()=>terminal(f,override),patch:(_,dryRun)=>{if(!dryRun)writes++;}}),/AUTHORITY_(CHANGED|TERMINAL_REQUIRED)/);
     assert.equal(writes,0);assert.equal(journal.events.some(e=>e.type==='INTENT'),false);
   }
+});
+
+
+test('051 API restore связывает отказ с точной 050 и свежей authority 110',()=>{
+ const f=fixture();f.step();ready(f);
+ const {baselineSHA256,...base}=syntheticMigrationBaseline(f.target);
+ const current={...base,policyRevision:110};
+ const authority={...current,baselineSHA256:fingerprint(current)};
+ const migrationRestoreProfile='workflow-file-provenance-backup';
+ f.plan.migrationRestore={profile:migrationRestoreProfile,closedPlanPath:'/tmp/synthetic-close.json',
+  closedEvidencePath:'/tmp/synthetic-close.jsonl',authority};
+ f.journal.events[0].planSHA256=fingerprint(f.plan);
+ const {terminalSHA256,jobName,jobUID,podUID,...body}=syntheticMigrationTerminal({isolation:f.plan,closed:f.closed.plan,deployment:f.deployment,sourceSHA:f.sourceSHA});
+ const makeProof=(change={})=>{
+  const base={...body,schema:'kodex.workflow-file-provenance-api-abort/v1',profile:migrationRestoreProfile,
+   migrationVersion:20261121000100,outcome:'ABORTED_NOT_APPLIED',abortSHA256:'b'.repeat(64),authority,
+   sourceCompatibility:{...body.sourceCompatibility,profile:migrationRestoreProfile},
+   postcondition:{...body.postcondition,profile:migrationRestoreProfile},...change};
+  return {...base,terminalSHA256:fingerprint(base)};
+ };
+ const args={...f,action:'restore',previous:f.traffic(),migrationRestoreProfile,migrationSourceSHA:'a'.repeat(40)};
+ const plan=planComponentAPITraffic({...args,terminal:makeProof()});
+ assert.deepEqual(plan.afterSpec,f.plan.beforeSpec);
+ for(const change of [
+  {migrationVersion:20261121000200},{outcome:'UNKNOWN'},{jobUID},{abortSHA256:''},
+  {authority:{...authority,policyRevision:106}},{serviceUID:'99999999-9999-4999-8999-999999999999'},
+ ]) assert.throws(()=>planComponentAPITraffic({...args,terminal:makeProof(change)}),/TERMINAL_REQUIRED|AUTHORITY_110_REQUIRED/);
+ assert.throws(()=>validateMigrationAPITerminal(makeProof(),plan,Date.parse(body.observedAt)+31000),/BASELINE_PROOF_REJECTED/);
+});
+
+
+test('051 unbound restore принимает только исходный шлюз, authority 110 и terminal backup на ART 050',()=>{
+ const f=fixture();f.step();ready(f);
+ const {baselineSHA256,...base}=syntheticMigrationBaseline(f.target);
+ const current={...base,policyRevision:110},authority={...current,baselineSHA256:fingerprint(current)};
+ const migrationRestoreProfile='workflow-file-provenance-backup';
+ f.plan.migrationRestore={profile:migrationRestoreProfile,closedPlanPath:'/tmp/synthetic-close.json',
+  closedEvidencePath:'/tmp/synthetic-close.jsonl',authority,
+  earlyRecovery:{isolationEvidencePath:'/tmp/synthetic-isolate.jsonl',controlPlane:{uid,specSHA256:'4'.repeat(64)},
+   backupMaintenance:{planPath:'/tmp/backup-stop.json',evidencePath:'/tmp/backup-stop.jsonl',planSHA256:'1'.repeat(64)}}};
+ f.journal.events[0].planSHA256=fingerprint(f.plan);
+ const makeProof=(change={})=>{
+  const body={schema:workflowFileUnboundAPISchema,profile:migrationRestoreProfile,sourceSHA:source,
+   migrationVersion:20261121000100,backup:{outcome:'UNBOUND_NOT_STARTED',stopPlanSHA256:'1'.repeat(64),
+    evidenceSHA256:'2'.repeat(64),owner:{schemaVersion:20261121000100,schemaCatalogSHA256:'3'.repeat(64)}},
+   controlPlane:{uid,specSHA256:'4'.repeat(64)},trafficPlanSHA256:fingerprint(f.plan),targetSHA256:fingerprint(f.target),
+   closePlanSHA256:fingerprint(f.closed.plan),maintenanceID:f.plan.maintenanceID,deploymentUID:uid,serviceUID,
+   apiSpecSHA256:fingerprint(f.deployment.spec),openPlanSHA256:'5'.repeat(64),openEvidenceSHA256:'6'.repeat(64),
+   authority,observedAt:authority.observedAt,...change};
+  return {...body,terminalSHA256:fingerprint(body)};
+ };
+ const args={...f,action:'restore',previous:f.traffic(),migrationRestoreProfile,migrationSourceSHA:source};
+ const proof=makeProof(),plan=planComponentAPITraffic({...args,terminal:proof});
+ assert.deepEqual(plan.afterSpec,f.plan.beforeSpec);
+ for(const change of [{sourceSHA:'b'.repeat(40)},{migrationVersion:20261121000200},
+  {backup:{...proof.backup,outcome:'UNKNOWN'}},{controlPlane:{uid,specSHA256:''}},{trafficPlanSHA256:'0'.repeat(64)}]){
+  assert.throws(()=>planComponentAPITraffic({...args,terminal:makeProof(change)}),/TERMINAL_REQUIRED/);
+ }
+ f.journal.events.push({type:workflowFileUnboundRestoreIntent,restorePlanSHA256:fingerprint(plan)});
+ assert.throws(()=>f.step(),/ISOLATION_CLOSED/);
+ assert.equal(f.effects,1);
+});
+
+
+test('051 изоляция применяет действующую authority 110 и отклоняет старую или просроченную',()=>{
+ const {baselineSHA256,...base}=syntheticMigrationBaseline(fixture().target);
+ const baseline=(policyRevision,observedAt=base.observedAt)=>{
+  const proof={...base,policyRevision,observedAt};
+  return {...proof,baselineSHA256:fingerprint(proof)};
+ };
+ for(const [fresh,allowed] of [[baseline(110),true],[baseline(106),false],
+  [baseline(110,new Date(Date.now()-31000).toISOString()),false]]){
+  const f=fixture();
+  const plan=planComponentAPITraffic({...f,action:'isolate',migrationRestore:{profile:'workflow-file-provenance-backup',
+   closedPlanPath:'/tmp/synthetic-close.json',closedEvidencePath:'/tmp/synthetic-close.jsonl',authority:baseline(110)}});
+  f.journal.events[0].planSHA256=fingerprint(plan);
+  const execute=()=>componentAPITrafficStep({phase:'apply',plan,journal:f.journal,get:()=>f.service,slices:()=>f.slices,pods:()=>f.pods,
+   gate:()=>fresh,patch:(operations,dryRun)=>{
+    if(dryRun)return;
+    f.effects++;
+    f.service.metadata.annotations=operations[3].value;f.service.spec=operations[4].value;
+   }});
+  if(allowed){
+   assert.equal(execute().state,'ISOLATED');
+   assert.equal(f.journal.events.filter(e=>e.type==='BASELINE_CONFIRMED').length,1);
+  }else assert.throws(execute,/CATALOG_BASELINE_PROOF_REJECTED/);
+  assert.equal(f.effects,Number(allowed));
+ }
+});
+
+function workflowIsolationHandoffFixture(sourceSHA='b'.repeat(40)){
+ const f=fixture();f.step();ready(f);
+ const previous=f.traffic();
+ const predecessorRestore=planComponentAPITraffic({...f,action:'restore',previous,terminal:terminal(f)});
+ f.deployment.metadata.annotations=structuredClone(f.closed.plan.beforeAnnotations);
+ const nextClose=planComponentAPIMaintenance(f.deployment,f.target,f.observed,sourceSHA,'close');
+ const closed={plan:nextClose,events:[{type:'HEADER',schema:'kodex.component-api-maintenance-evidence/v1',planSHA256:fingerprint(nextClose),maintenanceID:nextClose.maintenanceID},
+  {type:'INTENT',step:'apply'},{type:'OBSERVED',state:'CLOSED',deploymentUID:uid,maintenanceID:nextClose.maintenanceID}]};
+ f.deployment.spec=structuredClone(nextClose.afterSpec);f.deployment.metadata.annotations=structuredClone(nextClose.afterAnnotations);
+ f.deployment.status={observedGeneration:1,replicas:0,updatedReplicas:0,readyReplicas:0,availableReplicas:0};f.resources={items:[]};
+ const {baselineSHA256,...base}=syntheticMigrationBaseline(f.target);
+ const current={...base,policyRevision:110},authority={...current,baselineSHA256:fingerprint(current)};
+ const migrationRestore={profile:'workflow-file-provenance-backup',closedPlanPath:'/tmp/next-close.json',closedEvidencePath:'/tmp/next-close.jsonl',authority,
+  earlyRecovery:{isolationEvidencePath:'/tmp/next-isolation.jsonl',controlPlane:{uid,specSHA256:'3'.repeat(64)},
+   backupMaintenance:{planPath:'/tmp/next-backup.json',evidencePath:'/tmp/next-backup.jsonl',planSHA256:'4'.repeat(64)}}};
+ const args={...f,closed,sourceSHA,action:'isolate',previous,migrationRestore,
+  handoffWitness:{migrationPlanSHA256:'5'.repeat(64),openPlanSHA256:'6'.repeat(64),artifactJobUID:uid}};
+ const plan=planComponentAPITraffic(args);
+ const journal={events:[{type:'HEADER',schema:'kodex.component-api-traffic-evidence/v1',planSHA256:fingerprint(plan),maintenanceID:plan.maintenanceID}],append(e){this.events.push(e);}};
+ let patches=0;
+ const step=(phase,options={})=>componentAPITrafficStep({phase,plan:options.plan??plan,journal,get:()=>f.service,slices:()=>f.slices,pods:()=>f.pods,
+  gate:options.gate??(()=>authority),patch:(operations,dryRun)=>{
+   assert.equal(operations[0].value,f.service.metadata.uid);
+   assert.equal(operations[1].value,f.service.metadata.resourceVersion);
+   assert.deepEqual(operations[2].value,f.service.spec);
+   assert.deepEqual(operations.map(operation=>operation.path),['/metadata/uid','/metadata/resourceVersion','/spec','/metadata/annotations']);
+   if(dryRun)return;
+   patches++;f.service.metadata.annotations=structuredClone(operations[3].value);
+   f.service.metadata.resourceVersion=String(Number(f.service.metadata.resourceVersion)+1);
+   if(options.loseACK)throw Error('lost handoff acknowledgement');
+  }});
+ return {f,previous,predecessorRestore,args,plan,journal,step,patchCount:()=>patches};
+}
+
+test('перенос 049→051 меняет только аннотацию одного закрытого Service и ограждает прежнее открытие',()=>{
+ const {f,previous,predecessorRestore,args,plan,journal,step,patchCount}=workflowIsolationHandoffFixture();
+ const originalSpec=structuredClone(f.service.spec);
+ assert.equal(plan.adoptedIsolation.planSHA256,fingerprint(previous.plan));
+ assert.equal(plan.adoptedIsolation.maintenanceID,previous.plan.maintenanceID);
+ assert.notEqual(plan.maintenanceID,previous.plan.maintenanceID);
+ assert.deepEqual(plan.beforeSpec,plan.afterSpec);
+ assert.throws(()=>step('apply',{loseACK:true}),/lost handoff acknowledgement/);
+ assert.equal(patchCount(),1);
+ assert.equal(step('status').state,'ISOLATED');
+ assert.equal(step('apply',{gate:()=>assert.fail('positive readback must not apply again')}).state,'ISOLATED');
+ assert.equal(patchCount(),1);
+ assert.deepEqual(f.service.spec,originalSpec);
+ assert.throws(()=>requireIsolatedAPIService(f.service,f.slices,f.pods,previous.plan),/NOT_ISOLATED/);
+ assert.throws(()=>step('apply',{plan:predecessorRestore}),/COMPONENT_API_TRAFFIC_DRIFT/);
+ assert.doesNotThrow(()=>requireClosedAPIAdmission(f.deployment,f.resources,args.closed,{plan,events:journal.events,
+  service:f.service,slices:f.slices,pods:f.pods}));
+ assert.equal(patchCount(),1);
+});
+
+test('перенос отвергает чужой Service, совпадающий Pod, незавершённый CLOSE и отсутствующий backup pin',()=>{
+ const {f,args}=workflowIsolationHandoffFixture();
+ for(const input of [
+  {...args,service:{...f.service,metadata:{...f.service.metadata,uid}}},
+  {...args,previous:{...args.previous,pods:{items:[{kind:'Pod',metadata:{namespace:'kodex-system',labels:f.service.spec.selector}}]}}},
+  {...args,closed:{...args.closed,events:args.closed.events.slice(0,-1)}},
+  {...args,migrationRestore:{...args.migrationRestore,earlyRecovery:undefined}},
+  {...args,handoffWitness:undefined},
+ ])assert.throws(()=>planComponentAPITraffic(input),/SCOPE_INVALID|SELECTOR_MATCHES_POD|MAINTENANCE_UNCONFIRMED|ISOLATION_HANDOFF_REJECTED/);
+});
+
+test('после переноса трафик открывается только по подтверждённой схеме 051',()=>{
+ const {f,args,plan,journal,step}=workflowIsolationHandoffFixture();
+ assert.equal(step('apply').state,'ISOLATED');ready(f);
+ const previous={plan,events:journal.events,service:f.service,slices:f.slices,pods:f.pods};
+ const {terminalSHA256:syntheticHash,...synthetic}=syntheticMigrationTerminal({isolation:plan,closed:args.closed.plan,deployment:f.deployment,sourceSHA:args.sourceSHA});
+ assert.equal(syntheticHash,fingerprint(synthetic));
+ const acknowledged={...synthetic,migrationVersion:20261121000200,jobName:'control-plane-migrate-20261121000200',
+  sourceCompatibility:{...synthetic.sourceCompatibility,migrationSourceSHA:args.sourceSHA}};
+ const proof={...acknowledged,terminalSHA256:fingerprint(acknowledged)};
+ const input={...args,action:'restore',closed:args.closed,migrationRestore:undefined,handoffWitness:undefined,previous,
+  migrationRestoreProfile:args.migrationRestore.profile,migrationSourceSHA:args.sourceSHA,deployment:f.deployment,resources:f.resources};
+ const restored=planComponentAPITraffic({...input,terminal:proof});
+ assert.deepEqual(restored.beforeSpec,plan.afterSpec);
+ assert.equal(restored.afterSpec.selector['kodex.dev/component-traffic-isolation'],undefined);
+ const {terminalSHA256,...body}=proof;
+ const failed={...body,migrationVersion:20261121000100,schema:'kodex.workflow-file-provenance-api-abort/v1'};
+ assert.throws(()=>planComponentAPITraffic({...input,terminal:{...failed,terminalSHA256:fingerprint(failed)}}),/ISOLATION_HANDOFF_REJECTED/);
+});
+
+test('допуск миграции 051 читает Pods по прежнему selector и связывает новый CLOSE',t=>{
+ const {f,previous,args}=workflowIsolationHandoffFixture();
+ const directory=mkdtempSync(join(tmpdir(),'kodex-workflow-handoff-'));
+ t.after(()=>rmSync(directory,{recursive:true,force:true}));
+ const files=Object.fromEntries(['closedPlanPath','closedEvidencePath','isolationPlanPath','isolationEvidencePath'].map(key=>[key,join(directory,key)]));
+ const save=(path,value,jsonl=false)=>writeFileSync(path,jsonl?value.map(row=>JSON.stringify(row)).join('\n')+'\n':JSON.stringify(value),{mode:0o600});
+ const registry={metadata:{uid},data:{registry:'synthetic'}},publisher={metadata:{uid},spec:{replicas:1}};
+ const {baselineSHA256,...base}=args.migrationRestore.authority;
+ const body={...base,registryDataSHA256:fingerprint(registry.data),publisherSpecSHA256:fingerprint(publisher.spec)};
+ const authority={...body,baselineSHA256:fingerprint(body)};
+ const migrationRestore={...args.migrationRestore,authority,closedPlanPath:files.closedPlanPath,closedEvidencePath:files.closedEvidencePath,
+  earlyRecovery:{...args.migrationRestore.earlyRecovery,isolationEvidencePath:files.isolationEvidencePath}};
+ const plan=planComponentAPITraffic({...args,migrationRestore});
+ const journal={events:[{type:'HEADER',schema:'kodex.component-api-traffic-evidence/v1',planSHA256:fingerprint(plan),maintenanceID:plan.maintenanceID}],append(row){this.events.push(row);}};
+ assert.equal(componentAPITrafficStep({phase:'apply',plan,journal,get:()=>f.service,slices:()=>f.slices,pods:()=>f.pods,gate:()=>authority,
+  patch:(operations,dryRun)=>{if(!dryRun)f.service.metadata.annotations=operations[3].value;}}).state,'ISOLATED');
+ save(files.closedPlanPath,args.closed.plan);save(files.closedEvidencePath,args.closed.events,true);
+ save(files.isolationPlanPath,plan);save(files.isolationEvidencePath,journal.events,true);
+ let podLists=0;
+ const kube=command=>{
+  const [,,verb,kind,resource]=command;
+  assert.equal(verb,'get');
+  if(kind==='deployment')return JSON.stringify(resource===name?f.deployment:publisher);
+  if(kind==='configmap')return JSON.stringify(registry);
+  if(kind==='service')return JSON.stringify(f.service);
+  if(kind==='replicasets,pods,jobs')return '';
+  if(kind==='endpointslices')return JSON.stringify(f.slices);
+  assert.equal(kind,'pods');
+  assert.ok(command.includes(`kodex.dev/component-traffic-isolation=${previous.plan.maintenanceID}`));
+  podLists++;return JSON.stringify(f.pods);
+ };
+ const observe=()=>readMigrationAPIAdmission({isolationPlanPath:files.isolationPlanPath,isolationEvidencePath:files.isolationEvidencePath,
+  profile:migrationRestore.profile},kube,{stopped:true});
+ const proof=observe();
+ assert.equal(proof.admission.maintenanceID,plan.maintenanceID);
+ assert.equal(proof.admission.isolationPlanSHA256,fingerprint(plan));
+ assert.equal(podLists,1);
+ f.pods.items=[{kind:'Pod',metadata:{namespace:'kodex-system',labels:f.service.spec.selector}}];
+ assert.throws(observe,/SELECTOR_MATCHES_POD/);
+});
+
+test('CLI переноса после потерянного ACK подтверждает ISOLATED по старому selector без повторного PATCH',t=>{
+ const root=fileURLToPath(new URL('../../',import.meta.url));
+ const revision=execFileSync('git',['-C',root,'rev-parse','HEAD'],{encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
+ const {f,previous,args,journal,step}=workflowIsolationHandoffFixture(revision);
+ const directory=mkdtempSync(join(tmpdir(),'kodex-workflow-isolation-cli-'));
+ t.after(()=>rmSync(directory,{recursive:true,force:true}));
+ const path=key=>join(directory,key);
+ const save=(key,value,jsonl=false)=>writeFileSync(path(key),jsonl?value.map(row=>JSON.stringify(row)).join('\n')+'\n':JSON.stringify(value),{mode:0o600});
+ const migrationRestore={...args.migrationRestore,closedPlanPath:path('close'),closedEvidencePath:path('close-journal'),
+  earlyRecovery:{...args.migrationRestore.earlyRecovery,isolationEvidencePath:path('journal')}};
+ const plan=planComponentAPITraffic({...args,migrationRestore});
+ journal.events[0].planSHA256=fingerprint(plan);
+ assert.throws(()=>step('apply',{plan,loseACK:true}),/lost handoff acknowledgement/);
+ save('plan',plan);save('journal',journal.events,true);save('close',args.closed.plan);save('close-journal',args.closed.events,true);
+ save('predecessor',previous.plan);save('predecessor-journal',previous.events,true);
+ save('kubeconfig',{});
+ save('transport',{service:f.service,installation:f.observed.installation,selector:previous.plan.maintenanceID,context:f.target.context,uid,
+  kubeconfig:path('kubeconfig')});
+ writeFileSync(path('kubectl'),`#!${process.execPath}\nconst assert=require('node:assert/strict');const fs=require('node:fs');const path=require('node:path');
+const state=JSON.parse(fs.readFileSync(path.join(__dirname,'transport'),'utf8'));
+const calls=process.argv.slice(2);
+assert.deepEqual(calls.slice(0,5),['--kubeconfig',state.kubeconfig,'--context',state.context,'--request-timeout=25s']);
+const index=calls.indexOf('get');assert.ok(index>=0&&!calls.includes('patch'));
+const kind=calls[index+1];let result;
+if(kind==='namespace')result={metadata:{uid:state.uid}};
+else if(kind==='configmap')result=state.installation;
+else if(kind==='service')result=state.service;
+else if(kind==='endpointslices')result={items:[]};
+else if(kind==='pods'){assert.ok(calls.includes('kodex.dev/component-traffic-isolation='+state.selector));result={items:[]};}
+else throw Error('Synthetic kubectl rejected unexpected operation');
+fs.appendFileSync(path.join(__dirname,'calls'),kind+'\\n');process.stdout.write(JSON.stringify(result));\n`,{mode:0o700});
+ const common=['--plan',path('plan'),'--closed-plan',path('close'),'--closed-evidence',path('close-journal'),
+  '--context',f.target.context,'--kubeconfig',path('kubeconfig')];
+ const run=(phase,extra)=>spawnSync(process.execPath,[join(root,'tools/release/component-api-traffic.mjs'),phase,...common,...extra],
+  {env:{PATH:directory+':'+process.env.PATH,HOME:process.env.HOME,LANG:'C'},encoding:'utf8',timeout:30000});
+ const refused=run('plan',['--action','isolate','--migration-profile',migrationRestore.profile,'--adopt-personal-isolation','true',
+  '--workflow-file-backup-stop-plan',path('stop'),'--workflow-file-isolation-evidence',path('journal')]);
+ assert.notEqual(refused.status,0);assert.match(refused.stderr,/ISOLATION_HANDOFF_REJECTED/);assert.equal(existsSync(path('calls')),false);
+ const status=run('status',['--evidence',path('journal')]);assert.equal(status.status,0,status.stderr);assert.equal(JSON.parse(status.stdout).state,'ISOLATED');
+ const apply=run('apply',['--evidence',path('journal'),'--approved-plan-sha',fingerprint(plan),
+  '--isolation-plan',path('predecessor'),'--isolation-evidence',path('predecessor-journal'),
+  '--api-open-plan',path('former-open'),'--api-open-evidence',path('former-open-journal')]);
+ assert.equal(apply.status,0,apply.stderr);assert.equal(JSON.parse(apply.stdout).state,'ISOLATED');
+ const observed=readFileSync(path('journal'),'utf8').trim().split('\n').map(JSON.parse);
+ assert.equal(observed.filter(event=>event.type==='INTENT').length,1);
+ assert.equal(observed.filter(event=>event.state==='ISOLATED').length,2);
 });

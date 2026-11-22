@@ -1,0 +1,227 @@
+apiVersion: integrations.kodex.io/v1
+kind: IntegrationPackage
+metadata:
+  key: ssh-managed
+  version: 1.0.0
+  origin: SHIPPED
+spec:
+  name: Управляемый SSH
+  description: Отдельный broker-owned SSH профиль с owner-pinned identity и однократным исполнением; установка требует квалифицированных048/109.
+  category: deployment
+  adapter: SSH_TARGET
+  adapterOwner: integration-gateway
+  executionRoute: MANAGED_MCP
+  readiness: READY
+  credential: {kind: BROKER_IDENTITY, brokerPurpose: SSH_TARGET}
+  configurationFields:
+    - {"key": "target_ref", "type": "STRING", "format": "IDENTIFIER", "required": true, "maximumLength": 96}
+    - {"key": "service_subject_ref", "type": "STRING", "format": "IDENTIFIER", "required": false, "maximumLength": 96}
+  networkDestinations:
+    - {key: ssh_broker, source: STATIC, hostname: secret-broker.kodex-system.svc, port: 8443, tls: REQUIRED}
+  healthCheck: {operation: ssh.target.inspect, timeoutSeconds: 5, maxAttempts: 1}
+  capabilities:
+    - key: ssh.target.inspect
+      name: Проверить managed SSH профиль
+      description: Типизированная операция только выбранного target/user/profile; параметры не назначают credentials либо полномочия.
+      operation: ssh.target.inspect
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
+      resourceScope: {kind: SSH_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result_json, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 20, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: ssh.system.read
+      name: Прочитать сведения ОС
+      description: Типизированная операция только выбранного target/user/profile; параметры не назначают credentials либо полномочия.
+      operation: ssh.system.read
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
+      resourceScope: {kind: SSH_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result_json, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 20, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: ssh.process.list
+      name: Прочитать процессы выбранного UID
+      description: Типизированная операция только выбранного target/user/profile; параметры не назначают credentials либо полномочия.
+      operation: ssh.process.list
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
+      resourceScope: {kind: SSH_TARGET, connectionFields: [target_ref]}
+      inputFields:
+        - {"key": "limit", "type": "INTEGER", "required": true, "minimum": 1, "maximum": 128}
+      outputFields:
+        - {key: result_json, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 20, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: ssh.file.list
+      name: Перечислить bounded entries выбранного root
+      description: Типизированная операция только выбранного target/user/profile; параметры не назначают credentials либо полномочия.
+      operation: ssh.file.list
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
+      resourceScope: {kind: SSH_TARGET, connectionFields: [target_ref]}
+      inputFields:
+        - {"key": "resource", "type": "STRING", "format": "IDENTIFIER", "required": true, "maximumLength": 48}
+        - {"key": "path", "type": "STRING", "format": "PLAIN", "required": false, "maximumLength": 1024}
+        - {"key": "limit", "type": "INTEGER", "required": true, "minimum": 1, "maximum": 64}
+      outputFields:
+        - {key: result_json, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 20, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: ssh.file.stat
+      name: Прочитать версию выбранного файла
+      description: Типизированная операция только выбранного target/user/profile; параметры не назначают credentials либо полномочия.
+      operation: ssh.file.stat
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
+      resourceScope: {kind: SSH_TARGET, connectionFields: [target_ref]}
+      inputFields:
+        - {"key": "resource", "type": "STRING", "format": "IDENTIFIER", "required": true, "maximumLength": 48}
+        - {"key": "path", "type": "STRING", "format": "PLAIN", "required": true, "maximumLength": 1024}
+      outputFields:
+        - {key: result_json, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 20, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: ssh.file.read
+      name: Прочитать bounded фрагмент файла
+      description: Типизированная операция только выбранного target/user/profile; параметры не назначают credentials либо полномочия.
+      operation: ssh.file.read
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
+      resourceScope: {kind: SSH_TARGET, connectionFields: [target_ref]}
+      inputFields:
+        - {"key": "resource", "type": "STRING", "format": "IDENTIFIER", "required": true, "maximumLength": 48}
+        - {"key": "path", "type": "STRING", "format": "PLAIN", "required": true, "maximumLength": 1024}
+        - {"key": "expected", "type": "STRING", "format": "IDENTIFIER", "required": true, "maximumLength": 64}
+        - {"key": "offset", "type": "INTEGER", "required": false, "minimum": 0, "maximum": 1048576}
+        - {"key": "limit", "type": "INTEGER", "required": true, "minimum": 1, "maximum": 16384}
+      outputFields:
+        - {key: result_json, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 20, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: ssh.file.create
+      name: Создать управляемый файл
+      description: Типизированная операция только выбранного target/user/profile; параметры не назначают credentials либо полномочия.
+      operation: ssh.file.create
+      risk: WRITE
+      approvalPolicy: HUMAN_SCOPED
+      allowedApprovalPolicies: [HUMAN_SCOPED, HUMAN_EACH_EFFECT]
+      resourceScope: {kind: SSH_TARGET, connectionFields: [target_ref]}
+      approvalScope:
+        name: SSH_TARGET_ARGUMENTS_V1
+        requiredInputPaths: ["/resource", "/path", "/content_base64"]
+        limits: {durationSeconds: 3600, maxEffects: 100}
+        allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE]
+      inputFields:
+        - {"key": "resource", "type": "STRING", "format": "IDENTIFIER", "required": true, "maximumLength": 48}
+        - {"key": "path", "type": "STRING", "format": "PLAIN", "required": true, "maximumLength": 1024}
+        - {"key": "content_base64", "type": "STRING", "format": "PLAIN", "required": true, "maximumLength": 21848, "allowEmpty": true}
+      outputFields:
+        - {key: result_json, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 20, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: ssh.file.replace
+      name: Заменить точную версию файла
+      description: Типизированная операция только выбранного target/user/profile; параметры не назначают credentials либо полномочия.
+      operation: ssh.file.replace
+      risk: WRITE
+      approvalPolicy: HUMAN_SCOPED
+      allowedApprovalPolicies: [HUMAN_SCOPED, HUMAN_EACH_EFFECT]
+      resourceScope: {kind: SSH_TARGET, connectionFields: [target_ref]}
+      approvalScope:
+        name: SSH_TARGET_ARGUMENTS_V1
+        requiredInputPaths: ["/resource", "/path", "/expected", "/content_base64"]
+        limits: {durationSeconds: 3600, maxEffects: 100}
+        allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE]
+      inputFields:
+        - {"key": "resource", "type": "STRING", "format": "IDENTIFIER", "required": true, "maximumLength": 48}
+        - {"key": "path", "type": "STRING", "format": "PLAIN", "required": true, "maximumLength": 1024}
+        - {"key": "expected", "type": "STRING", "format": "IDENTIFIER", "required": true, "maximumLength": 64}
+        - {"key": "content_base64", "type": "STRING", "format": "PLAIN", "required": true, "maximumLength": 21848, "allowEmpty": true}
+      outputFields:
+        - {key: result_json, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 20, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: ssh.file.delete
+      name: Удалить точную версию файла
+      description: Типизированная операция только выбранного target/user/profile; параметры не назначают credentials либо полномочия.
+      operation: ssh.file.delete
+      risk: DESTRUCTIVE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
+      resourceScope: {kind: SSH_TARGET, connectionFields: [target_ref]}
+      inputFields:
+        - {"key": "resource", "type": "STRING", "format": "IDENTIFIER", "required": true, "maximumLength": 48}
+        - {"key": "path", "type": "STRING", "format": "PLAIN", "required": true, "maximumLength": 1024}
+        - {"key": "expected", "type": "STRING", "format": "IDENTIFIER", "required": true, "maximumLength": 64}
+      outputFields:
+        - {key: result_json, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 20, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: ssh.service.read
+      name: Прочитать состояние выбранного сервиса
+      description: Типизированная операция только выбранного target/user/profile; параметры не назначают credentials либо полномочия.
+      operation: ssh.service.read
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
+      resourceScope: {kind: SSH_TARGET, connectionFields: [target_ref]}
+      inputFields:
+        - {"key": "resource", "type": "STRING", "format": "IDENTIFIER", "required": true, "maximumLength": 48}
+      outputFields:
+        - {key: result_json, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 20, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: ssh.service.restart
+      name: Перезапустить выбранный сервис
+      description: Типизированная операция только выбранного target/user/profile; параметры не назначают credentials либо полномочия.
+      operation: ssh.service.restart
+      risk: SENSITIVE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
+      resourceScope: {kind: SSH_TARGET, connectionFields: [target_ref]}
+      inputFields:
+        - {"key": "resource", "type": "STRING", "format": "IDENTIFIER", "required": true, "maximumLength": 48}
+      outputFields:
+        - {key: result_json, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 20, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: ssh.service.reload
+      name: Перезагрузить конфигурацию выбранного сервиса
+      description: Типизированная операция только выбранного target/user/profile; параметры не назначают credentials либо полномочия.
+      operation: ssh.service.reload
+      risk: SENSITIVE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
+      resourceScope: {kind: SSH_TARGET, connectionFields: [target_ref]}
+      inputFields:
+        - {"key": "resource", "type": "STRING", "format": "IDENTIFIER", "required": true, "maximumLength": 48}
+      outputFields:
+        - {key: result_json, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 20, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: ssh.receipt.read
+      name: Прочитать исходный immutable receipt
+      description: Типизированная операция только выбранного target/user/profile; параметры не назначают credentials либо полномочия.
+      operation: ssh.receipt.read
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
+      resourceScope: {kind: SSH_TARGET, connectionFields: [target_ref]}
+      inputFields:
+        - {"key": "receipt_invocation_ref", "type": "STRING", "format": "IDENTIFIER", "required": true, "maximumLength": 96}
+      outputFields:
+        - {key: result_json, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 20, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: ssh.journal.read
+      name: Прочитать bounded журнал выбранного сервиса
+      description: Типизированная операция только выбранного target/user/profile; параметры не назначают credentials либо полномочия.
+      operation: ssh.journal.read
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
+      resourceScope: {kind: SSH_TARGET, connectionFields: [target_ref]}
+      inputFields:
+        - {"key": "resource", "type": "STRING", "format": "IDENTIFIER", "required": true, "maximumLength": 48}
+        - {"key": "limit", "type": "INTEGER", "required": true, "minimum": 1, "maximum": 64}
+      outputFields:
+        - {key: result_json, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 20, maxAttempts: 1, retryBackoffMilliseconds: 250}

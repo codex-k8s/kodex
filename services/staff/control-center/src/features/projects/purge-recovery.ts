@@ -19,6 +19,10 @@ export function canResolvePurgeRecovery(value?: ProjectPurgeRecovery): boolean {
 }
 
 export function purgeRecoveryStatusKey(value: ProjectPurgeRecovery): string {
+  if (value.reasonCode === "ARTIFACT_PURGE_RECONCILIATION_REQUIRED")
+    return "projects.recovery.artifactPurge";
+  if (value.reasonCode === "KUBERNETES_STAGING_RECONCILIATION_REQUIRED")
+    return "projects.recovery.kubernetesStaging";
   if (value.cleanupPendingCount > 0 && !value.canResolve)
     return "projects.recovery.cleanupPending";
   switch (value.state) {

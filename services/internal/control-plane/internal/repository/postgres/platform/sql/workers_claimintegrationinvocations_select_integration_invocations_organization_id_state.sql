@@ -19,11 +19,32 @@ LEFT JOIN control_plane.integration_credential_revisions cr ON cr.id=c.credentia
 LEFT JOIN control_plane.integration_approval_scopes approval ON approval.id=i.approval_scope_id
 WHERE i.organization_id=$1::uuid
   AND (c.definition_key='ssh-compose')=$5::boolean
+  AND (c.definition_key='kubernetes-managed')=$7::boolean
+  AND (c.definition_key IN('ssh-managed','ssh-execute'))=$9::boolean
+  AND (NOT $9::boolean OR EXISTS(SELECT 1 FROM control_plane.ssh_invocation_identity_bindings ssh_pin
+    WHERE ssh_pin.invocation_id=i.id AND ssh_pin.organization_id=i.organization_id
+      AND ssh_pin.connection_id=c.id AND ssh_pin.root_run_id=root.id AND ssh_pin.root_actor_id=root.initiated_by))
+  AND (NOT $7::boolean OR EXISTS(SELECT 1 FROM control_plane.kubernetes_invocation_identity_bindings kube_pin
+    WHERE kube_pin.invocation_id=i.id AND kube_pin.organization_id=i.organization_id
+      AND kube_pin.connection_id=c.id AND kube_pin.root_run_id=root.id AND kube_pin.root_actor_id=root.initiated_by))
   AND (NOT $5::boolean OR NOT i.ssh_compose_admission_blocked)
   AND (r.project_id IS NOT NULL OR control_plane.owned_organization_assistant_run(r.organization_id,r.root_run_id))
   AND root.state IN ('RUNNING','WAITING_HUMAN')
   AND control_plane.runtime_execution_before_deadline(i.organization_id,i.run_id)
-  AND (n.state='RUNNING' OR control_plane.workflow_evidence_execution_assigned(i.organization_id,n.id,i.id) OR (
+  AND (n.state='RUNNING' OR (
+    -- Уже выданный Kubernetes claim может ждать exact child Gate после завершения исходного хода.
+    -- Это допускает owner read/renew, но не выдачу нового claim или обход проверки Gate перед Begin.
+    $7::boolean AND $6<>'' AND i.ref=$6 AND i.state='RUNNING'
+    AND n.state='SUCCEEDED' AND n.finished_at IS NOT NULL AND root.state='WAITING_HUMAN'
+    AND EXISTS (SELECT 1 FROM control_plane.owner_gates pending_gate
+      JOIN control_plane.kubernetes_execution_children pending_child ON pending_child.id=pending_gate.kubernetes_child_id
+        AND pending_child.organization_id=i.organization_id
+      JOIN control_plane.kubernetes_execution_plans pending_plan ON pending_plan.id=pending_child.plan_id
+        AND pending_plan.organization_id=i.organization_id AND pending_plan.invocation_id=i.id
+      WHERE pending_gate.integration_invocation_id=i.id AND pending_gate.organization_id=i.organization_id
+        AND pending_gate.root_run_id=root.id AND pending_gate.project_id IS NOT DISTINCT FROM r.project_id
+        AND pending_gate.state='OPEN')
+  ) OR control_plane.workflow_evidence_execution_assigned(i.organization_id,n.id,i.id) OR (
     n.state='SUCCEEDED' AND (root.state='WAITING_HUMAN' OR (
       root.state='RUNNING' AND n.finished_at IS NOT NULL AND EXISTS (
         -- Отрицательное решение другого Gate уже поставило continuation в очередь.
@@ -93,15 +114,31 @@ WHERE i.organization_id=$1::uuid
       OR (i.generation<4 AND i.operation=i.capability_key AND
         ((c.definition_key='jira-server-dc' AND i.operation IN ('jira.issue.create','jira.issue.comment.write'))
          OR (c.definition_key='confluence-server-dc' AND i.operation IN ('confluence.page.create','confluence.page.update')))))
-  ))) OR ($6<>'' AND i.ref=$6 AND i.state='RUNNING'))
+  ))) OR ($6<>'' AND i.ref=$6 AND ((NOT $8::boolean AND i.state='RUNNING') OR ($8::boolean AND i.state='READY' AND i.generation=0))))
   AND i.operation NOT IN ('mattermost.inbound','mattermost.gate_decisions','github.repository.bundle.publish')
+  AND (c.definition_key<>'email' OR (c.credential_revision_id IS NULL AND c.broker_identity_revision_id IS NULL
+    AND control_plane.email_invocation_mailbox_current(i.id)))
   AND c.enabled AND (
     (c.credential_policy='PROJECT_SHARED' AND c.state='CONNECTED') OR
     (c.credential_policy='INITIATOR_REQUIRED'
       AND control_plane.integration_connection_configuration_ready(c.id)
-      AND EXISTS (SELECT 1 FROM control_plane.integration_personal_invocation_credentials pin
+      AND (EXISTS (SELECT 1 FROM control_plane.integration_personal_invocation_credentials pin
         WHERE pin.invocation_id=i.id AND pin.organization_id=i.organization_id
-          AND pin.connection_id=c.id AND pin.root_run_id=root.id AND pin.subject_id=root.initiated_by))
+          AND pin.connection_id=c.id AND pin.root_run_id=root.id AND pin.subject_id=root.initiated_by)
+       OR ($7::boolean AND EXISTS(SELECT 1 FROM control_plane.kubernetes_invocation_identity_bindings pin
+        WHERE pin.invocation_id=i.id AND pin.organization_id=i.organization_id AND pin.connection_id=c.id
+          AND pin.root_run_id=root.id AND pin.root_actor_id=root.initiated_by AND pin.subject_id=root.initiated_by
+          AND pin.credential_policy='INITIATOR_REQUIRED'))
+       OR ($9::boolean AND EXISTS(SELECT 1 FROM control_plane.ssh_invocation_identity_bindings pin
+        WHERE pin.invocation_id=i.id AND pin.organization_id=i.organization_id AND pin.connection_id=c.id
+          AND pin.root_run_id=root.id AND pin.root_actor_id=root.initiated_by AND pin.subject_id=root.initiated_by
+          AND pin.binding_id IS NOT NULL))
+        OR (c.definition_key='email' AND c.mailbox_owner_state='ACTIVE' AND EXISTS (
+          SELECT 1 FROM control_plane.email_invocation_mailbox_bindings mailbox_pin
+          WHERE mailbox_pin.invocation_id=i.id AND mailbox_pin.organization_id=i.organization_id
+            AND mailbox_pin.connection_id=c.id AND mailbox_pin.root_run_id=root.id
+            AND mailbox_pin.initiator_id=root.initiated_by AND mailbox_pin.owner_subject_id=c.mailbox_owner_subject_id
+            AND mailbox_pin.owner_generation=c.mailbox_owner_generation))))
   )
   AND d.enabled AND d.adapter_owner=$3 AND d.execution_route=$4 AND d.adapter_readiness='READY'
   AND c.definition_version=i.definition_version AND c.definition_digest=i.definition_digest
@@ -139,10 +176,13 @@ WHERE i.organization_id=$1::uuid
         AND gate.project_id IS NOT DISTINCT FROM r.project_id
         AND gate.state='APPROVED'
     )) OR
-    (i.approval_policy='HUMAN_EACH_EFFECT' AND EXISTS(
+    (i.approval_policy='HUMAN_EACH_EFFECT' AND (($7::boolean AND c.definition_key='kubernetes-managed'
+      AND i.resource_kind='KUBERNETES_TARGET' AND EXISTS(SELECT 1 FROM control_plane.kubernetes_invocation_identity_bindings kube_effect_pin
+        WHERE kube_effect_pin.invocation_id=i.id AND kube_effect_pin.organization_id=i.organization_id
+          AND kube_effect_pin.connection_id=c.id AND kube_effect_pin.root_run_id=root.id AND kube_effect_pin.root_actor_id=root.initiated_by)) OR EXISTS(
       SELECT 1 FROM control_plane.owner_gates gate
       WHERE gate.integration_invocation_id=i.id AND gate.state='APPROVED'
-  )))
+  ))))
   AND i.effect_receipt_id IS NULL
 ORDER BY i.created_at
 FOR UPDATE OF i SKIP LOCKED

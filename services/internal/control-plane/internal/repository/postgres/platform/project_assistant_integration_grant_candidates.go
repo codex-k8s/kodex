@@ -78,7 +78,7 @@ func (repository *Repository) projectAssistantIntegrationGrantCandidatesTx(ctx c
 		return result, err
 	}
 	configuration := map[string]string{}
-	if definition.Metadata.Key == "github" {
+	if definition.Metadata.Key == "github" || definition.Metadata.Key == "kubernetes-managed" {
 		configuration, _, _, err = integrationCandidateScope(ctx, tx, current, integrationCandidateRow{ConnectionRef: connectionRef, RecipientKind: "AGENT", RecipientRef: target.ref})
 		if err != nil {
 			return result, err

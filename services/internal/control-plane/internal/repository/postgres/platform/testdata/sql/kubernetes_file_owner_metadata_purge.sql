@@ -1,0 +1,2 @@
+-- name: kubernetes_file_owner_metadata_purge :one
+SELECT count(*) FROM control_plane.kubernetes_file_input_frames frame JOIN control_plane.kubernetes_file_input_sources source ON source.id=frame.source_id AND source.organization_id=frame.organization_id JOIN control_plane.kubernetes_input_stages stage ON stage.id=frame.stage_id AND stage.organization_id=frame.organization_id WHERE source.ref=$1 AND(stage.payload_purged_at IS NULL OR stage.deletion_receipt_digest IS DISTINCT FROM source.deletion_receipt_digest);

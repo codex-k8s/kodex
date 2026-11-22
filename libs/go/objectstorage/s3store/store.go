@@ -62,8 +62,9 @@ type api interface {
 // RU: Store связывает ограниченный клиент S3 с одним бакетом и реализует
 // границу objectstorage через типизированные квитанции и закрытые ошибки.
 type Store struct {
-	client api
-	bucket string
+	client           api
+	bucket           string
+	singleDeleteHTTP aws.HTTPClient
 }
 
 // New validates adapter configuration and constructs a path-style-capable S3
@@ -85,11 +86,13 @@ func New(ctx context.Context, config Config) (*Store, error) {
 	if err != nil {
 		return nil, objectstorage.ErrUnavailable
 	}
+	var singleDeleteHTTP aws.HTTPClient
 	client := s3.NewFromConfig(loaded, func(options *s3.Options) {
+		options.HTTPClient, singleDeleteHTTP = exactDeleteHTTPClient(options.HTTPClient)
 		options.BaseEndpoint = aws.String(config.Endpoint)
 		options.UsePathStyle = config.UsePathStyle
 	})
-	return &Store{client: client, bucket: config.Bucket}, nil
+	return &Store{client: client, bucket: config.Bucket, singleDeleteHTTP: singleDeleteHTTP}, nil
 }
 
 // validateConfig rejects missing credentials and endpoints with userinfo,
@@ -115,6 +118,31 @@ func (store *Store) Check(ctx context.Context) error {
 		return objectstorage.ErrUnavailable
 	}
 	if _, err := store.client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: aws.String(store.bucket)}); err != nil {
+		return objectstorage.ErrUnavailable
+	}
+	return nil
+}
+
+// versioningAPI exposes only the read-only bucket configuration needed by versioned consumers.
+// versioningAPI предоставляет только read-only bucket configuration для versioned consumers.
+type versioningAPI interface {
+	GetBucketVersioning(context.Context, *s3.GetBucketVersioningInput, ...func(*s3.Options)) (*s3.GetBucketVersioningOutput, error)
+}
+
+// CheckVersioning requires the exact configured bucket to report Enabled. A missing/suspended
+// status or unavailable read refuses capture before PUT; this method never enables versioning.
+// CheckVersioning требует Enabled у exact configured bucket. Missing/suspended status либо
+// unavailable read закрывает capture до PUT; метод сам не включает versioning.
+func (store *Store) CheckVersioning(ctx context.Context) error {
+	if store == nil || store.client == nil || store.bucket == "" {
+		return objectstorage.ErrUnavailable
+	}
+	api, ok := store.client.(versioningAPI)
+	if !ok {
+		return objectstorage.ErrUnavailable
+	}
+	configuration, err := api.GetBucketVersioning(ctx, &s3.GetBucketVersioningInput{Bucket: aws.String(store.bucket)})
+	if err != nil || configuration == nil || configuration.Status != types.BucketVersioningStatusEnabled {
 		return objectstorage.ErrUnavailable
 	}
 	return nil
@@ -219,6 +247,28 @@ func (store *Store) Head(ctx context.Context, key, versionID string) (objectstor
 // RU: Delete отправляет запрос удаления корректного ключа и необязательной
 // точной версии; владелец и полномочия должны быть проверены вызывающим слоем.
 func (store *Store) Delete(ctx context.Context, key, versionID string) error {
+	return store.deleteObject(ctx, key, versionID, false)
+}
+
+// DeleteOnce refuses an absent provider version and makes one S3 SDK attempt through the existing
+// client. A transport or 503 outcome remains unknown; Head reconciliation belongs to the owner.
+// DeleteOnce отклоняет отсутствие provider version и делает одну S3 SDK attempt существующим
+// client. Transport/503 outcome остаётся unknown; Head reconciliation принадлежит owner.
+func (store *Store) DeleteOnce(ctx context.Context, key, versionID string) error {
+	if versionID == "" || len(versionID) > 1024 || strings.EqualFold(versionID, "null") || strings.ContainsAny(versionID, "\r\n\x00") {
+		return objectstorage.ErrInvalid
+	}
+	if err := store.CheckDeleteOnce(ctx); err != nil {
+		return err
+	}
+	return store.deleteObject(ctx, key, versionID, true)
+}
+
+// deleteObject shares the same client, validation and error mapping for both transport modes;
+// the single-attempt option is private and never changes the client's ordinary retry policy.
+// deleteObject использует один client, validation и error mapping обоих transport modes;
+// single-attempt option приватна и не меняет ordinary retry policy client.
+func (store *Store) deleteObject(ctx context.Context, key, versionID string, singleAttempt bool) error {
 	if !objectstorage.ValidKey(key) {
 		return objectstorage.ErrInvalid
 	}
@@ -226,7 +276,11 @@ func (store *Store) Delete(ctx context.Context, key, versionID string) error {
 	if versionID != "" {
 		input.VersionId = aws.String(versionID)
 	}
-	if _, err := store.client.DeleteObject(ctx, input); err != nil {
+	var options []func(*s3.Options)
+	if singleAttempt {
+		options = append(options, func(option *s3.Options) { option.RetryMaxAttempts = 1; option.HTTPClient = store.singleDeleteHTTP })
+	}
+	if _, err := store.client.DeleteObject(ctx, input, options...); err != nil {
 		return mapError(err)
 	}
 	return nil

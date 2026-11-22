@@ -1,6 +1,7 @@
 -- name: configuration_changeconnection_activate_credential_revision :one
 UPDATE control_plane.integration_connections
 SET credential_revision_id=$2::uuid,
+    broker_identity_revision_id=NULL,
     credential_materialization_ref=$3,
     masked_credentials_state='CONFIGURED',
     state='NOT_CONNECTED',

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import KubernetesChildGatePanel from "@/features/workboard/components/KubernetesChildGatePanel.vue";
+import { validKubernetesChildGate } from "@/features/workboard/kubernetes-child-gate";
 import { downloadBlob } from "@/shared/ui/download-blob";
 import { useServerMessage } from "@/shared/ui/server-message";
 import { runListSummary } from "@/shared/ui/run-summary";
@@ -649,6 +651,7 @@ async function decide(
 ) {
   if (
     busy.value ||
+    !validKubernetesChildGate(gate) ||
     !gate.nextActions.includes("RESOLVE_GATE") ||
     !gate.allowedDecisions.includes(decision)
   )
@@ -666,7 +669,9 @@ async function decide(
   const project = run.value?.projectRef;
   const scopeRef = runRef.value;
   const rootRun = run.value?.rootRunRef;
-  const selectedIntegrationConsent = integrationConsents.value[gate.ref];
+  const selectedIntegrationConsent = gate.kubernetesChild
+    ? undefined
+    : integrationConsents.value[gate.ref];
   const integrationApproval =
     decision === "APPROVE" && selectedIntegrationConsent
       ? { ...selectedIntegrationConsent }
@@ -724,6 +729,7 @@ function gateIntegrationRisk(gate: OwnerGate): string {
     : "UNKNOWN";
 }
 function gateDisplayTitle(gate: OwnerGate): string {
+  if (gate.kubernetesChild) return translator.t("kubernetesChildGate.title");
   if (!gate.integrationIntent) return serverMessage(gate.title);
   const risk = gateIntegrationRisk(gate);
   const key =
@@ -737,6 +743,7 @@ function gateDisplayTitle(gate: OwnerGate): string {
   });
 }
 function gateDisplayQuestion(gate: OwnerGate): string {
+  if (gate.kubernetesChild) return translator.t("kubernetesChildGate.question");
   if (!gate.integrationIntent) return serverMessage(gate.contextSummary);
   return translator.t("decisions.integrationQuestion", {
     connection: gate.integrationIntent.connectionName,
@@ -1171,6 +1178,7 @@ onBeforeUnmount(() => {
                   {{ gateDisplayQuestion(gate) }}
                 </p>
                 <SafeMarkdown v-else :content="gate.contextSummary" />
+                <KubernetesChildGatePanel :gate="gate" />
                 <IntegrationIntentPreview
                   v-if="gate.integrationIntent"
                   :intent="gate.integrationIntent"

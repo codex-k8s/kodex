@@ -316,6 +316,8 @@ INTEGRATION_GRANT_UPDATED:
   other: Разрешение интеграции обновлено
 INTEGRATION_CONNECTION_TEST_COMPLETED:
   other: Проверка подключения завершена
+INTEGRATION_CONNECTION_TEST_PROBE_ADMITTED:
+  other: Для проверки подключения выдан ограниченный допуск
 INTEGRATION_CONNECTION_TEST_RETRY_SCHEDULED:
   other: Повторная проверка подключения назначена
 INTEGRATION_TEST_SUCCEEDED:
@@ -334,6 +336,30 @@ PERSONAL_INTEGRATION_CREDENTIAL_CONFIGURED:
   other: Личный ключ сохранён и скрыт; требуется проверка доступа
 PERSONAL_INTEGRATION_CREDENTIAL_REVOKED:
   other: Личный ключ отозван для новых вызовов
+KUBERNETES_CAPTURE_REPAIR_QUEUED:
+  other: Восстановление сохранённого результата Kubernetes поставлено в очередь
+KUBERNETES_CHILD_GATE_APPROVE:
+  other: Разрешить выполнение этого действия в Kubernetes
+KUBERNETES_CHILD_GATE_CANCEL:
+  other: Отменить ожидающее действие в Kubernetes
+KUBERNETES_CHILD_GATE_REJECT:
+  other: Отклонить запрос на выполнение этого действия в Kubernetes
+KUBERNETES_IDENTITY_SETUP_CANCELLED:
+  other: Настройка доступа к Kubernetes отменена; возможный результат записи сохранён для сверки
+KUBERNETES_IDENTITY_SETUP_PREPARED:
+  other: Настройка доступа к Kubernetes подготовлена; передайте файл через локальную команду
+KUBERNETES_IDENTITY_UPLOAD_CLAIMED:
+  other: Исполнитель получил ограниченный допуск для настройки доступа к Kubernetes
+KUBERNETES_STAGING_CLEANUP_REPAIR_QUEUED:
+  other: Повторная очистка временного хранилища Kubernetes поставлена в очередь
+KUBERNETES_TOOL_STOPPED:
+  other: Запрос на остановку действия в Kubernetes записан
+SSH_IDENTITY_SETUP_CANCELLED:
+  other: Запрос на отмену настройки доступа по SSH записан
+SSH_IDENTITY_SETUP_EVIDENCE_RECORDED:
+  other: Результат проверки настройки доступа по SSH записан
+SSH_IDENTITY_SETUP_PREPARED:
+  other: Настройка доступа по SSH подготовлена
 PERSONAL_INTEGRATION_CREDENTIAL_TEST_QUEUED:
   other: Проверка личного ключа поставлена в очередь
 PERSONAL_INTEGRATION_CREDENTIAL_TEST_COMPLETED:
@@ -944,12 +970,16 @@ EMAIL_MAILBOX_GIT_PUBLICATION_PENDING:
   other: Конфигурация почтового ящика из Git ожидает доставки
 EMAIL_MAILBOX_GIT_SOURCE_RECORDED:
   other: Источник Git почтового ящика записан
+EMAIL_MAILBOX_OWNERSHIP_CHANGED:
+  other: Правила владения почтовым ящиком обновлены
 EMAIL_MAILBOX_PUBLICATION_FAILED:
   other: Не удалось доставить конфигурацию почтового ящика
 EMAIL_MAILBOX_PUBLICATION_PENDING:
   other: Конфигурация почтового ящика ожидает доставки
 EMAIL_MAILBOX_PUBLICATION_READY:
   other: Доставка конфигурации почтового ящика подтверждена
+PERSONAL_EMAIL_MAILBOX_METADATA_ACCESS_ASSIGNED:
+  other: Выдан доступ к метаданным личного почтового ящика
 RUNTIME_SECRET_DRAFT_CHANGED:
   other: Черновик секрета изменён
 INTERACTION_AUTHORITY_CHANGED:
@@ -1091,3 +1121,9 @@ INFERENCE_CACHE_POLICY_UNSUPPORTED:
   other: Маршрут модели не поддерживает обязательную политику кеша
 CONTEXT_WINDOW_IMAGE_UNSUPPORTED:
   other: Выбранный образ не подтверждает поддержку бюджета контекста. Выберите новый проверенный RoleImage или наследуйте окно каталога.
+
+KUBERNETES_CONFIGURATION_PLAN_UNSUPPORTED:
+  other: Настройте точную область Kubernetes и grant в настройках подключений. Изменение таких грантов через план помощника пока недоступно.
+
+KUBERNETES_STAGING_QUOTA_EXCEEDED:
+  other: "Исчерпана квота временного хранилища Kubernetes. Дождитесь подтверждённой очистки или устраните её ошибку; повторная отправка данных не выполнена."

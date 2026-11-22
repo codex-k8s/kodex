@@ -1463,6 +1463,8 @@ type ConnectionInput struct {
 // доказывает владение и не выдаёт разрешение.
 type IntegrationGrantInput struct {
 	ConnectionRef, CapabilityKey, AgentRef, WorkflowRef string
+	KubernetesNamespace                                 string `json:"kubernetesNamespace,omitempty"`
+	KubernetesGrantRef                                  string `json:"kubernetesGrantRef,omitempty"`
 	ApprovalPolicy                                      string
 	ApprovalScopePaths                                  []string
 	Enabled                                             bool
@@ -1476,6 +1478,8 @@ type IntegrationGrantInput struct {
 // подтверждения, а не принимает полномочия действующего лица из этих данных.
 type SystemAssistantIntegrationGrantInput struct {
 	ConnectionRef, CapabilityKey, ApprovalPolicy string
+	KubernetesNamespace                          string `json:"kubernetesNamespace,omitempty"`
+	KubernetesGrantRef                           string `json:"kubernetesGrantRef,omitempty"`
 	ApprovalScopePaths                           []string
 	Enabled                                      bool
 }
@@ -1524,9 +1528,10 @@ type AssistantConversationProjectInput struct{ ConversationRef, ProjectRef strin
 // подключения. ReplayOnly не разрешает создать квитанцию или заменить содержимое реквизитов; владелец
 // проверяет существующую операцию.
 type EmailCredentialInput struct {
-	ConnectionRef string
-	Credential    entity.EmailMailboxCredential
-	ReplayOnly    bool
+	ConnectionRef   string
+	OwnerGeneration int64
+	Credential      entity.EmailMailboxCredential
+	ReplayOnly      bool
 }
 
 // AssistantTurnInput supplies conversation content, an attachment-set reference, delivery mode, and
@@ -1891,6 +1896,7 @@ type EmailMailboxInput struct {
 // транспортный ответ: каждая граница выбирает типизированное представление, а Duplicate не разрешает
 // повторить эффект.
 type Result struct {
+	EmailMailboxOwnership             *entity.EmailMailboxOwnershipView
 	TelegramSubscription              *entity.TelegramSubscription
 	IntegrationApprovalConsent        *entity.IntegrationApprovalConsent `json:"integrationApprovalConsent,omitempty"`
 	PersonalIntegrationCredentialTest *entity.PersonalIntegrationCredentialTestReceipt

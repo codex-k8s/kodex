@@ -290,7 +290,7 @@ func (repository *Repository) replayDeletedCommand(
 	}
 	if result.Connection != nil {
 		result.Connection.Grants = nil
-		if err := attachConnection(ctx, tx, current, result.Connection); err != nil {
+		if err := repository.attachConnection(ctx, tx, current, result.Connection); err != nil {
 			return command.Result{}, false, errs.ErrUnavailable
 		}
 	}
@@ -346,6 +346,12 @@ func exposesActorActions(workload string) bool {
 // существующей транзакции, сохраняя nominal payload checks и отклоняя неизвестные kinds как
 // Invalid; не создаёт generic lifecycle mutation либо commit.
 func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
+	if input.Kind == command.CreatePersonalEmailMailboxConnection {
+		return repository.createPersonalEmailConnectionTx(ctx, tx, scope, input)
+	}
+	if emailMailboxOwnershipCommand(input.Kind) {
+		return repository.changeEmailMailboxOwnershipTx(ctx, tx, scope, input)
+	}
 	if input.Kind == command.RevokeIntegrationApprovalConsent {
 		return repository.revokeIntegrationApprovalConsentTx(ctx, tx, scope, input)
 	}
@@ -3171,6 +3177,9 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 	if nextState == "" {
 		return commandOutcome{}, errs.ErrInvalid
 	}
+	if outcome, handled, err := repository.resolveKubernetesChildGate(ctx, tx, scope, input); handled || err != nil {
+		return outcome, err
+	}
 	if outcome, handled, err := repository.resolveInteractionDeliveryGate(ctx, tx, scope, input); handled {
 		return outcome, err
 	}
@@ -3198,11 +3207,19 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 	if payload.IntegrationApproval != nil && (integrationInvocationID == "" || integrationApprovalPolicy != "HUMAN_SCOPED" || payload.Decision != "APPROVE") {
 		return commandOutcome{}, errs.ErrInvalid
 	}
+	if _, err := lockOwnerGateRootTx(ctx, tx, rootRunID); err != nil {
+		return commandOutcome{}, err
+	}
 	attachmentSet, err := repository.resolveFinalizedAttachmentSet(ctx, tx, scope, projectID, payload.AttachmentSetRef, "OWNER_GATE_MESSAGE", false)
 	if err != nil {
 		return commandOutcome{}, err
 	}
 	if integrationInvocationID != "" {
+		if payload.Decision == "APPROVE" {
+			if err := repository.requireEmailGateMailboxTx(ctx, tx, scope, integrationInvocationID); err != nil {
+				return commandOutcome{}, err
+			}
+		}
 		if err := repository.applyRepositoryBundleGateDecision(ctx, tx, scope, gateID, integrationInvocationID, rootRunID, projectID, payload.Decision); err != nil {
 			return commandOutcome{}, err
 		}

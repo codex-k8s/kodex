@@ -1051,34 +1051,57 @@ verify_email_projection_generation() {
 }
 
 ensure_email_projection_secret() {
-  local name=email-bridge-mailbox-projection state output
+  local name=email-bridge-mailbox-projection state output expected acknowledgement created_uid="" actual_uid
   output="$temporary_directory/email-projection-bootstrap.yaml"
+  expected="$temporary_directory/email-projection-bootstrap.json"
   state=$(kubectl -n "$namespace" get "secret/$name" --ignore-not-found --request-timeout=20s -o json) ||
     fail 'email projection Secret discovery failed'
   if [[ -z "$state" ]]; then
     yq 'select(.kind == "Secret" and .metadata.name == "email-bridge-mailbox-projection")' "$render" >"$output"
-    yq -o=json -I=0 '.' "$output" | jq -s -e '
-      length == 1 and .[0].metadata.namespace == "kodex-system" and
+    yq -o=json -I=0 '.' "$output" >"$expected" || fail 'canonical email projection bootstrap is invalid'
+    jq -s -e '
+      length == 1 and .[0].apiVersion == "v1" and .[0].kind == "Secret" and
+      .[0].metadata.namespace == "kodex-system" and
       .[0].metadata.labels."app.kubernetes.io/managed-by" == "control-plane" and
-      .[0].type == "Opaque" and .[0].immutable != true and
+      .[0].metadata.uid == null and .[0].metadata.resourceVersion == null and
+      (.[0].metadata.ownerReferences == null or .[0].metadata.ownerReferences == []) and
+      .[0].type == "Opaque" and (.[0].immutable == null or .[0].immutable == false) and
+      (.[0].data == null or .[0].data == {}) and
+      (.[0].stringData | keys == ["mailboxes.json"]) and
       (.[0].stringData."mailboxes.json" | fromjson | .version == "email-bridge/v1")
-    ' >/dev/null || fail 'canonical email projection bootstrap is invalid'
-    # Не применяем пустой bootstrap повторно поверх опубликованного CP поколения.
-    if ! kubectl -n "$namespace" create --field-manager=kodex-local-dev --request-timeout=20s -f "$output" >/dev/null 2>&1; then
-      state=$(kubectl -n "$namespace" get "secret/$name" --request-timeout=20s -o json) ||
-        fail 'email projection Secret creation failed'
-    else
-      state=$(kubectl -n "$namespace" get "secret/$name" --request-timeout=20s -o json) ||
-        fail 'email projection Secret readback failed'
+    ' "$expected" >/dev/null 2>&1 || fail 'canonical email projection bootstrap is invalid'
+    # Пустой bootstrap не применяется поверх опубликованного CP поколения.
+    # Successful create закрепляет UID API-ответа до последующего GET.
+    if acknowledgement=$(kubectl -n "$namespace" create --field-manager=kodex-local-dev --request-timeout=20s -f "$output" -o json 2>/dev/null); then
+      jq -e --slurpfile expected "$expected" '
+        ($expected | length) == 1 and .apiVersion == "v1" and .kind == "Secret" and
+        .metadata.name == "email-bridge-mailbox-projection" and .metadata.namespace == "kodex-system" and
+        .metadata.labels."app.kubernetes.io/managed-by" == "control-plane" and
+        (.metadata.uid | type == "string" and length > 0) and
+        .metadata.deletionTimestamp == null and
+        (.metadata.ownerReferences == null or .metadata.ownerReferences == []) and
+        .type == "Opaque" and (.immutable == null or .immutable == false) and
+        (.data | keys == ["mailboxes.json"]) and
+        .data."mailboxes.json" == ($expected[0].stringData."mailboxes.json" | @base64)
+      ' <<<"$acknowledgement" >/dev/null 2>&1 || fail 'email projection Secret create ACK is invalid'
+      created_uid=$(jq -er '.metadata.uid' <<<"$acknowledgement")
     fi
+    # Unknown outcome допускает лишь прежний readback существующей проекции, без второго create.
+    state=$(kubectl -n "$namespace" get "secret/$name" --request-timeout=20s -o json) ||
+      fail 'email projection Secret readback failed'
   fi
   jq -e '
-    .kind == "Secret" and .metadata.name == "email-bridge-mailbox-projection" and
+    .apiVersion == "v1" and .kind == "Secret" and .metadata.name == "email-bridge-mailbox-projection" and
     .metadata.namespace == "kodex-system" and
     .metadata.labels."app.kubernetes.io/managed-by" == "control-plane" and
     (.metadata.uid | type == "string" and length > 0) and
-    .type == "Opaque" and .immutable != true
-  ' <<<"$state" >/dev/null || fail 'email projection Secret ownership readback failed'
+    .metadata.deletionTimestamp == null and
+    (.metadata.ownerReferences == null or .metadata.ownerReferences == []) and
+    .type == "Opaque" and (.immutable == null or .immutable == false) and
+    (.data | keys == ["mailboxes.json"]) and (.data."mailboxes.json" | type == "string")
+  ' <<<"$state" >/dev/null 2>&1 || fail 'email projection Secret ownership readback failed'
+  actual_uid=$(jq -er '.metadata.uid' <<<"$state")
+  [[ -z "$created_uid" || "$created_uid" == "$actual_uid" ]] || fail 'email projection Secret UID changed after create ACK'
 }
 
 apply_job() {

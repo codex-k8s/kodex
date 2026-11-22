@@ -7,6 +7,7 @@ import (
 	"time"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -214,6 +215,7 @@ func TestCastConnectionUsesCompletePublicStatesAndSnapshot(t *testing.T) {
 	now := time.Now().UTC()
 	connection := castConnection(entity.IntegrationConnection{
 		State: "DELETED", CreatedAt: now, UpdatedAt: now,
+		CredentialDelivery: integrationpackage.CredentialDelivery{Kind: integrationpackage.CredentialDeliveryToken},
 		CredentialRevision: &entity.IntegrationCredentialRevision{Ref: "icr_example", CreatedAt: now},
 	})
 	if connection.GetState() != controlplanev1.ConnectionState_CONNECTION_STATE_DELETED ||

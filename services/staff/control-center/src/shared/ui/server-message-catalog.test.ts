@@ -34,6 +34,39 @@ function closedCases(path: string, functionName: string): string[] {
 
 describe("полнота закрытого реестра server tokens", () => {
   it.each([
+    [
+      "ru",
+      "KUBERNETES_TOOL_STOPPED",
+      "Запрос на остановку действия в Kubernetes записан.",
+    ],
+    [
+      "en",
+      "KUBERNETES_TOOL_STOPPED",
+      "Stop request for the Kubernetes action recorded.",
+    ],
+    [
+      "ru",
+      "SSH_IDENTITY_SETUP_CANCELLED",
+      "Запрос на отмену настройки доступа по SSH записан.",
+    ],
+    [
+      "en",
+      "SSH_IDENTITY_SETUP_CANCELLED",
+      "SSH access setup cancellation request recorded.",
+    ],
+  ] as const)(
+    "показывает запись запроса с неопределённым исходом в %s/%s",
+    (locale, token, expected) => {
+      const key = serverMessageKey(`i18n:${token}`);
+      expect(key).toBe(`serverMessages.${token}`);
+      const message = i18n.global.t(key ?? "", {}, { locale });
+      expect(message.startsWith(expected)).toBe(true);
+      expect(message).toContain(
+        locale === "ru" ? "для сверки." : "for reconciliation.",
+      );
+    },
+  );
+  it.each([
     ["ru", "Модель временно перегружена. Повторите запрос позже."],
     ["en", "The model is temporarily overloaded. Try again later."],
   ] as const)(

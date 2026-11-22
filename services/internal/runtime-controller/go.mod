@@ -28,11 +28,25 @@ require (
 require k8s.io/component-helpers v0.36.3
 
 require (
+	github.com/codex-k8s/kodex/libs/go/managedkubernetes v0.0.0 // indirect
+	github.com/codex-k8s/kodex/libs/go/managedssh v0.0.0 // indirect
+	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1 // indirect
 	github.com/getkin/kin-openapi v0.149.0 // indirect
 	github.com/go-openapi/swag/jsonname v0.25.5 // indirect
+	github.com/goccy/go-json v0.10.6 // indirect
+	github.com/gowebpki/jcs v1.0.1 // indirect
+	github.com/lestrrat-go/blackmagic v1.0.4 // indirect
+	github.com/lestrrat-go/dsig v1.3.0 // indirect
+	github.com/lestrrat-go/dsig-secp256k1 v1.0.0 // indirect
+	github.com/lestrrat-go/httpcc v1.0.1 // indirect
+	github.com/lestrrat-go/httprc/v3 v3.0.6 // indirect
+	github.com/lestrrat-go/jwx/v3 v3.2.0 // indirect
+	github.com/lestrrat-go/option/v2 v2.0.0 // indirect
 	github.com/oasdiff/yaml v0.1.1 // indirect
 	github.com/oasdiff/yaml3 v0.0.14 // indirect
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3 // indirect
+	github.com/segmentio/asm v1.2.1 // indirect
+	github.com/valyala/fastjson v1.6.10 // indirect
 )
 
 require (
@@ -132,3 +146,7 @@ replace github.com/codex-k8s/kodex/libs/go/runtimepolicywire => ../../../libs/go
 replace github.com/codex-k8s/kodex/libs/go/modelmeasurementwire => ../../../libs/go/modelmeasurementwire
 
 replace github.com/codex-k8s/kodex/libs/go/integrationpackage => ../../../libs/go/integrationpackage
+
+replace github.com/codex-k8s/kodex/libs/go/managedkubernetes => ../../../libs/go/managedkubernetes
+
+replace github.com/codex-k8s/kodex/libs/go/managedssh => ../../../libs/go/managedssh

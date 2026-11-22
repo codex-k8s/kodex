@@ -268,6 +268,11 @@ func mailboxSpecificationInput(v *generated.EmailMailboxSpecification) (*cp.Emai
 		return nil, true
 	}
 	result := &cp.EmailMailboxSpecification{}
+	profile, okProfile := mailboxEnumInput(v.ProviderProfile, cp.EmailMailboxProviderProfile_value, "EMAIL_MAILBOX_PROVIDER_PROFILE_")
+	if !okProfile {
+		return nil, false
+	}
+	result.ProviderProfile = cp.EmailMailboxProviderProfile(profile)
 	result.Enabled = mailboxValue(v.Enabled)
 	result.AllowedFolders = mailboxValue(v.AllowedFolders)
 	result.ArchiveFolder = mailboxValue(v.ArchiveFolder)
@@ -328,6 +333,11 @@ func mailboxSpecificationView(v *cp.EmailMailboxSpecification) (*generated.Email
 		return nil, true
 	}
 	result := &generated.EmailMailboxSpecification{}
+	profile, okProfile := mailboxEnumView[generated.EmailMailboxProviderProfile](int32(v.GetProviderProfile()), cp.EmailMailboxProviderProfile_name, "EMAIL_MAILBOX_PROVIDER_PROFILE_")
+	if !okProfile {
+		return nil, false
+	}
+	result.ProviderProfile = profile
 	result.Enabled = mailboxPointer(v.GetEnabled())
 	result.AllowedFolders = mailboxPointer(append([]string{}, v.GetAllowedFolders()...))
 	result.ArchiveFolder = mailboxPointer(v.GetArchiveFolder())

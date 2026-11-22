@@ -7,4 +7,4 @@ patches:
     group: networking.k8s.io
     version: v1
     kind: NetworkPolicy
-    name: (automation-scheduler-internal-rpc-authority-exact-paths|email-bridge-internal-rpc-authority-exact-paths|integration-gateway-internal-rpc-authority-exact-paths|interaction-gateway-internal-rpc-authority-exact-paths|role-image-builder-internal-rpc-authority-exact-paths|secret-broker-internal-rpc-authority-exact-paths|session-archive-internal-rpc-authority-exact-paths)
+    name: (artifact-retention-internal-rpc-authority-exact-paths|automation-scheduler-internal-rpc-authority-exact-paths|email-bridge-internal-rpc-authority-exact-paths|integration-gateway-internal-rpc-authority-exact-paths|interaction-gateway-internal-rpc-authority-exact-paths|role-image-builder-internal-rpc-authority-exact-paths|secret-broker-internal-rpc-authority-exact-paths|session-archive-internal-rpc-authority-exact-paths)

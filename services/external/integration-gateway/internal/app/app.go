@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"sync/atomic"
 	"time"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
@@ -35,16 +36,31 @@ const (
 // Once workers have started, it clears readiness on termination and performs ordered bounded cleanup using the independent shutdown base.
 // RU: После запуска workers функция снимает готовность при завершении и выполняет упорядоченную ограниченную очистку с независимой базой shutdown.
 func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultErr error) {
+	lifecycle, stopActivities := context.WithCancel(lifecycle)
+	defer stopActivities()
 	config, err := loadConfig()
 	if err != nil {
 		return err
 	}
 	startup, cancelStartup := context.WithTimeout(lifecycle, config.StartupTimeout)
 	defer cancelStartup()
+	var workers *serviceruntime.WorkerGroup
+	var brokerConsumers *brokerIdentityConsumers
+	var technicalShutdown func(context.Context) error
+	var technicalJoined func() bool
+	var dependencies []serviceruntime.ShutdownOperation
+	defer func() {
+		stopActivities()
+		resultErr = errors.Join(resultErr, finishIntegrationOwnedResources(shutdownBase, config.ShutdownTimeout, workers, brokerConsumers, technicalShutdown, technicalJoined, dependencies))
+	}()
+
 	telemetry, err := sharedobservability.NewRuntimeFromEnv(startup, serviceName, buildVersion)
 	if err != nil {
 		return err
 	}
+	dependencies = append(dependencies,
+		serviceruntime.ShutdownOperation{Name: "error reporting", Timeout: 5 * time.Second, Run: telemetry.FlushSentry},
+		serviceruntime.ShutdownOperation{Name: "tracing", Timeout: 5 * time.Second, Run: telemetry.ShutdownTracing})
 	logger := telemetry.Logger(os.Stdout)
 	metrics := sharedobservability.NewMetrics(metricsSubsystem, buildVersion, map[string]string{})
 	business, err := businessmetrics.New(metrics)
@@ -62,6 +78,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	if err != nil {
 		return err
 	}
+	dependencies = append(dependencies, serviceruntime.ShutdownOperation{Name: "control-plane client", Timeout: config.ShutdownTimeout / 4, Run: func(context.Context) error { return control.Close() }})
 	adapter, err := integration.New(integration.Config{
 		RPCProfile:          config.RPCProfile,
 		CredentialDirectory: config.CredentialDirectory, ProxyURL: config.EgressProxyURL, OpenAPIProxyURL: config.OpenAPIProxyURL,
@@ -78,13 +95,34 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		Target: config.SecretBrokerTarget, TLSServerName: config.SecretBrokerTLSServerName, CAFile: config.ControlPlaneCAFile,
 		ResolverTarget: config.ControlPlaneTarget, ResolverTLSServerName: config.ControlPlaneTLSServerName, ResolverCAFile: config.ControlPlaneCAFile,
 		ClientCertificateFile: config.ControlPlaneCertificateFile, ClientPrivateKeyFile: config.ControlPlanePrivateKeyFile, ApplicationGrantFile: config.ApplicationGrantFile,
-		ExpectedIssuerUID: issuerUID, ExpectedIssuerGID: issuerGID, DialTimeout: config.RequestTimeout, Operations: controlplaneclient.SSHComposeCredentialProjectionOperations()})
+		ExpectedIssuerUID: issuerUID, ExpectedIssuerGID: issuerGID, DialTimeout: config.RequestTimeout, Operations: integrationBrokerOperations(config.SSHInvocationCapacity)})
 	if err != nil {
+		return err
+	}
+	dependencies = append(dependencies, serviceruntime.ShutdownOperation{Name: "broker client", Timeout: config.ShutdownTimeout / 4, Run: func(context.Context) error { return broker.Close() }})
+	brokerConsumers, err = newKubernetesHealthRegistry(lifecycle, config.InstanceID, adapter, secretbrokerv1.NewManagedKubernetesServiceClient(broker.ManagedKubernetesBrokerConnection()), control.KubernetesOperations)
+	if err != nil {
+		return err
+	}
+	brokerConsumers.SSH, err = newSSHConfiguredConsumer(lifecycle, config, adapter, secretbrokerv1.NewManagedSSHServiceClient(broker.SSHIdentityBrokerConnection()))
+	if err != nil {
+		return err
+	}
+	if err := checkBrokerIdentityDelivery(startup, brokerConsumers); err != nil {
 		return err
 	}
 	sshWorker := &sshComposeWorker{control: control, broker: secretbrokerv1.NewRuntimeCredentialProjectionServiceClient(broker.SSHComposeCredentialConnection()), adapter: adapter, config: config}
 	technical, err := httpserver.New(httpserver.StandardProcessConfig(config.TechnicalListen), readiness, metrics.PrometheusHandler())
 	if err != nil {
+		return err
+	}
+	var technicalHandlersJoined atomic.Bool
+	technicalJoined = technicalHandlersJoined.Load
+	technicalShutdown = func(ctx context.Context) error {
+		err := technical.Shutdown(ctx)
+		if err == nil {
+			technicalHandlersJoined.Store(true)
+		}
 		return err
 	}
 	if err := technical.Listen(); err != nil {
@@ -93,20 +131,11 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	readiness.Set(true, "ready")
 	metrics.SetReady(true)
 	workHealth := &workCycleHealth{}
-	workers := serviceruntime.StartWorkers(lifecycle, technical.Worker(), monitorWorkPathHealth(workHealth, business, config), runIntegrationLoop(control, adapter, workHealth, business, logger, config, sshWorker), sshWorker.runSSHComposeLoop(business))
-	err = workers.Wait(context.WithoutCancel(lifecycle))
+	workers = serviceruntime.StartWorkers(lifecycle, httpserver.ShutdownWorker(technical.Serve, technicalShutdown, config.ShutdownTimeout/2), monitorWorkPathHealth(workHealth, business, config), runIntegrationLoop(control, adapter, workHealth, business, logger, config, sshWorker, brokerConsumers), sshWorker.runSSHComposeLoop(business), monitorBrokerIdentityConsumers(brokerConsumers, stopActivities))
+	_ = workers.Wait(lifecycle)
 	readiness.Set(false, "stopping")
 	metrics.SetReady(false)
-	workers.Stop()
-	shutdownErr := serviceruntime.RunShutdown(shutdownBase,
-		serviceruntime.ShutdownOperation{Name: "integration workers", Timeout: config.ShutdownTimeout / 2, Run: workers.Wait},
-		serviceruntime.ShutdownOperation{Name: "control-plane client", Timeout: config.ShutdownTimeout / 4, Run: func(context.Context) error { return control.Close() }},
-		serviceruntime.ShutdownOperation{Name: "SSH credential client", Timeout: config.ShutdownTimeout / 4, Run: func(context.Context) error { return broker.Close() }},
-		serviceruntime.ShutdownOperation{Name: "technical HTTP", Timeout: config.ShutdownTimeout / 4, Run: technical.Shutdown},
-		serviceruntime.ShutdownOperation{Name: "tracing", Timeout: 5 * time.Second, Run: telemetry.ShutdownTracing},
-		serviceruntime.ShutdownOperation{Name: "error reporting", Timeout: 5 * time.Second, Run: telemetry.FlushSentry},
-	)
-	return errors.Join(err, shutdownErr)
+	return nil
 }
 
 // monitorWorkPathHealth periodically publishes freshness of completed owner work cycles to business metrics, not HTTP readiness.
@@ -132,19 +161,22 @@ func monitorWorkPathHealth(workHealth *workCycleHealth, business *businessmetric
 // RU: runIntegrationLoop выполняет ограниченные последовательные claim-циклы, учитывает здоровье и метрики, журналирует только деградацию и восстановление.
 // Productive successful cycles reset idle backoff; errors or idle cycles increase it, while cancellation interrupts the wait.
 // RU: Успешный цикл с работой сбрасывает паузу простоя; ошибка или отсутствие работы увеличивают её, а отмена прерывает ожидание.
-func runIntegrationLoop(control *controlplaneclient.Client, adapter *integration.Adapter, workHealth *workCycleHealth, metrics *businessmetrics.Metrics, logger *slog.Logger, config Config, sshWorker *sshComposeWorker) serviceruntime.Worker {
+func runIntegrationLoop(control *controlplaneclient.Client, adapter *integration.Adapter, workHealth *workCycleHealth, metrics *businessmetrics.Metrics, logger *slog.Logger, config Config, sshWorker *sshComposeWorker, brokerConsumers *brokerIdentityConsumers) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		idleBackoff := serviceruntime.NewIdleBackoff(config.PollInterval, 5*time.Second)
 		degraded := false
 		for {
 			cycle, cancel := context.WithTimeout(ctx, integrationCycleBudget(config))
-			processed, err := processIntegrationWork(cycle, control, adapter, metrics, logger, config, sshWorker)
+			processed, err := processIntegrationWork(cycle, control, adapter, metrics, logger, config, brokerConsumers, sshWorker)
 			cancel()
 			workHealth.record(time.Now(), err)
 			if err != nil {
 				metrics.WorkPathReady(false)
 			}
 			metrics.Cycle(err)
+			if errors.Is(err, errBrokerIdentityDeliveryUnresolved) {
+				return err
+			}
 			if err != nil && !degraded {
 				degraded = true
 				logger.WarnContext(ctx, "integration work delivery degraded", "error_class", "control_plane_or_adapter")
@@ -171,8 +203,8 @@ func runIntegrationLoop(control *controlplaneclient.Client, adapter *integration
 // RU: Режим вызова выбирает read-only восстановление либо исполнение; нехватка остатка аренды запрещает оба обращения к провайдеру.
 // External-operation metrics are recorded before owner completion, and an unknown provider outcome remains explicit rather than retried here.
 // RU: Метрики внешней операции учитываются до owner completion; неопределённый результат сохраняется явно и здесь не повторяется.
-func processIntegrationWork(ctx context.Context, control *controlplaneclient.Client, adapter *integration.Adapter, metrics *businessmetrics.Metrics, logger *slog.Logger, config Config, sshWorkers ...*sshComposeWorker) (int, error) {
-	processed, err := processPersonalCredentialTests(ctx, control.PersonalCredentials, adapter, config, func(success bool) { metrics.Operation(true, success, false) })
+func processIntegrationWork(ctx context.Context, control *controlplaneclient.Client, adapter *integration.Adapter, metrics *businessmetrics.Metrics, logger *slog.Logger, config Config, brokerConsumers *brokerIdentityConsumers, sshWorkers ...*sshComposeWorker) (int, error) {
+	processed, err := processPersonalCredentialTests(ctx, control.PersonalCredentials, adapter, config, func(success bool) { metrics.Operation(true, success, false) }, brokerConsumers)
 	if err != nil {
 		return processed, err
 	}
@@ -181,6 +213,18 @@ func processIntegrationWork(ctx context.Context, control *controlplaneclient.Cli
 		return processed, err
 	}
 	for _, claim := range tests.GetClaims() {
+		kind, err := healthClaimRepresentation(claim)
+		if err != nil {
+			return processed, err
+		}
+		if kind == controlplanev1.IntegrationCredentialDeliveryKind_INTEGRATION_CREDENTIAL_DELIVERY_KIND_BROKER_IDENTITY {
+			completed, err := runBrokerIdentityProbe(ctx, brokerConsumers, claim, false, config, func(success bool) { metrics.Operation(true, success, false) })
+			processed += completed
+			if err != nil {
+				return processed, err
+			}
+			continue
+		}
 		operation, cancel := context.WithTimeout(ctx, config.OperationTimeout)
 		var result string
 		var operationErr error
@@ -200,11 +244,14 @@ func processIntegrationWork(ctx context.Context, control *controlplaneclient.Cli
 		}
 		processed++
 	}
-	invocations, err := control.Runtime.ClaimIntegrationInvocations(ctx, &controlplanev1.ClaimIntegrationInvocationsRequest{WorkloadInstance: config.InstanceID, Limit: config.ClaimLimit})
+	invocations, adopted, err := claimIntegrationInvocationDelivery(ctx, control.Runtime, brokerConsumers, config.InstanceID, config.ClaimLimit, func(progress brokerIdentityInvocationProgress) {
+		metrics.Operation(false, progress.RemoteOutcome == "SUCCEEDED", progress.RemoteOutcome == "UNKNOWN")
+	})
+	processed += adopted
 	if err != nil {
 		return processed, err
 	}
-	for _, claim := range invocations.GetClaims() {
+	for _, claim := range invocations {
 		execution, err := executeInvocationClaim(ctx, control.PersonalCredentials, adapter, claim, config)
 		if err != nil {
 			return processed, err

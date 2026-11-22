@@ -54,38 +54,51 @@ const (
 // Config хранит typed environment-derived runtime/identity paths, exact service boundaries и time/size
 // budgets; разбор полей не доказывает file safety, network reachability и caller authority.
 type Config struct {
-	ModelProviderConfigurationFile string        `env:"SECRET_BROKER_MODEL_PROVIDER_CONFIGURATION_FILE"`
-	RPCProfile                     string        `env:"KODEX_RPC_PROFILE"`
-	Environment                    string        `env:"DEPLOYMENT_ENVIRONMENT"`
-	RuntimeNamespace               string        `env:"SECRET_BROKER_RUNTIME_NAMESPACE"`
-	DraftNamespace                 string        `env:"SECRET_BROKER_DRAFT_NAMESPACE"`
-	DraftKeyringFile               string        `env:"SECRET_BROKER_DRAFT_KEYRING_FILE"`
-	DraftKeyGuardName              string        `env:"SECRET_BROKER_DRAFT_KEY_GUARD_NAME"`
-	ClaimantID                     string        `env:"POD_UID"`
-	GRPCListen                     string        `env:"SECRET_BROKER_GRPC_LISTEN"`
-	TechnicalListen                string        `env:"SECRET_BROKER_TECHNICAL_LISTEN"`
-	ServerCertificateFile          string        `env:"SECRET_BROKER_SERVER_CERTIFICATE_FILE"`
-	ServerPrivateKeyFile           string        `env:"SECRET_BROKER_SERVER_PRIVATE_KEY_FILE"`
-	ClientCAFile                   string        `env:"SECRET_BROKER_CLIENT_CA_FILE"`
-	ExpectedClientSPIFFEIDs        []string      `env:"SECRET_BROKER_EXPECTED_CLIENT_SPIFFE_IDS" envSeparator:","`
-	ControlPlaneTarget             string        `env:"SECRET_BROKER_CONTROL_PLANE_TARGET"`
-	ControlPlaneTLSServerName      string        `env:"SECRET_BROKER_CONTROL_PLANE_TLS_SERVER_NAME"`
-	ControlPlaneCAFile             string        `env:"SECRET_BROKER_CONTROL_PLANE_CA_FILE"`
-	ControlPlaneCertificateFile    string        `env:"SECRET_BROKER_CONTROL_PLANE_CERTIFICATE_FILE"`
-	ControlPlanePrivateKeyFile     string        `env:"SECRET_BROKER_CONTROL_PLANE_PRIVATE_KEY_FILE"`
-	ApplicationGrantFile           string        `env:"SECRET_BROKER_APPLICATION_GRANT_FILE"`
-	RequestTimeout                 time.Duration `env:"SECRET_BROKER_REQUEST_TIMEOUT"`
-	ShutdownTimeout                time.Duration `env:"SECRET_BROKER_SHUTDOWN_TIMEOUT"`
-	MaximumSecretBytes             int           `env:"SECRET_BROKER_MAXIMUM_SECRET_BYTES"`
-	RecoveryInterval               time.Duration `env:"SECRET_BROKER_RECOVERY_INTERVAL"`
-	RecoveryTimeout                time.Duration `env:"SECRET_BROKER_RECOVERY_TIMEOUT"`
-	ProviderAuthorizationRoot      string        `env:"SECRET_BROKER_PROVIDER_AUTHORIZATION_ROOT"`
-	ProviderDeviceAuthTTL          time.Duration `env:"SECRET_BROKER_PROVIDER_DEVICE_AUTH_TTL"`
-	ProviderHTTPSProxy             string        `env:"HTTPS_PROXY"`
-	ProviderHTTPProxy              string        `env:"HTTP_PROXY"`
-	AuthorityVerifierSocket        string        `env:"INTERNAL_RPC_AUTHORITY_VERIFIER_SOCKET"`
-	AuthorityVerifierUID           uint32        `env:"SECRET_BROKER_AUTHORITY_VERIFIER_UID"`
-	AuthorityVerifierGID           uint32        `env:"SECRET_BROKER_AUTHORITY_VERIFIER_GID"`
+	SSHQualificationFile            string        `env:"SECRET_BROKER_SSH_QUALIFICATION_FILE"`
+	SSHQualificationSHA256          string        `env:"SECRET_BROKER_SSH_QUALIFICATION_SHA256"`
+	SSHIdentityNamespace            string        `env:"SECRET_BROKER_SSH_IDENTITY_NAMESPACE"`
+	SSHUploadListen                 string        `env:"SECRET_BROKER_SSH_UPLOAD_LISTEN"`
+	SSHUploadOrigin                 string        `env:"SECRET_BROKER_SSH_UPLOAD_ORIGIN"`
+	SSHUploadBrowserOrigin          string        `env:"SECRET_BROKER_SSH_UPLOAD_BROWSER_ORIGIN"`
+	SSHUploadCertificateFile        string        `env:"SECRET_BROKER_SSH_UPLOAD_CERTIFICATE_FILE"`
+	SSHUploadPrivateKeyFile         string        `env:"SECRET_BROKER_SSH_UPLOAD_PRIVATE_KEY_FILE"`
+	KubernetesIdentityNamespace     string        `env:"SECRET_BROKER_KUBERNETES_IDENTITY_NAMESPACE"`
+	KubernetesUploadListen          string        `env:"SECRET_BROKER_KUBERNETES_UPLOAD_LISTEN"`
+	KubernetesUploadOrigin          string        `env:"SECRET_BROKER_KUBERNETES_UPLOAD_ORIGIN"`
+	KubernetesUploadCertificateFile string        `env:"SECRET_BROKER_KUBERNETES_UPLOAD_CERTIFICATE_FILE"`
+	KubernetesUploadPrivateKeyFile  string        `env:"SECRET_BROKER_KUBERNETES_UPLOAD_PRIVATE_KEY_FILE"`
+	ModelProviderConfigurationFile  string        `env:"SECRET_BROKER_MODEL_PROVIDER_CONFIGURATION_FILE"`
+	RPCProfile                      string        `env:"KODEX_RPC_PROFILE"`
+	Environment                     string        `env:"DEPLOYMENT_ENVIRONMENT"`
+	RuntimeNamespace                string        `env:"SECRET_BROKER_RUNTIME_NAMESPACE"`
+	DraftNamespace                  string        `env:"SECRET_BROKER_DRAFT_NAMESPACE"`
+	DraftKeyringFile                string        `env:"SECRET_BROKER_DRAFT_KEYRING_FILE"`
+	DraftKeyGuardName               string        `env:"SECRET_BROKER_DRAFT_KEY_GUARD_NAME"`
+	ClaimantID                      string        `env:"POD_UID"`
+	GRPCListen                      string        `env:"SECRET_BROKER_GRPC_LISTEN"`
+	TechnicalListen                 string        `env:"SECRET_BROKER_TECHNICAL_LISTEN"`
+	ServerCertificateFile           string        `env:"SECRET_BROKER_SERVER_CERTIFICATE_FILE"`
+	ServerPrivateKeyFile            string        `env:"SECRET_BROKER_SERVER_PRIVATE_KEY_FILE"`
+	ClientCAFile                    string        `env:"SECRET_BROKER_CLIENT_CA_FILE"`
+	ExpectedClientSPIFFEIDs         []string      `env:"SECRET_BROKER_EXPECTED_CLIENT_SPIFFE_IDS" envSeparator:","`
+	ControlPlaneTarget              string        `env:"SECRET_BROKER_CONTROL_PLANE_TARGET"`
+	ControlPlaneTLSServerName       string        `env:"SECRET_BROKER_CONTROL_PLANE_TLS_SERVER_NAME"`
+	ControlPlaneCAFile              string        `env:"SECRET_BROKER_CONTROL_PLANE_CA_FILE"`
+	ControlPlaneCertificateFile     string        `env:"SECRET_BROKER_CONTROL_PLANE_CERTIFICATE_FILE"`
+	ControlPlanePrivateKeyFile      string        `env:"SECRET_BROKER_CONTROL_PLANE_PRIVATE_KEY_FILE"`
+	ApplicationGrantFile            string        `env:"SECRET_BROKER_APPLICATION_GRANT_FILE"`
+	RequestTimeout                  time.Duration `env:"SECRET_BROKER_REQUEST_TIMEOUT"`
+	ShutdownTimeout                 time.Duration `env:"SECRET_BROKER_SHUTDOWN_TIMEOUT"`
+	MaximumSecretBytes              int           `env:"SECRET_BROKER_MAXIMUM_SECRET_BYTES"`
+	RecoveryInterval                time.Duration `env:"SECRET_BROKER_RECOVERY_INTERVAL"`
+	RecoveryTimeout                 time.Duration `env:"SECRET_BROKER_RECOVERY_TIMEOUT"`
+	ProviderAuthorizationRoot       string        `env:"SECRET_BROKER_PROVIDER_AUTHORIZATION_ROOT"`
+	ProviderDeviceAuthTTL           time.Duration `env:"SECRET_BROKER_PROVIDER_DEVICE_AUTH_TTL"`
+	ProviderHTTPSProxy              string        `env:"HTTPS_PROXY"`
+	ProviderHTTPProxy               string        `env:"HTTP_PROXY"`
+	AuthorityVerifierSocket         string        `env:"INTERNAL_RPC_AUTHORITY_VERIFIER_SOCKET"`
+	AuthorityVerifierUID            uint32        `env:"SECRET_BROKER_AUTHORITY_VERIFIER_UID"`
+	AuthorityVerifierGID            uint32        `env:"SECRET_BROKER_AUTHORITY_VERIFIER_GID"`
 }
 
 // loadConfig starts from explicit deployment defaults, overlays tagged environment values and validates
@@ -131,6 +144,12 @@ func loadConfig() (Config, error) {
 // syntax, durations и sizes, затем проверяет listen/path/URI shapes. Absolute paths не открываются и их
 // права не проверяются, один SplitHostPort не проверяет port range.
 func (config Config) validate() error {
+	if err := config.validateKubernetesIdentityUpload(); err != nil {
+		return err
+	}
+	if err := config.validateSSHIdentityUpload(); err != nil {
+		return err
+	}
 	if config.RPCProfile != "" && config.RPCProfile != "trusted-cluster" {
 		return errors.New("secret broker RPC profile is invalid")
 	}

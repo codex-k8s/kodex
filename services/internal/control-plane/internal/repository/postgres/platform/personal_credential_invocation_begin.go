@@ -74,7 +74,7 @@ func (repository *Repository) BeginPersonalIntegrationInvocation(ctx context.Con
 	}
 	var candidate integrationInvocationCandidate
 	err = scanIntegrationInvocationCandidate(tx.QueryRow(ctx, queryWorkersClaimintegrationinvocationsSelectIntegrationInvocationsOrganizationIdState,
-		current.organizationID, 1, "integration-gateway", "MANAGED_MCP", false, input.InvocationRef), &candidate)
+		current.organizationID, 1, "integration-gateway", "MANAGED_MCP", false, input.InvocationRef, false, false, false), &candidate)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return empty, denyUnstartedPersonalInvocationTx(ctx, tx, current, input, errs.ErrForbidden)
 	}

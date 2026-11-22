@@ -59,17 +59,23 @@ var (
 	// запись отчёта не разрешает новую provider mutation.
 	//go:embed sql/email_report_expire_source.sql
 	queryEmailReportExpireSource string
+	// queryEmailAdmittedReportSource locks only the source of an already admitted exact receipt. It permits reporting a historical mutation fact without issuing new dispatch credit after access expiry or revoke.
+	// queryEmailAdmittedReportSource блокирует только источник уже admitted exact receipt. Разрешает исторический факт mutation без выдачи нового dispatch credit после access expiry либо revoke.
+	//go:embed sql/email_report__admitted_source.sql
+	queryEmailAdmittedReportSource string
 )
 
 // authorizeEmailReport validates report/receipt/binding shape and requires email-bridge with no
 // authority-project restriction. It matches saved authorization and existing receipt pins; exact
-// fact replay returns early without new write authority. Expired sources use the locked recovery
-// path; live sources require fresh owner decision equality after fence handling. Backend failures
+// fact replay returns early without new write authority. Existing admitted receipts use an exact
+// source-locked maintenance path; initial live reports require fresh owner decision equality and
+// expired initial sources retain the prior recovery path. Backend failures
 // and denied/changed facts remain distinct, and expiry is never extended.
 // authorizeEmailReport проверяет форму report/receipt/binding и требует email-bridge без
 // authority-project ограничения. Сопоставляет сохранённые authorization и receipt pins; exact fact
-// replay возвращается раньше без новых прав write. Expired sources используют заблокированный
-// recovery path, live sources требуют равенства свежего owner decision после обработки fence.
+// replay возвращается раньше без новых прав write. Существующие admitted receipts используют exact
+// source-locked maintenance path; initial live reports требуют равенства свежего owner decision,
+// initial expired sources сохраняют прежний recovery path.
 // Backend failures и запрещённые либо изменённые факты различаются, expiry не продлевается.
 func (repository *Repository) authorizeEmailReport(ctx context.Context, tx pgx.Tx, current scope, input command.Command) (string, entity.EmailAuthorization, emailReceiptOwner, error) {
 	var decision entity.EmailAuthorization
@@ -87,7 +93,7 @@ func (repository *Repository) authorizeEmailReport(ctx context.Context, tx pgx.T
 	var rawInput, rawDecision []byte
 	err := tx.QueryRow(ctx, queryEmailAuthorizationGet, current.organizationID, payload.Binding.InvocationRef,
 		payload.Binding.LeaseRef, payload.Binding.Generation, emailFenceDigest(payload.Binding)).Scan(&ref, &rawInput, &rawDecision)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) && !accessInfrastructureFailure(err) {
 		return "", decision, owner, errs.ErrForbidden
 	}
 	if err != nil {
@@ -108,7 +114,10 @@ func (repository *Repository) authorizeEmailReport(ctx context.Context, tx pgx.T
 	if err == nil {
 		var authorizationRef string
 		if err := tx.QueryRow(ctx, queryEmailReceiptAuthorizationRef, owner.id).Scan(&authorizationRef); err != nil {
-			return "", decision, owner, errs.ErrForbidden
+			if errors.Is(err, pgx.ErrNoRows) && !accessInfrastructureFailure(err) {
+				return "", decision, owner, errs.ErrForbidden
+			}
+			return "", decision, owner, errs.ErrUnavailable
 		}
 		if authorizationRef != ref || owner.receipt.ExternalReceiptRef != payload.ExternalReceiptRef ||
 			owner.receipt.ExternalReceiptDigest != payload.ExternalReceiptDigest || owner.receipt.SemanticInputDigest != payload.SemanticInputDigest {
@@ -118,12 +127,24 @@ func (repository *Repository) authorizeEmailReport(ctx context.Context, tx pgx.T
 		if owner.receipt.Outcome == payload.Outcome || payload.Outcome == emailpolicy.OutcomeUnknown {
 			return ref, decision, owner, nil
 		}
+		// The first UNKNOWN receipt was admitted before dispatch. Subsequent facts belong to that original receipt; refreshing actor permissions here would discard an already observed external outcome.
+		// Первая UNKNOWN receipt была admitted до dispatch. Последующие факты принадлежат этой исходной receipt; повторная авторизация actor здесь теряла бы уже наблюдённый внешний outcome.
+		var sourceState string
+		if err := tx.QueryRow(ctx, queryEmailAdmittedReportSource, pgx.StrictNamedArgs{
+			"organization_id": current.organizationID, "authorization_ref": ref, "receipt_id": owner.id,
+		}).Scan(&sourceState); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) && !accessInfrastructureFailure(err) {
+				return "", decision, owner, errs.ErrForbidden
+			}
+			return "", decision, owner, errs.ErrUnavailable
+		}
+		return ref, decision, owner, nil
 	}
 	if !payload.Binding.ExpiresAt.After(time.Now()) {
 		// Просроченный source допускает только запись факта по прежней authorization.
 		var state string
 		if err := tx.QueryRow(ctx, queryEmailReportRecoverySource, current.organizationID, ref).Scan(&state); err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
+			if errors.Is(err, pgx.ErrNoRows) && !accessInfrastructureFailure(err) {
 				return "", decision, owner, errs.ErrForbidden
 			}
 			return "", decision, owner, errs.ErrUnavailable

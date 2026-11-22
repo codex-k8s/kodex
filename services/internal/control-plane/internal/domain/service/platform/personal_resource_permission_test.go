@@ -53,7 +53,7 @@ func TestPersonalResourcePermissionPreflight(t *testing.T) {
 			binding.VerifiedCapabilities = []string{"confluence.space.read", "confluence.identity.read"}
 			scenario.change(&requirement, &binding)
 			original := append([]string(nil), binding.VerifiedCapabilities...)
-			selection, err := ResolveIntegrationCredential(requirement, initiator, binding.Credential, &binding, now)
+			selection, err := ResolveIntegrationCredential(requirement, initiator, entity.TokenIntegrationCredentialSource(binding.Credential), &binding, now)
 			if (err != nil) != scenario.invalid || selection.Problem != scenario.problem || !reflect.DeepEqual(original, binding.VerifiedCapabilities) {
 				t.Fatalf("incorrect conditional preflight: problem=%s error=%v", selection.Problem, err)
 			}
@@ -115,7 +115,7 @@ func TestPersonalObjectReadPreflight(t *testing.T) {
 						binding.VerifiedCredentialRef, want = "icr_old", entity.IntegrationCredentialCheckRequired
 					}
 					before := slices.Clone(binding.VerifiedCapabilities)
-					selection, err := ResolveIntegrationCredential(requirement, initiator, binding.Credential, &binding, now)
+					selection, err := ResolveIntegrationCredential(requirement, initiator, entity.TokenIntegrationCredentialSource(binding.Credential), &binding, now)
 					if (err != nil) != invalid || selection.Problem != want || !slices.Equal(before, binding.VerifiedCapabilities) || slices.Contains(binding.VerifiedCapabilities, operation) {
 						t.Fatal("object read eligibility fabricated permissions or misclassified a known refusal", err)
 					}
@@ -166,7 +166,7 @@ func TestJiraPersonalResourcePermissionPreflight(t *testing.T) {
 				case "missing profile":
 					requirement.ResourcePermissionProfile, invalid = "", true
 				}
-				selection, err := ResolveIntegrationCredential(requirement, initiator, binding.Credential, &binding, now)
+				selection, err := ResolveIntegrationCredential(requirement, initiator, entity.TokenIntegrationCredentialSource(binding.Credential), &binding, now)
 				if (err != nil) != invalid || selection.Problem != problem {
 					t.Fatal("conditional Jira preflight classified the key incorrectly", err)
 				}
@@ -219,7 +219,7 @@ func TestGitLabPersonalWritePreflight(t *testing.T) {
 				case "missing profile":
 					requirement.ResourcePermissionProfile, invalid = "", true
 				}
-				selection, err := ResolveIntegrationCredential(requirement, initiator, binding.Credential, &binding, now)
+				selection, err := ResolveIntegrationCredential(requirement, initiator, entity.TokenIntegrationCredentialSource(binding.Credential), &binding, now)
 				if (err != nil) != invalid || selection.Problem != problem {
 					t.Fatal("conditional GitLab preflight classified the key incorrectly", err)
 				}

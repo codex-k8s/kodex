@@ -9,8 +9,10 @@ resources:
   - poddisruptionbudget.yaml
   - servicemonitor.yaml
   - networkpolicy.yaml
+  - issuer-networkpolicy.yaml
   - prometheusrule.yaml
   - dashboard.yaml
-patches: null
 components:
-- ../../components/observability-egress-common
+  - ../../components/observability-egress-common
+  - ../../components/internal-rpc-authority-artifact-retention-issuer
+  - ../../components/internal-rpc-authority-namespaced-network-egress-common

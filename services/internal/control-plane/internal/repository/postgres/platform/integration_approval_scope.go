@@ -112,5 +112,8 @@ func (repository *Repository) approveIntegrationScope(
 	if err != nil || tag.RowsAffected() != 1 {
 		return serializableTransactionError(err, errs.ErrConflict)
 	}
+	if definitionKey == "email" {
+		return pinEmailApprovalScopeTx(ctx, tx, current, invocationID, approvalScopeID)
+	}
 	return nil
 }

@@ -16,6 +16,64 @@ const directory = new URL(
   import.meta.url,
 );
 describe("IntegrationPackage canonical schema", () => {
+  it("требует private BI credential для broker adapters независимо от их регистрации", () => {
+    for (const [adapter, purpose] of [
+      ["KUBERNETES", "KUBERNETES_TARGET"],
+      ["SSH_TARGET", "SSH_TARGET"],
+    ]) {
+      const value = parseConfigurationDocument(
+        readFileSync(new URL("github.yaml", directory), "utf8"),
+        "YAML",
+      );
+      const spec = value.spec as Record<string, unknown>;
+      spec.adapter = adapter;
+      spec.credential = { kind: "BROKER_IDENTITY", brokerPurpose: purpose };
+      // Возможный отказ adapter enum не доказывает credential boundary.
+      // Проверяем именно credential diagnostics, не готовность будущего handler.
+      const credentialErrors = () =>
+        packageDiagnosticDetails(value).filter(
+          ({ path }) => path[0] === "spec" && path[1] === "credential",
+        );
+      expect(credentialErrors()).toEqual([]);
+      for (const credential of [
+        undefined,
+        { kind: "TOKEN", secretKey: "token" },
+        { kind: "PASSWORD", secretKey: "password" },
+        { kind: "BROKER_IDENTITY", brokerPurpose: "GENERIC_SECRET" },
+      ]) {
+        if (credential === undefined) delete spec.credential;
+        else spec.credential = credential;
+        expect(credentialErrors().length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("не смешивает broker identity с token descriptor и произвольным adapter", () => {
+    for (const credential of [
+      { kind: "BROKER_IDENTITY", brokerPurpose: "KUBERNETES_TARGET" },
+      { kind: "BROKER_IDENTITY", brokerPurpose: "SSH_TARGET" },
+      { kind: "TOKEN", secretKey: "token", brokerPurpose: "" },
+      { kind: "TOKEN", secretKey: "token", brokerPurpose: null },
+      {
+        kind: "BROKER_IDENTITY",
+        brokerPurpose: "KUBERNETES_TARGET",
+        secretKey: "",
+      },
+      {
+        kind: "BROKER_IDENTITY",
+        brokerPurpose: "KUBERNETES_TARGET",
+        secretKey: null,
+      },
+    ]) {
+      const value = parseConfigurationDocument(
+        readFileSync(new URL("github.yaml", directory), "utf8"),
+        "YAML",
+      );
+      (value.spec as Record<string, unknown>).credential = credential;
+      expect(packageDiagnostics(value).length).toBeGreaterThan(0);
+    }
+  });
+
   it("сохраняет семантику canonical patterns в JSON Schema u и HTML v", () => {
     const patterns: string[] = [];
     function visit(value: unknown): void {

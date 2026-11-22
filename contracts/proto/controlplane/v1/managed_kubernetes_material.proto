@@ -1,0 +1,107 @@
+syntax = "proto3";
+
+package controlplane.v1;
+
+import "google/protobuf/timestamp.proto";
+import "controlplane/v1/control_plane.proto";
+import "controlplane/v1/managed_kubernetes.proto";
+
+option go_package = "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1;controlplanev1";
+
+// Только authenticated control-api-gateway с exact permission вызывает public
+// metadata boundary. Материал передаётся owner-local CLI прямо private broker TLS.
+// Actor, policy, target, identity и purpose назначаются владельцем, не payload.
+service ManagedKubernetesResourceMaterialService {
+  rpc BeginManagedKubernetesResourceMaterial(BeginManagedKubernetesResourceMaterialRequest) returns (BeginManagedKubernetesResourceMaterialResponse);
+  rpc GetManagedKubernetesResourceMaterial(GetManagedKubernetesResourceMaterialRequest) returns (GetManagedKubernetesResourceMaterialResponse);
+  rpc CancelManagedKubernetesResourceMaterial(CancelManagedKubernetesResourceMaterialRequest) returns (CancelManagedKubernetesResourceMaterialResponse);
+}
+
+enum ManagedKubernetesResourceMaterialState {
+  MANAGED_KUBERNETES_RESOURCE_MATERIAL_STATE_UNSPECIFIED = 0;
+  MANAGED_KUBERNETES_RESOURCE_MATERIAL_STATE_PREPARED = 1;
+  MANAGED_KUBERNETES_RESOURCE_MATERIAL_STATE_ATTEMPTING = 2;
+  MANAGED_KUBERNETES_RESOURCE_MATERIAL_STATE_AVAILABLE = 3;
+  MANAGED_KUBERNETES_RESOURCE_MATERIAL_STATE_UNKNOWN = 4;
+  MANAGED_KUBERNETES_RESOURCE_MATERIAL_STATE_ACK_REJECTED = 5;
+  MANAGED_KUBERNETES_RESOURCE_MATERIAL_STATE_CANCELLED = 6;
+  MANAGED_KUBERNETES_RESOURCE_MATERIAL_STATE_EXPIRED = 7;
+  MANAGED_KUBERNETES_RESOURCE_MATERIAL_STATE_CONSUMED = 8;
+}
+
+// AVAILABLE подтверждает private artifact, не создание target Secret и не READ/
+// mutation authority. Нет values, storage locator, permit либо content hash.
+message ManagedKubernetesResourceMaterialView {
+  string material_ref = 1;
+  string connection_ref = 2;
+  int64 connection_version = 3;
+  string identity_ref = 4;
+  int64 identity_revision = 5;
+  string target_ref = 6;
+  string namespace = 7;
+  string name = 8;
+  string generate_name = 9;
+  string operation = 10;
+  string secret_type = 11;
+  string patch_type = 12;
+  ManagedKubernetesResourceMaterialState state = 13;
+  google.protobuf.Timestamp expires_at = 14;
+  int64 version = 15;
+  string reason_code = 16;
+  IntegrationCredentialPolicy credential_policy = 17;
+  int64 binding_version = 18;
+}
+
+// Permit возвращается только при первом admission. Replay/GET дают лишь safe
+// metadata/reconcileOnly; повторного private write из потери ACK не возникает.
+message ManagedKubernetesResourceMaterialAdmission {
+  ManagedKubernetesResourceMaterialView material = 1;
+  bytes upload_permit = 2;
+  ManagedKubernetesIdentityUploadEndpoint endpoint = 3;
+  bool reconcile_only = 4;
+}
+
+message BeginManagedKubernetesResourceMaterialRequest {
+  string connection_ref = 1;
+  // expected_version: current personal binding либо shared Connection version.
+  MutationContext mutation = 2;
+  int64 expected_connection_version = 3;
+  string operation = 4;
+  string namespace = 5;
+  string name = 6;
+  // Только CREATE: ровно один name/generate_name, без implicit destination.
+  string generate_name = 7;
+  string secret_type = 8;
+  // Только PATCH: JSON, MERGE либо STRATEGIC, не raw content-type/flags.
+  string patch_type = 9;
+  string content_sha256 = 10;
+  uint32 content_bytes = 11;
+}
+
+message GetManagedKubernetesResourceMaterialRequest {
+  string connection_ref = 1;
+  oneof selector {
+    string material_ref = 2;
+    string begin_idempotency_key = 3;
+  }
+}
+
+message CancelManagedKubernetesResourceMaterialRequest {
+  string connection_ref = 1;
+  string material_ref = 2;
+  // expected_version относится к exact material view, не Connection/binding.
+  MutationContext mutation = 3;
+}
+
+// Специализированные response envelopes сохраняют отдельный контракт каждого RPC.
+message BeginManagedKubernetesResourceMaterialResponse {
+  ManagedKubernetesResourceMaterialAdmission admission = 1;
+}
+
+message GetManagedKubernetesResourceMaterialResponse {
+  ManagedKubernetesResourceMaterialView material = 1;
+}
+
+message CancelManagedKubernetesResourceMaterialResponse {
+  ManagedKubernetesResourceMaterialView material = 1;
+}

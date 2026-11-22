@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Create-only пустая почтовая проекция; опубликованное поколение CP не затирается."""
 import argparse
+import base64
 import json
 from pathlib import Path
 import subprocess
@@ -24,12 +25,30 @@ def seed(resources):
 
 
 def verify_existing(value):
+    require(isinstance(value, dict) and isinstance(value.get('metadata'), dict) and
+            isinstance(value['metadata'].get('labels'), dict) and isinstance(value.get('data'), dict),
+            'EMAIL_PROJECTION_OWNER_REQUIRED')
     require(value.get('apiVersion') == 'v1' and value.get('kind') == 'Secret' and
             value['metadata'].get('name') == NAME and value['metadata'].get('namespace') == 'kodex-system' and
             value['metadata'].get('labels', {}).get('app.kubernetes.io/managed-by') == 'control-plane' and
-            bool(value['metadata'].get('uid')) and not value['metadata'].get('deletionTimestamp') and
-            not value['metadata'].get('ownerReferences') and value.get('type') == 'Opaque' and
-            value.get('immutable') is not True and set(value.get('data', {})) == {'mailboxes.json'}, 'EMAIL_PROJECTION_OWNER_REQUIRED')
+            isinstance(value['metadata'].get('uid'), str) and bool(value['metadata']['uid']) and value['metadata'].get('deletionTimestamp') is None and
+            value['metadata'].get('ownerReferences') in (None, []) and value.get('type') == 'Opaque' and
+            (value.get('immutable') is None or value.get('immutable') is False) and set(value['data']) == {'mailboxes.json'} and
+            isinstance(value['data']['mailboxes.json'], str), 'EMAIL_PROJECTION_OWNER_REQUIRED')
+
+
+def created_seed_uid(raw, desired):
+    # Подтверждённый create обязан вернуть именно server-assigned UID и исходные
+    # байты seed. Ошибка successful ACK не заменяется усыновлением следующего GET.
+    try:
+        value = json.loads(raw)
+        verify_existing(value)
+        actual = base64.b64decode(value['data']['mailboxes.json'], validate=True)
+        require(actual == desired['stringData']['mailboxes.json'].encode('utf-8'),
+                'EMAIL_BOOTSTRAP_CREATE_ACK_REJECTED')
+        return value['metadata']['uid']
+    except (ValueError, TypeError, KeyError):
+        raise Rejected('EMAIL_BOOTSTRAP_CREATE_ACK_REJECTED') from None
 
 
 def reconcile(resources, context, dry_run=False, existing_only=False):
@@ -46,17 +65,20 @@ def reconcile(resources, context, dry_run=False, existing_only=False):
         verify_existing(existing)
         return
     require(not existing_only, 'EXISTING_EMAIL_PROJECTION_REQUIRED')
-    args = command + ['create', '--field-manager=kodex-install', '-f', '-']
+    args = command + ['create', '--field-manager=kodex-install', '-f', '-', '-o', 'json']
     if dry_run:
         args.append('--dry-run=server')
     response = subprocess.run(args, input=json.dumps(desired).encode(), capture_output=True, timeout=25)
     if dry_run:
         require(response.returncode == 0, 'EMAIL_BOOTSTRAP_DRY_RUN_FAILED')
         return
-    # Потерянный ответ или гонка create требуют readback, а не повторной записи.
+    ack_uid = created_seed_uid(response.stdout, desired) if response.returncode == 0 else None
+    # Неизвестный исход допускает прежнее наблюдение существующей CP-проекции,
+    # но не повтор create. При известном successful ACK его UID обязателен.
     actual = current()
     require(actual is not None, 'EMAIL_BOOTSTRAP_READBACK_REQUIRED')
     verify_existing(actual)
+    require(ack_uid is None or actual['metadata']['uid'] == ack_uid, 'EMAIL_BOOTSTRAP_UID_CHANGED')
 
 
 def main():

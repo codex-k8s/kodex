@@ -20,6 +20,8 @@ COPY libs/go/runtimepolicywire/ libs/go/runtimepolicywire/
 COPY libs/go/secretbrokerapi/ libs/go/secretbrokerapi/
 COPY libs/go/serviceruntime/ libs/go/serviceruntime/
 COPY libs/go/securefile/ libs/go/securefile/
+COPY libs/go/managedkubernetes/ libs/go/managedkubernetes/
+COPY libs/go/managedssh/ libs/go/managedssh/
 COPY services/internal/runtime-controller/ services/internal/runtime-controller/
 WORKDIR /workspace/services/internal/runtime-controller
 RUN test "$(go env GOVERSION)" = "go1.26.10"

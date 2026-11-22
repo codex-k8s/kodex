@@ -1392,12 +1392,86 @@ components:
           type: array
           maxItems: 4
           items: { $ref: "#/components/schemas/OwnerGateDecisionConsequence" }
+        kubernetesChild: { $ref: "#/components/schemas/KubernetesOwnerGateChild" }
         integrationIntent: { $ref: "#/components/schemas/IntegrationIntent" }
         nextActions:
           type: array
           maxItems: 12
           uniqueItems: true
           items: { $ref: "#/components/schemas/NextAction" }
+    KubernetesOwnerGateChild:
+      type: object
+      additionalProperties: false
+      description: Сохранённое описание одного дочернего действия, без material и execution credit. Решение относится только к этому child исходного plan.
+      required: [planRef, childRef, operation, planDigest, inputDigest, targetRef, targetRevision, resource, intendedName, intendedGenerateName, preview]
+      properties:
+        planRef: { $ref: "#/components/schemas/OpaqueRef" }
+        childRef: { $ref: "#/components/schemas/OpaqueRef" }
+        operation: { type: string, pattern: '^kubernetes\.[a-z][a-z.-]{1,63}$' }
+        planDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        inputDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        targetRef: { $ref: "#/components/schemas/OpaqueRef" }
+        targetRevision: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        resource: { $ref: "#/components/schemas/KubernetesOwnerGateResource" }
+        intendedName: { type: string, maxLength: 4096 }
+        intendedGenerateName: { type: string, maxLength: 4096 }
+        preview: { $ref: "#/components/schemas/KubernetesOwnerGatePreview" }
+    KubernetesOwnerGatePreview:
+      type: object
+      additionalProperties: false
+      required: [inputDigest, options, changes, secretMaterialRef, limitations]
+      properties:
+        inputDigest: { type: string, pattern: "^[a-f0-9]{64}$" }
+        options:
+          type: array
+          maxItems: 128
+          items: { $ref: "#/components/schemas/KubernetesOwnerGatePreviewOption" }
+        changes:
+          type: array
+          maxItems: 2048
+          items: { $ref: "#/components/schemas/KubernetesOwnerGatePreviewChange" }
+        secretMaterialRef: { type: string, maxLength: 96 }
+        limitations:
+          type: array
+          maxItems: 4
+          uniqueItems: true
+          items: { type: string, enum: [NOT_AUTHORIZED, SENSITIVE_OR_UNCLASSIFIED_FIELDS_HIDDEN, PROTECTED_MATERIAL_HIDDEN, BUDGET_EXCEEDED] }
+    KubernetesOwnerGatePreviewOption:
+      type: object
+      additionalProperties: false
+      required: [key, kind, valueJson, redacted]
+      properties:
+        key: { type: string, minLength: 1, maxLength: 64 }
+        kind: { type: string, enum: [NONE, STRING, NUMBER, BOOLEAN, ARRAY, OBJECT, 'NULL'] }
+        valueJson: { type: string, maxLength: 524288 }
+        redacted: { type: boolean }
+    KubernetesOwnerGatePreviewChange:
+      type: object
+      additionalProperties: false
+      required: [operation, path, from, valueKind, valueJson, redacted]
+      properties:
+        operation: { type: string, enum: [SUBMIT, add, remove, replace, copy, move, test] }
+        path: { type: string, minLength: 1, maxLength: 4096 }
+        from: { type: string, maxLength: 4096 }
+        valueKind: { type: string, enum: [NONE, STRING, NUMBER, BOOLEAN, ARRAY, OBJECT, 'NULL'] }
+        valueJson: { type: string, maxLength: 524288 }
+        redacted: { type: boolean }
+    KubernetesOwnerGateResource:
+      type: object
+      additionalProperties: false
+      description: Безопасные координаты из original child observation. Пустые UID/RV у CREATE collection не означают доказанную ABSENT incarnation.
+      required: [group, version, resource, namespace, name, uid, resourceVersion, subresource, namespaced, allNamespaces]
+      properties:
+        group: { type: string, maxLength: 253 }
+        version: { type: string, minLength: 1, maxLength: 63 }
+        resource: { type: string, minLength: 1, maxLength: 63 }
+        namespace: { type: string, maxLength: 63 }
+        name: { type: string, maxLength: 4096 }
+        uid: { type: string, maxLength: 36 }
+        resourceVersion: { type: string, maxLength: 256 }
+        subresource: { type: string, maxLength: 32 }
+        namespaced: { type: boolean }
+        allNamespaces: { type: boolean }
     WorkflowReworkStepPreview:
       type: object
       additionalProperties: false

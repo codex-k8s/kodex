@@ -24,6 +24,7 @@ import (
 // sourceFixture provides explicit synthetic inventory/ownership answers and records finalization for purge unit tests; it performs no SQL work or authorization.
 // sourceFixture задаёт явные синтетические ответы inventory/ownership и записывает финализацию в unit-тестах очистки; SQL и авторизацию не выполняет.
 type sourceFixture struct {
+	kubernetesReceipt                    *objectstorage.Receipt
 	items                                []platform.ProjectPurgeExternalItem
 	shared, finalized                    bool
 	archiveOwned                         bool
@@ -397,5 +398,73 @@ func TestMovedSubjectArtifactRequiresExactServerLineage(t *testing.T) {
 		if err := processor.process(ctx, candidate); err != nil || !source.finalized {
 			t.Fatal("confirmed moved subject artifact cleanup/retry", err)
 		}
+	}
+}
+
+// ProjectPurgeKubernetesObjectReceipt returns only the explicitly configured immutable test receipt;
+// unrelated fixtures default to no KUBE authority.
+// ProjectPurgeKubernetesObjectReceipt возвращает только явно заданный immutable test receipt;
+// посторонние fixtures по умолчанию не получают KUBE authority.
+func (source *sourceFixture) ProjectPurgeKubernetesObjectReceipt(context.Context, platform.ProjectPurgeCandidate, platform.ProjectPurgeExternalItem) (objectstorage.Receipt, error) {
+	if source.kubernetesReceipt == nil {
+		return objectstorage.Receipt{}, objectstorage.ErrNotFound
+	}
+	return *source.kubernetesReceipt, nil
+}
+
+// TestKubernetesPurgeRequiresExactOwnerReceipt checks the new staged-object branch through the
+// real processor: a matching project path is insufficient, every receipt coordinate must match,
+// and a known exact missing version is idempotent deletion rather than UNKNOWN abandonment.
+// TestKubernetesPurgeRequiresExactOwnerReceipt проверяет staged-object branch через actual
+// processor: подходящий путь недостаточен, должны совпадать все поля receipt; известная точная
+// отсутствующая version означает idempotent deletion, а не UNKNOWN abandonment.
+func TestKubernetesPurgeRequiresExactOwnerReceipt(t *testing.T) {
+	for _, test := range []struct {
+		name, change string
+		want         bool
+	}{
+		{"exact", "", true}, {"no owner", "owner", false}, {"version", "version", false}, {"etag", "etag", false}, {"digest", "digest", false}, {"size", "size", false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := t.Context()
+			candidate := platform.ProjectPurgeCandidate{OrganizationRef: "org_fixture", ProjectRef: "prj_fixture"}
+			key := "organizations/disposable-tenant/kubernetes-input-stages/kif_disposable"
+			store := objectstoragetest.New()
+			actual, err := store.Put(ctx, objectstorage.PutInput{Key: key, MediaType: "text/plain", Digest: "sha256:" + strings.Repeat("a", 64), SizeBytes: 1, Body: strings.NewReader("x")})
+			if err != nil {
+				t.Fatal(err)
+			}
+			expected := actual
+			switch test.change {
+			case "version":
+				expected.VersionID = "different"
+			case "etag":
+				expected.ETag = "different"
+			case "digest":
+				expected.Digest = "sha256:" + strings.Repeat("b", 64)
+			case "size":
+				expected.SizeBytes++
+			}
+			source := &sourceFixture{items: []platform.ProjectPurgeExternalItem{{Kind: "OBJECT", Target: key, Version: actual.VersionID}}, kubernetesReceipt: &expected}
+			if test.change == "owner" {
+				source.kubernetesReceipt = nil
+			}
+			processor := New(source, store, nil, fake.NewSimpleClientset(), "kodex-runtime")
+			err = processor.process(ctx, candidate)
+			if (err == nil) != test.want || source.finalized != test.want {
+				t.Fatal("staged object owner receipt boundary", err)
+			}
+			_, headErr := store.Head(ctx, key, actual.VersionID)
+			if test.want {
+				if !errors.Is(headErr, objectstorage.ErrNotFound) {
+					t.Fatal("exact object survived deletion", headErr)
+				}
+				if err := processor.process(ctx, candidate); err != nil {
+					t.Fatal("exact known-version deletion replay", err)
+				}
+			} else if headErr != nil {
+				t.Fatal("denied staged object was deleted", headErr)
+			}
+		})
 	}
 }

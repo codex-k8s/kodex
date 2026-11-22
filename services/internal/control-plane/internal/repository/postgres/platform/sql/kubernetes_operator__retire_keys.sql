@@ -1,0 +1,2 @@
+-- name: kubernetes_operator__retire_keys :exec
+INSERT INTO control_plane.kubernetes_retired_serving_keys(serving_key_sha256,registry_revision) SELECT owner.serving_key_sha256,@registry_revision FROM control_plane.kubernetes_serving_key_owners owner WHERE NOT EXISTS(SELECT 1 FROM control_plane.kubernetes_node_transport_pins pin WHERE pin.ref=ANY(@active_refs::text[]) AND pin.serving_key_sha256=owner.serving_key_sha256) ON CONFLICT(serving_key_sha256) DO NOTHING;

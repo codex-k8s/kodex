@@ -27,6 +27,26 @@ def plan(value):
 
 
 class CleanupTests(unittest.TestCase):
+    def test_ssh_private_namespace_requires_ownership_and_preserves_unknown_objects(self):
+        value = fixture()
+        private = item('namespaces', 'kodex-ssh-identities', '', uid='ssh-namespace-uid')
+        value['namespaces'].append(private)
+        result = plan(value)
+        self.assertEqual(result['status'], 'OWNERSHIP_REVIEW_REQUIRED')
+        self.assertEqual(result['unprovenNamespaces'], [private])
+        private['labels']['app.kubernetes.io/part-of'] = 'kodex'
+        foreign = item('secrets', 'unknown-private-object', 'kodex-ssh-identities', uid='foreign-uid')
+        value['objects'] = [foreign]
+        result = plan(value)
+        self.assertEqual(result['status'], 'OWNERSHIP_REVIEW_REQUIRED')
+        self.assertFalse(result['deleteCandidates'])
+        self.assertTrue(any(row['uid'] == 'ssh-namespace-uid' for row in result['namespaces']))
+        retained = cleanup.plan_inventory(value, 'fixture', 'cluster-uid', ['node-uid'], 'a' * 40,
+                                          preserve_namespaces=['kodex-ssh-identities'])
+        self.assertEqual(retained['status'], 'OWNERSHIP_CLASSIFIED')
+        self.assertFalse(retained['deleteCandidates'])
+        self.assertNotIn(private, retained['namespaces'])
+
     def test_preserved_namespace_retains_owned_objects_volumes_and_helm_resources(self):
         value = fixture()
         value["namespaces"].append(item("namespaces", "kodex-trust", "", managers=["kodex-install"]))

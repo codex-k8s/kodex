@@ -848,6 +848,8 @@ enum IntegrationResourceKind {
   // Versioned GitLab project/group/instance boundary; project operations дополнительно закрепляют exact provider project ID.
   INTEGRATION_RESOURCE_KIND_GITLAB_SCOPE = 10;
   INTEGRATION_RESOURCE_KIND_GITHUB_SCOPE = 11;
+  // Namespace назначается owner из typed grant; target только из Connection configuration.
+  INTEGRATION_RESOURCE_KIND_KUBERNETES_TARGET = 12;
 }
 
 // IntegrationDefinitionOrigin фиксирует источник immutable definition revision.
@@ -1469,6 +1471,60 @@ message OwnerGate {
   // SUPERSEDED отличается от owner CANCEL и TTL expiry.
   string resolution_kind = 26;
   WorkflowReworkPreview rework_plan = 27;
+  // Необязательное безопасное описание одного immutable Kubernetes child, не execution credit.
+  KubernetesOwnerGateChild kubernetes_child = 28;
+}
+
+// Описывает точный child существующего HumanGate без material, actor selectors и lease secrets.
+message KubernetesOwnerGateChild {
+  string plan_ref = 1;
+  string child_ref = 2;
+  string operation = 3;
+  string plan_digest = 4;
+  string input_digest = 5;
+  string target_ref = 6;
+  int64 target_revision = 7;
+  KubernetesOwnerGateResource resource = 8;
+  // Только metadata.name/generateName из server-validated create input, без raw body.
+  string intended_name = 9;
+  string intended_generate_name = 10;
+  KubernetesOwnerGatePreview preview = 11;
+}
+
+// Публичные координаты immutable child; наличие UID/RV не является полномочием.
+// Read-only submitted values с closed limitations; не executable input и не before-state.
+message KubernetesOwnerGatePreview {
+  string input_digest = 1;
+  repeated KubernetesOwnerGatePreviewOption options = 2;
+  repeated KubernetesOwnerGatePreviewChange changes = 3;
+  string secret_material_ref = 4;
+  repeated string limitations = 5;
+}
+message KubernetesOwnerGatePreviewOption {
+  string key = 1;
+  string kind = 2;
+  string value_json = 3;
+  bool redacted = 4;
+}
+message KubernetesOwnerGatePreviewChange {
+  string operation = 1;
+  string path = 2;
+  string from = 3;
+  string value_kind = 4;
+  string value_json = 5;
+  bool redacted = 6;
+}
+message KubernetesOwnerGateResource {
+  string group = 1;
+  string version = 2;
+  string resource = 3;
+  string namespace = 4;
+  string name = 5;
+  string uid = 6;
+  string resource_version = 7;
+  string subresource = 8;
+  bool namespaced = 9;
+  bool all_namespaces = 10;
 }
 
 message OwnerGateDecisionConsequence {
@@ -1487,6 +1543,38 @@ message IntegrationIntent {
   IntegrationResourceScope resource_scope = 6;
   google.protobuf.Struct effect_preview = 7;
   string effect_key = 8;
+}
+
+// Происхождение принятого immutable OUTPUT; metadata не утверждают остановку remote process.
+enum KubernetesArtifactCaptureKind {
+  KUBERNETES_ARTIFACT_CAPTURE_KIND_UNSPECIFIED = 0;
+  KUBERNETES_ARTIFACT_CAPTURE_KIND_FULL = 1;
+  KUBERNETES_ARTIFACT_CAPTURE_KIND_PARTIAL = 2;
+}
+message KubernetesArtifactCaptureOrigin {
+  string invocation_ref = 1;
+  string stream_ref = 2;
+  int64 stream_generation = 3;
+  int64 capture_generation = 4;
+  string operation = 5;
+  string channel = 6;
+  KubernetesArtifactCaptureKind kind = 7;
+  uint64 acknowledged_prefix = 8;
+  uint64 output_watermark = 9;
+  uint64 dropped_bytes = 10;
+  bool native_terminal_known = 11;
+  bool transport_joined = 12;
+  string owner_state = 13;
+  string local_state = 14;
+  string remote_outcome = 15;
+  optional int32 exit_code = 16;
+  KubernetesOwnerGateResource resource = 17;
+  string target_ref = 18;
+  int64 target_revision = 19;
+  string connection_ref = 20;
+  string source_digest = 21;
+  string reason_code = 22;
+  google.protobuf.Timestamp sealed_at = 23;
 }
 
 message Artifact {
@@ -1510,6 +1598,7 @@ message Artifact {
   google.protobuf.Timestamp deleted_at = 18;
   google.protobuf.Timestamp purge_after = 19;
   string current_revision_ref = 20;
+  KubernetesArtifactCaptureOrigin capture_origin = 21;
 }
 
 // Неизменяемая версия тела стабильного логического Artifact.
@@ -1526,6 +1615,7 @@ message ArtifactRevision {
   string source = 9;
   bool preview_available = 10;
   google.protobuf.Timestamp created_at = 11;
+  KubernetesArtifactCaptureOrigin capture_origin = 12;
 }
 
 message ListArtifactRevisionsRequest {
@@ -1720,6 +1810,8 @@ message IntegrationDefinition {
   repeated string next_actions = 19;
   int64 connection_count = 20;
   int64 healthy_connection_count = 21;
+  IntegrationCredentialDeliveryKind credential_delivery_kind = 22;
+  IntegrationBrokerIdentityPurpose broker_identity_purpose = 23;
 }
 
 // IntegrationResourceScope содержит только server-derived exact resource values.
@@ -1789,6 +1881,11 @@ message IntegrationConnection {
   // Только адресный GetIntegrationConnection; omitted не означает ABSENT.
   IntegrationDefinitionConfigurationBinding definition_configuration_binding = 19;
   IntegrationCredentialPolicy credential_policy = 20;
+  IntegrationCredentialDeliveryKind credential_delivery_kind = 21;
+  IntegrationBrokerIdentityPurpose broker_identity_purpose = 22;
+  string broker_identity_ref = 23;
+  int64 broker_identity_revision = 24;
+  KubernetesIdentitySetupRequirements kubernetes_setup_requirements = 25;
 }
 
 // Безопасные pins текущей связи; не являются grant на чтение или изменение.
@@ -2561,6 +2658,8 @@ message ProjectPurgeRecovery {
   bool can_resolve = 8;
   string resolution_ref = 9;
   int64 project_version = 10;
+  // NONE либо KUBERNETES_STAGING_RECONCILIATION_REQUIRED; без storage locators.
+  string reason_code = 11;
 }
 message GetProjectPurgeRecoveryRequest {
   string project_ref = 1;
@@ -3447,6 +3546,10 @@ message ChangeIntegrationGrantRequest {
   bool enabled = 6;
   repeated string approval_scope_paths = 7;
   IntegrationApprovalPolicy approval_policy = 8;
+  // Только KUBERNETES_TARGET; exact DNS namespace, @cluster либо explicit READ @all-namespaces.
+  string kubernetes_namespace = 9;
+  // KUBE-only exact existing grant для update/revoke; create оставляет пустым.
+  string kubernetes_grant_ref = 10;
 }
 message ChangeIntegrationGrantResponse {
   IntegrationConnection connection = 1;
@@ -3459,6 +3562,8 @@ message ChangeSystemAssistantIntegrationGrantRequest {
   bool enabled = 4;
   IntegrationApprovalPolicy approval_policy = 5;
   repeated string approval_scope_paths = 6;
+  string kubernetes_namespace = 7;
+  string kubernetes_grant_ref = 8;
 }
 message ChangeSystemAssistantIntegrationGrantResponse {
   IntegrationConnection connection = 1;
@@ -4927,6 +5032,12 @@ message IntegrationConnectionTestClaim {
   repeated PersonalIntegrationCredentialObservationProfile personal_observation_profiles = 12;
   repeated string personal_denied_write_capability_keys = 13;
   int32 github_discovery_page = 14;
+  // Exact owner-selected representation; BROKER_IDENTITY не содержит generic Secret descriptor.
+  IntegrationCredentialDeliveryKind credential_delivery_kind = 15;
+  IntegrationBrokerIdentityPurpose broker_identity_purpose = 16;
+  string broker_identity_ref = 17;
+  int64 broker_identity_revision = 18;
+  string input_digest = 19;
 }
 message ClaimIntegrationConnectionTestsRequest {
   string workload_instance = 1;
@@ -5009,6 +5120,10 @@ enum IntegrationCredentialResourcePermissionProfile {
   INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_GRAFANA_TYPED_WRITE_V1 = 19;
   // Отдельный API-only namespace с operator qualification, текущим key и EACH effect.
   INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_LOKI_RULER_MUTATION_V1 = 20;
+  // Current resource checks KUBE выполняются purpose owner; health не выдаёт resource authority.
+  INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_KUBERNETES_SCOPED_RESOURCE_V1 = 21;
+  // Identity health не даёт reusable host permission: current target/user/recipe/gate проверяются при каждой SSH operation.
+  INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_SSH_SCOPED_RESOURCE_V1 = 22;
 }
 message IntegrationInvocationClaim {
   string invocation_ref = 1;
@@ -5038,6 +5153,11 @@ message IntegrationInvocationClaim {
   // Personal mode выдаёт descriptor только через одноразовый owner begin.
   bool credential_admission_required = 24;
   IntegrationCredentialResourcePermissionProfile resource_permission_profile = 25;
+  // Exact package и текущий owner назначают representation до commit lease; отсутствие не означает TOKEN.
+  IntegrationCredentialDeliveryKind credential_delivery_kind = 26;
+  IntegrationBrokerIdentityPurpose broker_identity_purpose = 27;
+  string broker_identity_ref = 28;
+  int64 broker_identity_revision = 29;
 }
 
 // ClaimSSHComposeInvocationsRequest ограничивает отдельную SSH-очередь одним consumer slot.
@@ -5049,9 +5169,21 @@ message ClaimSSHComposeInvocationsRequest {
 message ClaimSSHComposeInvocationsResponse {
   repeated IntegrationInvocationClaim claims = 1;
 }
+// Свободные slots только сужают owner selection; authority определяется текущим graph.
+// Отсутствующее поле сохраняет ordinary-only режим, нулевой purpose исключён до claim.
+message IntegrationInvocationDeliveryCapacity {
+  // Свободная synchronous capacity ordinary consumer; сумма всех полей не выше общего limit.
+  uint32 ordinary = 1;
+  // Фактически зарезервированные local slots KUBE consumer; ноль исключает этот purpose.
+  uint32 kubernetes = 2;
+  // Фактически зарезервированные local slots SSH consumer; ноль исключает этот purpose.
+  uint32 ssh = 3;
+}
 message ClaimIntegrationInvocationsRequest {
   string workload_instance = 1;
   int32 limit = 2;
+  // Bounded local capacity лишь сужает owner selection; caller не назначает lineage либо authority.
+  IntegrationInvocationDeliveryCapacity capacity = 3;
 }
 message ClaimIntegrationInvocationsResponse {
   repeated IntegrationInvocationClaim claims = 1;
@@ -8013,6 +8145,13 @@ message EmailMailboxOperationPolicy {
   EmailApprovalPolicy policy = 2;
   repeated string folders = 3;
 }
+// Выбранный setup profile ограничивает endpoints; не доказывает вход и не изображает OAuth lifecycle.
+enum EmailMailboxProviderProfile {
+  EMAIL_MAILBOX_PROVIDER_PROFILE_UNSPECIFIED = 0;
+  EMAIL_MAILBOX_PROVIDER_PROFILE_CUSTOM = 1;
+  EMAIL_MAILBOX_PROVIDER_PROFILE_TIMEWEB_PASSWORD = 2;
+  EMAIL_MAILBOX_PROVIDER_PROFILE_GMAIL_APP_PASSWORD = 3;
+}
 // Только редактируемые поля; tenant/connection/lineage назначает owner.
 message EmailMailboxSpecification {
   bool enabled = 1;
@@ -8030,6 +8169,7 @@ message EmailMailboxSpecification {
   EmailMailboxEndpoint pop = 13;
   EmailMailboxLimits limits = 14;
   repeated EmailMailboxOperationPolicy policies = 15;
+  EmailMailboxProviderProfile provider_profile = 16;
 }
 message EmailMailboxDraftContent {
   oneof content {
@@ -9615,6 +9755,22 @@ enum IntegrationCredentialPolicy {
   INTEGRATION_CREDENTIAL_POLICY_INITIATOR_REQUIRED = 2;
 }
 
+// Representation, не способ выдачи полномочий. PASSWORD остаётся generic TOKEN
+// delivery; BROKER_IDENTITY никогда не содержит generic Secret descriptor.
+enum IntegrationCredentialDeliveryKind {
+  INTEGRATION_CREDENTIAL_DELIVERY_KIND_UNSPECIFIED = 0;
+  INTEGRATION_CREDENTIAL_DELIVERY_KIND_NONE = 1;
+  INTEGRATION_CREDENTIAL_DELIVERY_KIND_TOKEN = 2;
+  INTEGRATION_CREDENTIAL_DELIVERY_KIND_BROKER_IDENTITY = 3;
+}
+
+// Purpose назначается pinned definition и owner binding, не request payload.
+enum IntegrationBrokerIdentityPurpose {
+  INTEGRATION_BROKER_IDENTITY_PURPOSE_UNSPECIFIED = 0;
+  INTEGRATION_BROKER_IDENTITY_PURPOSE_KUBERNETES_TARGET = 1;
+  INTEGRATION_BROKER_IDENTITY_PURPOSE_SSH_TARGET = 2;
+}
+
 enum PersonalIntegrationCredentialState {
   PERSONAL_INTEGRATION_CREDENTIAL_STATE_UNSPECIFIED = 0;
   PERSONAL_INTEGRATION_CREDENTIAL_STATE_NOT_CONFIGURED = 1;
@@ -9640,6 +9796,11 @@ message PersonalIntegrationCredentialView {
   repeated string denied_capability_keys = 9;
   int64 connection_version = 10;
   GitHubRepositoryDiscoveryPage github_discovery = 11;
+  IntegrationCredentialDeliveryKind credential_delivery_kind = 12;
+  IntegrationBrokerIdentityPurpose broker_identity_purpose = 13;
+  string broker_identity_ref = 14;
+  int64 broker_identity_revision = 15;
+  int64 binding_generation = 16;
 }
 
 message GetPersonalIntegrationCredentialRequest {
@@ -9693,6 +9854,9 @@ message PersonalIntegrationConnection {
   PersonalIntegrationCredentialView credential = 7;
   // Недоступный adapter не скрывает собственную сохранённую привязку для отзыва.
   bool available = 8;
+  IntegrationCredentialDeliveryKind credential_delivery_kind = 9;
+  IntegrationBrokerIdentityPurpose broker_identity_purpose = 10;
+  KubernetesIdentitySetupRequirements kubernetes_setup_requirements = 11;
 }
 message ListPersonalIntegrationConnectionsRequest {
   PageRequest page = 1;
@@ -10044,4 +10208,14 @@ message BeginInteractionDeliveryResponse {
   string input_digest = 4;
   string safe_error_code = 5;
   int32 retry_after_seconds = 6;
+}
+
+// Только безопасные pre-Begin требования из scoped Connection и текущего operator target.
+// Не содержит credentials/aliases и не является authority либо source selector.
+message KubernetesIdentitySetupRequirements {
+  string target_ref = 1;
+  int64 target_revision = 2;
+  string canonical_context = 3;
+  int64 connection_version = 4;
+  IntegrationCredentialPolicy credential_policy = 5;
 }

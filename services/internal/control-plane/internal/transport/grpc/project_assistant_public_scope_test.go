@@ -68,3 +68,35 @@ func TestProjectAssistantScopedGitHubCandidate(t *testing.T) {
 		}
 	}
 }
+
+// TestProjectAssistantKubernetesCandidateScope preserves safe unselected/selected target metadata
+// and rejects wrong operation, missing scope, private keys and damaged source digests.
+// TestProjectAssistantKubernetesCandidateScope сохраняет safe unselected/selected target metadata
+// и отклоняет wrong operation, missing scope, private keys и damaged source digests.
+func TestProjectAssistantKubernetesCandidateScope(t *testing.T) {
+	for _, values := range []map[string]string{{"target_ref": "target_example"}, {"target_ref": "target_example", "namespace": "example"}} {
+		raw, _ := json.Marshal(values)
+		digest := sha256.Sum256(raw)
+		item := entity.SystemAssistantIntegrationGrantCandidate{Reason: "READY", Capability: entity.IntegrationCapability{Key: "kubernetes.get", Operation: "kubernetes.get", ResourceKind: "KUBERNETES_TARGET"}, ResourceScope: values, ResourceScopeDigest: hex.EncodeToString(digest[:])}
+		wire, err := castAssistantIntegrationGrantCandidate(item)
+		if err != nil || wire.GetResourceScope().GetKind() != cp.IntegrationResourceKind_INTEGRATION_RESOURCE_KIND_KUBERNETES_TARGET {
+			t.Fatal("Kubernetes scope lost its exact public representation")
+		}
+		for _, mutation := range []string{"operation", "missing", "digest", "private"} {
+			invalid := item
+			switch mutation {
+			case "operation":
+				invalid.Capability.Operation = "kubernetes.delete"
+			case "missing":
+				invalid.ResourceScope, invalid.ResourceScopeDigest = nil, ""
+			case "digest":
+				invalid.ResourceScopeDigest = strings.Repeat("0", 64)
+			case "private":
+				invalid.ResourceScope = map[string]string{"target_ref": "target_example", "credential": "private-sentinel"}
+			}
+			if _, err := castAssistantIntegrationGrantCandidate(invalid); err == nil {
+				t.Fatal("invalid Kubernetes candidate scope was exposed")
+			}
+		}
+	}
+}

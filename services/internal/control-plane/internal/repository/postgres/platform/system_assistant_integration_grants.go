@@ -115,5 +115,5 @@ func (repository *Repository) systemAssistantIntegrationGrantInput(ctx context.C
 		return command.IntegrationGrantInput{}, target, errs.ErrInvalid
 	}
 	return command.IntegrationGrantInput{ConnectionRef: payload.ConnectionRef, CapabilityKey: payload.CapabilityKey, AgentRef: target.ref,
-		ApprovalPolicy: payload.ApprovalPolicy, ApprovalScopePaths: payload.ApprovalScopePaths, Enabled: payload.Enabled}, target, nil
+		ApprovalPolicy: payload.ApprovalPolicy, ApprovalScopePaths: payload.ApprovalScopePaths, Enabled: payload.Enabled, KubernetesNamespace: payload.KubernetesNamespace, KubernetesGrantRef: payload.KubernetesGrantRef}, target, nil
 }

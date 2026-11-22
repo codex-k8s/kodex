@@ -18,6 +18,8 @@ import type {
 } from "@/shared/ui/async-entity-picker";
 import { allowedIntegrationApprovalPolicies } from "@/features/integrations/ui/model";
 import { approvalScopeOptions } from "@/features/integrations/approval-scope-options";
+import KubernetesGrantScopeField from "@/features/integrations/ui/KubernetesGrantScopeField.vue";
+import { kubernetesGrantScopeFields } from "@/features/integrations/kubernetes-grant-scope";
 import {
   readSystemGrantConnections,
   readSystemGrantCandidates,
@@ -41,6 +43,16 @@ const connection = ref<IntegrationConnection>();
 const candidate = ref<SystemAssistantIntegrationGrantCandidate>();
 const policy = ref<SystemAssistantIntegrationGrantInput["approvalPolicy"]>();
 const paths = ref<string[]>([]);
+const kubernetesNamespace = ref("");
+const kubernetesScope = computed(() =>
+  kubernetesGrantScopeFields(
+    connection.value,
+    candidate.value?.capability,
+    kubernetesNamespace.value,
+    "AGENT",
+    props.assistant.ref,
+  ),
+);
 const enabled = ref(true);
 const busy = ref(false);
 const problem = ref<AppProblem>();
@@ -91,10 +103,15 @@ const canSave = computed(
   () =>
     !busy.value &&
     canManage.value &&
+    !!kubernetesScope.value &&
+    (candidate.value?.capability.resourceKind !== "KUBERNETES_TARGET" ||
+      enabled.value ||
+      !!kubernetesScope.value.kubernetesGrantRef) &&
     validSystemGrantSelection(candidate.value, policy.value, paths.value),
 );
 
 function clearCapability(): void {
+  kubernetesNamespace.value = "";
   candidate.value = undefined;
   policy.value = undefined;
   paths.value = [];
@@ -243,7 +260,8 @@ async function save(): Promise<void> {
         capabilityKey: item.capability.key,
         enabled: enabled.value,
         approvalPolicy: selectedPolicy,
-        ...(selectedPolicy === "HUMAN_SCOPED"
+        ...kubernetesScope.value,
+        ...(enabled.value && selectedPolicy === "HUMAN_SCOPED"
           ? { approvalScopePaths: [...paths.value] }
           : {}),
       },
@@ -327,6 +345,11 @@ onBeforeUnmount(() => {
     <template v-if="candidate">
       <p>{{ candidate.capability.description }}</p>
       <template v-if="canManage">
+        <KubernetesGrantScopeField
+          v-if="candidate.capability.resourceKind === 'KUBERNETES_TARGET'"
+          v-model="kubernetesNamespace"
+          :disabled="busy"
+        />
         <label
           ><input v-model="enabled" type="checkbox" :disabled="busy" />{{
             t("assistant.settings.integrationEnabled")

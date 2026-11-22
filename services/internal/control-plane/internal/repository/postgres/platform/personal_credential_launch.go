@@ -218,7 +218,14 @@ func (repository *Repository) personalLaunchCredentialIssues(ctx context.Context
 			return nil, errs.ErrConflict
 		}
 	}
-	rows, err = tx.Query(ctx, queryPersonalLaunchBindings, arguments)
+	genericRefs := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		if connections[ref].definitionKey != "email" {
+			genericRefs = append(genericRefs, ref)
+		}
+	}
+	bindingArguments := pgx.StrictNamedArgs{"organization_id": current.organizationID, "subject_id": current.actorID, "connection_refs": genericRefs}
+	rows, err = tx.Query(ctx, queryPersonalLaunchBindings, bindingArguments)
 	if err != nil {
 		return nil, errs.ErrUnavailable
 	}
@@ -245,6 +252,8 @@ func (repository *Repository) personalLaunchCredentialIssues(ctx context.Context
 	configDigests := make(map[string]string, len(refs))
 	definitionDigests := make(map[string]string, len(refs))
 	credentialRequired := make(map[string]bool, len(refs))
+	deliveries := make(map[string]integrationpackage.CredentialDelivery, len(refs))
+	targetsByConnection := make(map[string]string, len(refs))
 	knownCapabilities := make(map[[2]string]bool, len(requirements))
 	definitionKeys := make(map[string]string, len(refs))
 	resourceProfiles := make(map[[2]string]string, len(requirements))
@@ -277,6 +286,22 @@ func (repository *Repository) personalLaunchCredentialIssues(ctx context.Context
 		definitionDigests[ref] = definition.Digest
 		definitionKeys[ref] = definition.Metadata.Key
 		credentialRequired[ref] = definition.RequiresConnectionCredential()
+		delivery, known := definition.ConnectionCredentialDelivery()
+		if !known {
+			return nil, errs.ErrUnavailable
+		}
+		if definition.Metadata.Key == "email" {
+			if definition.Spec.Adapter != string(integrationpackage.AdapterEmailHTTPS) || delivery.Kind != integrationpackage.CredentialDeliveryNone {
+				return nil, errs.ErrUnavailable
+			}
+		} else if delivery.Kind != integrationpackage.CredentialDeliveryToken && delivery.Kind != integrationpackage.CredentialDeliveryBrokerIdentity {
+			return nil, errs.ErrUnavailable
+		}
+		if delivery.Kind == integrationpackage.CredentialDeliveryBrokerIdentity &&
+			(delivery.BrokerPurpose != string(entity.IntegrationBrokerIdentityKubernetes) && delivery.BrokerPurpose != string(entity.IntegrationBrokerIdentitySSH) || strings["target_ref"] == "" || strings["service_subject_ref"] != "") {
+			return nil, errs.ErrForbidden
+		}
+		deliveries[ref], targetsByConnection[ref] = delivery, strings["target_ref"]
 		for _, item := range requirements {
 			if item.connectionRef == ref {
 				capability, ok := definition.Capability(item.key)
@@ -291,16 +316,41 @@ func (repository *Repository) personalLaunchCredentialIssues(ctx context.Context
 	if launch.source == "SCHEDULE" || launch.source == "INTEGRATION" {
 		kind = "SERVICE"
 	}
+	emailChecked := make(map[string]bool)
+	emailProblems := make(map[string]entity.IntegrationCredentialProblem)
 	for _, item := range requirements {
 		connection := connections[item.connectionRef]
-		if !item.current || !connection.ready || !connection.visible || !connection.usable || configDigests[item.connectionRef] == "" || !knownCapabilities[[2]string{item.connectionRef, item.key}] || !credentialRequired[item.connectionRef] {
+		if !item.current || !connection.ready || !connection.visible || !connection.usable || configDigests[item.connectionRef] == "" || !knownCapabilities[[2]string{item.connectionRef, item.key}] {
+			issues = append(issues, entity.IntegrationCredentialPreflightIssue{ConnectionRef: item.connectionRef, CapabilityKey: item.key, Problem: entity.IntegrationCredentialConnectionUnavailable})
+			continue
+		}
+		if definitionKeys[item.connectionRef] == "email" {
+			if !emailChecked[item.connectionRef] {
+				problem, err := repository.emailPersonalLaunchProblem(ctx, tx, current, connection, launch)
+				if err != nil {
+					return nil, err
+				}
+				emailProblems[item.connectionRef], emailChecked[item.connectionRef] = problem, true
+			}
+			problem := emailProblems[item.connectionRef]
+			if problem != "" {
+				issues = append(issues, entity.IntegrationCredentialPreflightIssue{ConnectionRef: item.connectionRef, CapabilityKey: item.key, Problem: problem})
+			}
+			continue
+		}
+		if !credentialRequired[item.connectionRef] {
 			issues = append(issues, entity.IntegrationCredentialPreflightIssue{ConnectionRef: item.connectionRef, CapabilityKey: item.key, Problem: entity.IntegrationCredentialConnectionUnavailable})
 			continue
 		}
 		if connection.subjectKind != "USER" {
 			kind = "SERVICE"
 		}
-		valid = append(valid, entity.IntegrationCredentialRequirement{ConnectionRef: item.connectionRef, CapabilityKey: item.key, Policy: entity.IntegrationCredentialInitiatorRequired, CredentialRequired: true, DefinitionDigest: definitionDigests[item.connectionRef], ConfigurationDigest: configDigests[item.connectionRef],
+		credentialKind, brokerPurpose, targetRef := entity.IntegrationCredentialToken, entity.IntegrationBrokerIdentityPurpose(""), ""
+		if delivery := deliveries[item.connectionRef]; delivery.Kind == integrationpackage.CredentialDeliveryBrokerIdentity {
+			credentialKind, brokerPurpose, targetRef = entity.IntegrationCredentialBrokerIdentity, entity.IntegrationBrokerIdentityPurpose(delivery.BrokerPurpose), targetsByConnection[item.connectionRef]
+		}
+		valid = append(valid, entity.IntegrationCredentialRequirement{ConnectionRef: item.connectionRef, CapabilityKey: item.key, Policy: entity.IntegrationCredentialInitiatorRequired, CredentialRequired: true,
+			Kind: credentialKind, BrokerPurpose: brokerPurpose, BrokerTargetRef: targetRef, DefinitionDigest: definitionDigests[item.connectionRef], ConfigurationDigest: configDigests[item.connectionRef],
 			DefinitionKey: definitionKeys[item.connectionRef], ResourcePermissionProfile: resourceProfiles[[2]string{item.connectionRef, item.key}]})
 	}
 	credentialIssues, err := platformservice.PreflightIntegrationCredentials(valid, entity.IntegrationCredentialInitiator{OrganizationID: current.organizationID, SubjectID: current.actorID, SubjectKind: kind}, nil, bindings, time.Now().UTC())

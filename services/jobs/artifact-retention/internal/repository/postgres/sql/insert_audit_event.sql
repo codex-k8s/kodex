@@ -16,10 +16,10 @@ VALUES (
     @organization_id::uuid,
     NULLIF(@project_id, '')::uuid,
     @actor_id::uuid,
-    'artifact.retention_purge',
+    CASE WHEN @manual::boolean THEN 'artifact.manual_purge_reconcile' ELSE 'artifact.retention_purge' END,
     'ARTIFACT',
     @artifact_ref,
     'SUCCEEDED',
-    'i18n:ARTIFACT_RETENTION_PURGED',
+    CASE WHEN @manual::boolean THEN 'i18n:ARTIFACT_PURGED' ELSE 'i18n:ARTIFACT_RETENTION_PURGED' END,
     @correlation_ref
 );

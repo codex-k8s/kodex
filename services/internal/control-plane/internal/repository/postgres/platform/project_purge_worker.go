@@ -10,6 +10,14 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryProjectPurgeDueCandidates locks a bounded due set without changing lifecycle, allowing
+// the later statement to check object intents using a fresh snapshot after every root lock wait.
+// queryProjectPurgeDueCandidates блокирует bounded due set без смены lifecycle, чтобы следующий
+// statement проверил object intents свежим snapshot после всех ожиданий root locks.
+//
+//go:embed sql/project_purge__due_candidates.sql
+var queryProjectPurgeDueCandidates string
+
 // queryProjectPurgeDue selects due TRASHED projects with SKIP LOCKED, advances
 // PURGE_PENDING/version, inserts pending receipts and cancels READY archive tasks in one
 // statement.
@@ -155,7 +163,42 @@ func (repository *Repository) PromoteDueProjectPurges(ctx context.Context, limit
 		organizationID, organizationRef, projectID, projectRef string
 		version                                                int64
 	}
-	rows, err := tx.Query(ctx, queryProjectPurgeDue, pgx.StrictNamedArgs{"limit": limit})
+	candidates, err := tx.Query(ctx, queryProjectPurgeDueCandidates, pgx.StrictNamedArgs{"limit": limit})
+	if err != nil {
+		return errs.ErrUnavailable
+	}
+	// dueProject keeps only server-resolved tenant/project IDs between candidate and guard statements.
+	// dueProject хранит только server-resolved tenant/project IDs между candidate и guard statements.
+	type dueProject struct{ organizationID, projectID string }
+	var due []dueProject
+	for candidates.Next() {
+		var item dueProject
+		if err := candidates.Scan(&item.organizationID, &item.projectID); err != nil {
+			candidates.Close()
+			return errs.ErrUnavailable
+		}
+		due = append(due, item)
+	}
+	err = candidates.Err()
+	candidates.Close()
+	if err != nil {
+		return errs.ErrUnavailable
+	}
+	ids := make([]string, 0, len(due))
+	for _, item := range due {
+		err := requireKubernetesProjectReconciledTx(ctx, tx, scope{organizationID: item.organizationID}, item.projectID)
+		if errors.Is(err, errs.ErrKubernetesStagingReconciliationRequired) || errors.Is(err, errs.ErrArtifactPurgeReconciliationRequired) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if err := closeKubernetesProjectCapturesTx(ctx, tx, scope{organizationID: item.organizationID}, item.projectID); err != nil {
+			return err
+		}
+		ids = append(ids, item.projectID)
+	}
+	rows, err := tx.Query(ctx, queryProjectPurgeDue, pgx.StrictNamedArgs{"project_ids": ids})
 	if err != nil {
 		return errs.ErrUnavailable
 	}

@@ -4,7 +4,21 @@ package errs
 
 import "errors"
 
+// ArtifactPurgeReconciliationReason identifies unresolved manual custody without object locators.
+// ArtifactPurgeReconciliationReason обозначает незавершённую manual custody без object locators.
+const ArtifactPurgeReconciliationReason = "ARTIFACT_PURGE_RECONCILIATION_REQUIRED"
+
 var (
+	// ErrArtifactPurgeReconciliationRequired prevents project purge from replaying an admitted Delete.
+	// ErrArtifactPurgeReconciliationRequired запрещает project purge повторять admitted Delete.
+	ErrArtifactPurgeReconciliationRequired = errors.New("artifact purge reconciliation is required")
+
+	// ErrKubernetesStagingReconciliationRequired preserves reachable original-root cleanup before
+	// project deletion; it exposes a closed reason rather than private storage metadata.
+	// ErrKubernetesStagingReconciliationRequired сохраняет достижимую original-root cleanup до
+	// удаления проекта; раскрывает закрытую причину вместо private storage metadata.
+	ErrKubernetesStagingReconciliationRequired = errors.New("Kubernetes staging reconciliation is required")
+
 	// ErrProviderCatalogTooLarge marks a provider catalog that exceeds the supported bound; callers can classify the failure without reflecting catalog contents.
 	// ErrProviderCatalogTooLarge обозначает каталог провайдера сверх поддерживаемого предела; вызывающий различает класс ошибки без отражения содержимого каталога.
 	ErrProviderCatalogTooLarge = errors.New("provider catalog exceeds its bound")

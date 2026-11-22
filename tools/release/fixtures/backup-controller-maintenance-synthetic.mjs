@@ -74,7 +74,12 @@ export function backupMaintenanceKube(state,args,input){
  if(kind==='statefulset'&&name==='kodex-postgresql')return out(state.pgStatefulSet);
  if(kind==='pod'&&name==='kodex-postgresql-0'&&format==='json')return out(state.pgPod);
  if(kind==='pod'&&name==='kodex-postgresql-0')return `${state.postgres.uid}|StatefulSet|kodex-postgresql|${state.postgres.ownerUID}|kodex-postgresql|Running|`;
- if(kind==='pod')return out(state.pods.find(p=>p.metadata.name===name));
+ if(kind==='pods'&&format.startsWith('jsonpath=')){
+  const pods=[...state.pods,...state.extra.filter(item=>item.kind==='Pod')];
+  return pods.map(p=>[p.metadata.name,p.metadata.uid,p.metadata.resourceVersion,
+   p.metadata.labels?.['batch.kubernetes.io/job-name']??'',JSON.stringify(p.metadata.ownerReferences??[])].join('|')).join('\n');
+ }
+ if(kind==='pod')return out([...state.pods,...state.extra.filter(item=>item.kind==='Pod')].find(p=>p.metadata.name===name));
  if(kind==='replicasets,pods,jobs')return resources.map(item=>[item.kind,item.metadata.name,item.metadata.uid,item.metadata.labels?.['app.kubernetes.io/name']??'',namespace,JSON.stringify(item.metadata.ownerReferences??[])].join('\t')).join('\n')+'\n';
  if(kind==='deployments,statefulsets,daemonsets,cronjobs,jobs,replicasets,pods'||kind==='deployments,statefulsets,daemonsets,cronjobs,jobs,replicasets,replicationcontrollers,pods'){
   const resourceKinds={deployments:'Deployment',statefulsets:'StatefulSet',daemonsets:'DaemonSet',cronjobs:'CronJob',jobs:'Job',replicasets:'ReplicaSet',replicationcontrollers:'ReplicationController',pods:'Pod'};

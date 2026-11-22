@@ -56,7 +56,7 @@ func TestPersonalVerificationDoesNotInflatePermissions(t *testing.T) {
 		t.Fatal("verified READ operation was not eligible", err)
 	}
 	requirement.CapabilityKey = "fixture.write"
-	selection, err = ResolveIntegrationCredential(requirement, initiator, checking.Credential, &ready, now)
+	selection, err = ResolveIntegrationCredential(requirement, initiator, entity.TokenIntegrationCredentialSource(checking.Credential), &ready, now)
 	if err != nil || selection.Problem != entity.IntegrationCredentialUnconfirmed || selection.Credential != nil {
 		t.Fatal("health success confirmed an unobserved write permission or shared fallback", err)
 	}

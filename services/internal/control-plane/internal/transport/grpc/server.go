@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/libs/go/managedkubernetes"
 	sttv1 "github.com/codex-k8s/kodex/libs/go/sttapi/gen/stt/v1"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/authorization"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
@@ -45,7 +46,10 @@ const (
 // Server адаптирует generated control-plane RPC к platform и role-image domain services;
 // встроенные unimplemented servers сохраняют поведение неподдержанных RPC.
 type Server struct {
+	controlplanev1.UnimplementedManagedSSHIdentitySetupServiceServer
+	controlplanev1.UnimplementedManagedSSHOwnerServiceServer
 	controlplanev1.UnimplementedPersonalIntegrationCredentialServiceServer
+	controlplanev1.UnimplementedPersonalEmailMailboxServiceServer
 	controlplanev1.UnimplementedOIDCSessionServiceServer
 	sttv1.UnimplementedTranscriptionAuthorityServiceServer
 	sttv1.UnimplementedTranscriptionPolicyProjectionServiceServer
@@ -61,6 +65,15 @@ type Server struct {
 	controlplanev1.UnimplementedRuntimeSecretDraftWorkServiceServer
 	controlplanev1.UnimplementedSessionArchiveWorkServiceServer
 	controlplanev1.UnimplementedWorkspaceVolumeWorkServiceServer
+	controlplanev1.UnimplementedManagedKubernetesFileServiceServer
+	controlplanev1.UnimplementedManagedKubernetesOwnerServiceServer
+	controlplanev1.UnimplementedManagedKubernetesIdentitySetupServiceServer
+	controlplanev1.UnimplementedManagedKubernetesResourceMaterialServiceServer
+	controlplanev1.UnimplementedManagedKubernetesStreamInputServiceServer
+	controlplanev1.UnimplementedManagedKubernetesToolServiceServer
+	controlplanev1.UnimplementedManagedKubernetesCaptureServiceServer
+	controlplanev1.UnimplementedManagedKubernetesStreamOutputServiceServer
+	controlplanev1.UnimplementedManagedKubernetesPortForwardConnectionServiceServer
 	controlplanev1.UnimplementedInteractionWorkServiceServer
 	controlplanev1.UnimplementedAccessServiceServer
 	service    *platformservice.Service
@@ -288,6 +301,7 @@ func execute(ctx context.Context, service *platformservice.Service, method strin
 // Internal для неизвестной ошибки.
 func transportError(err error) error {
 	var preflight *platformservice.IntegrationCredentialPreflightError
+	var kubernetesApproval *platformservice.KubernetesApprovalRequiredError
 	switch {
 	case err == nil:
 		return nil
@@ -311,12 +325,32 @@ func transportError(err error) error {
 		return status.Error(codes.AlreadyExists, "idempotency key was reused with a different intent")
 	case errors.Is(err, errs.ErrProtected):
 		return status.Error(codes.FailedPrecondition, "protected system resource cannot be changed")
+	case errors.Is(err, errs.ErrArtifactPurgeReconciliationRequired):
+		return statusErrorWithReason(codes.FailedPrecondition, errs.ErrArtifactPurgeReconciliationRequired.Error(), errs.ArtifactPurgeReconciliationReason)
+	case errors.Is(err, errs.ErrKubernetesStagingReconciliationRequired):
+		return statusErrorWithReason(codes.FailedPrecondition, "Kubernetes staging reconciliation is required", managedkubernetes.ProjectStagingReconciliationReason)
 	case errors.Is(err, errs.ErrResourceInUse):
 		return statusErrorWithReason(codes.FailedPrecondition, "resource is in use", resourceInUseReason)
 	case errors.Is(err, errs.ErrCapabilityRequired):
 		return status.Error(codes.FailedPrecondition, "required capability is not enabled")
 	case errors.Is(err, errs.ErrAlreadyResolved):
 		return status.Error(codes.FailedPrecondition, "resource is already resolved")
+	case errors.Is(err, errs.ErrUnavailable) && errors.As(err, &kubernetesApproval):
+		return status.Error(codes.Unavailable, kubernetesApprovalUnavailableMessage)
+	case errors.As(err, &kubernetesApproval):
+		if !managedkubernetes.ValidLocator(kubernetesApproval.GateRef) || !managedkubernetes.ValidLocator(kubernetesApproval.ChildRef) || !managedkubernetes.ValidLocator(kubernetesApproval.PlanRef) || len(kubernetesApproval.GateRef) > 96 || len(kubernetesApproval.ChildRef) > 96 || len(kubernetesApproval.PlanRef) > 96 {
+			return status.Error(codes.Unavailable, kubernetesApprovalUnavailableMessage)
+		}
+		base := status.New(codes.FailedPrecondition, platformservice.KubernetesApprovalRequiredMessage)
+		withDetails, detailErr := base.WithDetails(&errdetails.ErrorInfo{Domain: controlPlaneErrorDomain, Reason: platformservice.KubernetesApprovalRequiredReason, Metadata: map[string]string{"gateRef": kubernetesApproval.GateRef, "childRef": kubernetesApproval.ChildRef, "planRef": kubernetesApproval.PlanRef}})
+		if detailErr != nil {
+			return status.Error(codes.Unavailable, kubernetesApprovalUnavailableMessage)
+		}
+		return withDetails.Err()
+	case errors.Is(err, errs.ErrKubernetesStagingQuota):
+		return statusErrorWithReason(codes.ResourceExhausted, errs.ErrKubernetesStagingQuota.Error(), managedkubernetes.ReasonStagingQuotaExceeded)
+	case errors.Is(err, errs.ErrKubernetesConfigurationPlanUnsupported):
+		return statusErrorWithReason(codes.FailedPrecondition, managedkubernetes.ConfigurationPlanUnsupportedMessage, managedkubernetes.ConfigurationPlanUnsupportedReason)
 	case errors.Is(err, errs.ErrLegacyReworkScopeUnsupported):
 		return statusErrorWithReason(codes.FailedPrecondition, "legacy rework operation scope is unsupported", "LEGACY_REWORK_SCOPE_UNSUPPORTED")
 	case errors.Is(err, errs.ErrLegacyReworkWrite):

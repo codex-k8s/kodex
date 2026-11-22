@@ -84,9 +84,27 @@ type Config struct {
 // Client owns generated service clients and their authority-bearing connections.
 // Client владеет типизированными клиентами сервисов и их полномочными соединениями.
 type Client struct {
+	// SSHIdentities carries dedicated setup operations over the same protected connection; private key bytes never cross this owner route.
+	// SSHIdentities передаёт отдельные setup operations через то же protected connection; private key bytes не пересекают этот owner route.
+	SSHIdentities controlplanev1.ManagedSSHIdentitySetupServiceClient
+	// SSHOperations carries private health admission over the existing protected owner channel; no key material crosses it.
+	// SSHOperations передаёт private health admission через existing protected owner channel; key material его не пересекает.
+	SSHOperations controlplanev1.ManagedSSHOwnerServiceClient
 	// PersonalCredentials uses protected method-specific bindings; browser and worker operation maps remain separate.
 	// PersonalCredentials использует защищённые method-specific привязки; browser и worker operation maps разделены.
-	PersonalCredentials     controlplanev1.PersonalIntegrationCredentialServiceClient
+	PersonalCredentials   controlplanev1.PersonalIntegrationCredentialServiceClient
+	KubernetesOutput      controlplanev1.ManagedKubernetesStreamOutputServiceClient
+	KubernetesIdentities  controlplanev1.ManagedKubernetesIdentitySetupServiceClient
+	KubernetesMaterials   controlplanev1.ManagedKubernetesResourceMaterialServiceClient
+	KubernetesInputs      controlplanev1.ManagedKubernetesStreamInputServiceClient
+	KubernetesTools       controlplanev1.ManagedKubernetesToolServiceClient
+	KubernetesCaptures    controlplanev1.ManagedKubernetesCaptureServiceClient
+	KubernetesPortForward controlplanev1.ManagedKubernetesPortForwardConnectionServiceClient
+	KubernetesFiles       controlplanev1.ManagedKubernetesFileServiceClient
+	KubernetesOperations  controlplanev1.ManagedKubernetesOwnerServiceClient
+	// PersonalEmail uses mailbox-owner setup/read commands and cannot select generic token or broker material.
+	// PersonalEmail использует mailbox-owner setup/read команды и не выбирает generic token либо broker material.
+	PersonalEmail           controlplanev1.PersonalEmailMailboxServiceClient
 	OIDCSessions            controlplanev1.OIDCSessionServiceClient
 	trustedCluster          bool
 	serviceIdentity         bool
@@ -206,6 +224,18 @@ func (client *Client) bindServices(protected *grpc.ClientConn) {
 	// не взаимозаменяемы и не являются повтором одной исполняемой операции.
 	client.Query = controlplanev1.NewPlatformQueryServiceClient(protected)
 	client.PersonalCredentials = controlplanev1.NewPersonalIntegrationCredentialServiceClient(protected)
+	client.KubernetesOutput = controlplanev1.NewManagedKubernetesStreamOutputServiceClient(protected)
+	client.SSHIdentities = controlplanev1.NewManagedSSHIdentitySetupServiceClient(protected)
+	client.SSHOperations = controlplanev1.NewManagedSSHOwnerServiceClient(protected)
+	client.KubernetesIdentities = controlplanev1.NewManagedKubernetesIdentitySetupServiceClient(protected)
+	client.KubernetesMaterials = controlplanev1.NewManagedKubernetesResourceMaterialServiceClient(protected)
+	client.KubernetesInputs = controlplanev1.NewManagedKubernetesStreamInputServiceClient(protected)
+	client.KubernetesTools = controlplanev1.NewManagedKubernetesToolServiceClient(protected)
+	client.KubernetesCaptures = controlplanev1.NewManagedKubernetesCaptureServiceClient(protected)
+	client.KubernetesPortForward = controlplanev1.NewManagedKubernetesPortForwardConnectionServiceClient(protected)
+	client.KubernetesFiles = controlplanev1.NewManagedKubernetesFileServiceClient(protected)
+	client.KubernetesOperations = controlplanev1.NewManagedKubernetesOwnerServiceClient(protected)
+	client.PersonalEmail = controlplanev1.NewPersonalEmailMailboxServiceClient(protected)
 	client.OIDCSessions = controlplanev1.NewOIDCSessionServiceClient(protected)
 	client.Command = controlplanev1.NewPlatformCommandServiceClient(protected)
 	client.Assistant = controlplanev1.NewSystemAssistantServiceClient(protected)

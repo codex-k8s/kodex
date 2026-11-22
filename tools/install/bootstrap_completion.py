@@ -15,7 +15,8 @@ from portable_state import key, seal, verify_resource, verify_schemas
 JOBS = ('email-bridge-migration', 'internal-rpc-authority-migrate', 'control-plane-migrate',
         'kodex-postgresql-runtime-credentials', 'control-plane-broker-bootstrap')
 SCHEMA = 'kodex.bootstrap-completion/v1'
-ORIGINS = ('LIVE_CAPTURE', 'RECONCILED_VERIFIED_PREFLIGHT', 'FORWARD_MIGRATION_UPGRADE', 'SAME_SCHEMA_IMAGE_UPGRADE')
+ADOPTION_ORIGIN = 'MIGRATED_SCHEMA_ADOPTION'
+ORIGINS = ('LIVE_CAPTURE', 'RECONCILED_VERIFIED_PREFLIGHT', 'FORWARD_MIGRATION_UPGRADE', 'SAME_SCHEMA_IMAGE_UPGRADE', ADOPTION_ORIGIN)
 
 
 def digest(raw):
@@ -93,7 +94,7 @@ def load(path, expected_sha256, allow_reconciled=False):
     for row in rows:
         require(set(row) == {'name', 'job_uid', 'desired_sha256', 'observed_seal', 'completion_time'} and uuid_value(row['job_uid']) and
                 hex_value(row['desired_sha256']) and hex_value(row['observed_seal']), 'EXACT_COMPLETION_JOB_IDENTITY_REQUIRED')
-        if receipt['origin'] == ORIGINS[0]:
+        if receipt['origin'] in (ORIGINS[0], ADOPTION_ORIGIN):
             require(isinstance(row['completion_time'], str) and re.fullmatch(r'\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ', row['completion_time']), 'LIVE_JOB_COMPLETION_TIME_REQUIRED')
         elif receipt['origin'] == ORIGINS[1]:
             require(row['completion_time'] is None, 'RECONCILED_COMPLETION_TIME_NOT_OBSERVED')
@@ -118,11 +119,14 @@ def load(path, expected_sha256, allow_reconciled=False):
                 all(uuid_value(v) if k.endswith('_uid') else hex_value(v) for k, v in evidence.items()) and
                 next(r['job_uid'] for r in rows if r['name'] == 'control-plane-migrate') == evidence['migration_job_uid'],
                 'UPGRADE_COMPLETION_EVIDENCE_REJECTED')
-    else:
+    elif receipt['origin'] == ORIGINS[3]:
         fields = {'previous_receipt_sha256', 'previous_render_sha256', 'upgrade_profile_sha256', 'schema_proof_sha256',
                   'prepared_render_sha256'}
         require(isinstance(evidence, dict) and set(evidence) == fields and all(hex_value(v) for v in evidence.values()),
                 'IMAGE_UPGRADE_COMPLETION_EVIDENCE_REJECTED')
+    else:
+        from bootstrap_migration_rollout import validate_evidence
+        validate_evidence(receipt)
     return receipt
 
 
@@ -134,7 +138,7 @@ def successful(job):
 
 def verify_render_pin(receipt, render_sha256):
     """Квитанция смены образов разрешает только полный подготовленный render."""
-    if receipt is not None and receipt['origin'] == ORIGINS[3]:
+    if receipt is not None and receipt['origin'] in (ORIGINS[3], ADOPTION_ORIGIN):
         require(receipt['evidence'].get('prepared_render_sha256') == render_sha256, 'UPGRADE_PREPARED_RENDER_DRIFT')
 
 
@@ -147,7 +151,10 @@ def verify_jobs(state, resources, receipt=None):
     jobs = desired_jobs(resources)
     rows = {}
     if receipt is not None:
-        if receipt['origin'] in ORIGINS[2:]:
+        if receipt['origin'] == ADOPTION_ORIGIN:
+            import bootstrap_upgrade
+            verify_render_pin(receipt, digest(bootstrap_upgrade.render_bytes(resources)))
+        elif receipt['origin'] in ORIGINS[2:]:
             import bootstrap_upgrade
             profile, profile_digest = bootstrap_upgrade.render_profile(resources)
             expected_origin = bootstrap_upgrade.IMAGE_ORIGIN if profile['schema'] == bootstrap_upgrade.IMAGE_SCHEMA else bootstrap_upgrade.ORIGIN

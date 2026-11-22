@@ -1005,7 +1005,7 @@ func rehydrateEditedAssistantConnection(original, edited entity.AssistantPlanOpe
 func (repository *Repository) assistantConnectionUpdateSnapshotMatches(ctx context.Context, tx pgx.Tx, actorScope scope,
 	operation entity.AssistantPlanOperation,
 ) (bool, error) {
-	connection, err := readConnection(ctx, tx, actorScope, operation.Target.Ref)
+	connection, err := repository.readConnection(ctx, tx, actorScope, operation.Target.Ref)
 	if err != nil {
 		return false, err
 	}

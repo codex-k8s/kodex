@@ -41,3 +41,7 @@ spec:
               app.kubernetes.io/name: seaweedfs
               app.kubernetes.io/component: object-storage
       ports: [{protocol: TCP, port: 8333}]
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: control-plane}
+      ports: [{protocol: TCP, port: 8443}]

@@ -54,6 +54,9 @@ func assistantGrantHydrationPayload(parameters map[string]any) (command.SystemAs
 // проверки callable, approval и scope paths. Допуск владельца и пакета принадлежит вызывающему;
 // отказ возвращает Invalid до чтения прежнего grant.
 func assistantGrantHydrationCapability(definition integrationpackage.Package, payload command.SystemAssistantIntegrationGrantInput) (integrationpackage.Capability, error) {
+	if definition.Metadata.Key == integrationpackage.KubernetesDefinitionKey {
+		return integrationpackage.Capability{}, errs.ErrKubernetesConfigurationPlanUnsupported
+	}
 	enabled, paths := payload.Enabled, payload.ApprovalScopePaths
 	capability, ok := definition.Capability(payload.CapabilityKey)
 	if !ok || !capability.CallableByAgent() || !capability.AllowsApprovalPolicy(payload.ApprovalPolicy) {

@@ -27,6 +27,8 @@ usage() {
     '  [--authority-registry-configuration <json>]' \
     '  [--native-integration-configuration <json> --native-integration-configuration-sha256 <64-hex>; optional operator routes]' \
     '  [--observability-qualification <json> --observability-qualification-sha256 <64-hex>; optional operator evidence]' \
+    '  [--ssh-identity-upload-configuration <json> --ssh-identity-upload-configuration-sha256 <64-hex>; optional direct TLS upload]' \
+    '  [--ssh-qualification <json> --ssh-qualification-sha256 <64-hex>; optional pinned operator target qualification]' \
     '  [--disable-observability; exporters only]' \
     '  [--clamav-storage-profile shared-rwx|node-local-rwo; default shared-rwx]' \
     '  [--session-workspace-profile disabled|SESSION_WORKSPACE_V2; default disabled]' \
@@ -48,6 +50,10 @@ native_integration_configuration=""
 native_integration_configuration_sha256=""
 observability_qualification=""
 observability_qualification_sha256=""
+ssh_identity_upload_configuration=""
+ssh_identity_upload_configuration_sha256=""
+ssh_qualification=""
+ssh_qualification_sha256=""
 deployment_profile=""
 oidc_authority_profile=""
 oidc_authority_profile_selected=false
@@ -96,6 +102,10 @@ while (($# > 0)); do
     --native-integration-configuration) native_integration_configuration="${2:-}"; shift 2 ;;
     --observability-qualification) observability_qualification="${2:-}"; shift 2 ;;
     --observability-qualification-sha256) observability_qualification_sha256="${2:-}"; shift 2 ;;
+    --ssh-identity-upload-configuration) ssh_identity_upload_configuration="${2:-}"; shift 2 ;;
+    --ssh-identity-upload-configuration-sha256) ssh_identity_upload_configuration_sha256="${2:-}"; shift 2 ;;
+    --ssh-qualification) ssh_qualification="${2:-}"; shift 2 ;;
+    --ssh-qualification-sha256) ssh_qualification_sha256="${2:-}"; shift 2 ;;
     --native-integration-configuration-sha256) native_integration_configuration_sha256="${2:-}"; shift 2 ;;
     --model-provider-configuration) model_provider_configuration="${2:-}"; shift 2 ;;
     --model-provider-default-model) model_provider_default_model="${2:-}"; shift 2 ;;
@@ -727,7 +737,7 @@ yq -i '
   ); del(.metadata.namespace))
 ' "$rendered"
 
-if [[ -n "$deployment_profile" || -n "$oidc_authority_profile" || -n "$native_integration_configuration$native_integration_configuration_sha256" || -n "$observability_qualification$observability_qualification_sha256" ]]; then
+if [[ -n "$deployment_profile" || -n "$oidc_authority_profile" || -n "$native_integration_configuration$native_integration_configuration_sha256" || -n "$observability_qualification$observability_qualification_sha256" || -n "$ssh_identity_upload_configuration$ssh_identity_upload_configuration_sha256" || -n "$ssh_qualification$ssh_qualification_sha256" ]]; then
   expected_schema_heads=$(python3 "$repository_root/tools/release/schema-heads.py")
   jq -e --argjson expected "$expected_schema_heads" '.schema_heads == $expected' "$lock_file" >/dev/null ||
     fail 'portable release lock schema pins differ from source'
@@ -766,6 +776,21 @@ if [[ -n "$observability_qualification$observability_qualification_sha256" ]]; t
     --configuration "$observability_qualification" --configuration-sha256 "$observability_qualification_sha256" || fail 'observability qualification render rejected'
 fi
 python3 "$repository_root/tools/install/observability_qualification.py" --check --render "$rendered" || fail 'observability qualification check rejected'
+
+if [[ -n "$ssh_identity_upload_configuration$ssh_identity_upload_configuration_sha256" ]]; then
+  [[ -n "$ssh_identity_upload_configuration" && "$ssh_identity_upload_configuration_sha256" =~ ^[a-f0-9]{64}$ ]] || fail 'exact SSH identity upload configuration and digest are required'
+  python3 -B "$repository_root/tools/install/ssh_identity_profile.py" --render "$rendered" \
+    --configuration "$ssh_identity_upload_configuration" --configuration-sha256 "$ssh_identity_upload_configuration_sha256" \
+    --source-sha "$source_sha" || fail 'SSH identity upload render rejected'
+fi
+python3 -B "$repository_root/tools/install/ssh_identity_profile.py" --check --render "$rendered" || fail 'SSH identity upload profile check rejected'
+
+if [[ -n "$ssh_qualification$ssh_qualification_sha256" ]]; then
+  [[ -n "$ssh_qualification" && "$ssh_qualification_sha256" =~ ^[a-f0-9]{64}$ ]] || fail 'exact SSH qualification and digest are required'
+  python3 -B "$repository_root/tools/install/ssh_qualification_profile.py" --render "$rendered" \
+    --configuration "$ssh_qualification" --configuration-sha256 "$ssh_qualification_sha256" || fail 'SSH qualification render rejected'
+fi
+python3 -B "$repository_root/tools/install/ssh_qualification_profile.py" --check --render "$rendered" || fail 'SSH qualification profile check rejected'
 
 python3 "$repository_root/tools/install/workspace_storage_profile.py" --render "$rendered" \
   --profile "$session_workspace_profile" || fail 'workspace storage profile render rejected'

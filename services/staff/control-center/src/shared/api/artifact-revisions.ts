@@ -1,3 +1,4 @@
+import { assertArtifactCaptureOrigin } from "./kubernetes-capture-origin";
 import { artifactContentAdmitted } from "@/shared/api/artifact-admission";
 import { requestSignal } from "./client";
 import {
@@ -52,6 +53,7 @@ export function assertArtifactRevision(
     !Number.isFinite(Date.parse(value.createdAt))
   )
     throw new Error("Invalid artifact revision readback");
+  assertArtifactCaptureOrigin(value.captureOrigin);
   return value;
 }
 
@@ -75,6 +77,7 @@ export async function readProjectArtifact(
   );
   if (artifact.ref !== artifactRef || artifact.projectRef !== projectRef)
     throw new Error("Artifact project readback mismatch");
+  assertArtifactCaptureOrigin(artifact.captureOrigin);
   return artifact;
 }
 

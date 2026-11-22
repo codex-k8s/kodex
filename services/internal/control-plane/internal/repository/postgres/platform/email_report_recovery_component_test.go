@@ -43,13 +43,20 @@ var emailReportTerminalSource string
 func testEmailLateReport(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service,
 	owner, runtime, gateway, email, reporter value.Principal, execution map[string]any, connectionRef string, bounded map[string]any, template query.EmailAuthorization) {
 	t.Helper()
+	seenGates := make(map[string]bool, 2)
 	for _, key := range []string{"initial", "terminal"} {
-		_, err := service.ResolveIntegrationInvocation(ctx, runtime, map[string]string{
+		invocation, err := service.ResolveIntegrationInvocation(ctx, runtime, map[string]string{
 			"run_ref": stringMap(execution, "runRef"), "node_ref": stringMap(execution, "nodeRef"), "connection_ref": connectionRef,
 			"capability_key": "email.message.send", "idempotency_key": "email-late-" + key}, bounded)
 		if err != nil {
 			t.Fatal(err)
 		}
+		gate := stringMap(invocation, "gateRef")
+		if gate == "" || seenGates[gate] {
+			t.Fatal("late receipt fixture did not receive distinct send gates")
+		}
+		seenGates[gate] = true
+		approveEmailFixtureGate(t, ctx, service, owner, invocation, "email-late-"+key+"-approve")
 	}
 	claims, err := service.ClaimIntegrationInvocations(ctx, gateway, "email-late-report", 32)
 	if err != nil || len(claims) != 2 {

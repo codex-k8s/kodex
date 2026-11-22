@@ -30,6 +30,8 @@ type gateCompletionReader struct {
 	mode           string
 	version        entity.WorkflowVersion
 	anchors        []serverWorkflowAnchor
+	originReads    int
+	originError    error
 	metadataReads  int
 	pending        bool
 	otherOpen      bool
@@ -77,6 +79,15 @@ func (reader *gateCompletionReader) QueryRow(_ context.Context, query string, ar
 				*dest[11].(*[]byte), *dest[13].(*[]byte), *dest[14].(*string) = []byte(`{"journal":"fixture"}`), input, hex.EncodeToString(sum[:])
 				*dest[15].(*string), *dest[16].(*string) = "WRITE", "HUMAN_EACH_EFFECT"
 			}
+		case query == queryKubernetesGateConsumerOrigin:
+			if len(args) != 1 || !reflect.DeepEqual(args[0], pgx.StrictNamedArgs{"organization_id": "tenant", "gate_ref": "gat_fixture"}) || len(dest) != 2 {
+				reader.t.Fatal("child discriminator lost exact owner pins")
+			}
+			reader.originReads++
+			if reader.originError != nil {
+				return reader.originError
+			}
+			*dest[0].(*bool), *dest[1].(*string) = false, ""
 		case query == queryOwnerGateCompletion:
 			if len(args) != 1 || !reflect.DeepEqual(args[0], pgx.StrictNamedArgs{"organization_id": "tenant", "gate_ref": "gat_fixture"}) {
 				reader.t.Fatal("completion projection lost exact owner pins")
@@ -202,6 +213,9 @@ func TestOwnerGateCompletionProjectionUsesSemanticState(t *testing.T) {
 			if err := (&Repository{integrationDefinitions: definitions}).projectGateIntent(t.Context(), reader, scope{organizationID: "tenant"}, &gate, false); err != nil {
 				t.Fatal(err)
 			}
+			if reader.originReads != 1 {
+				t.Fatal("ordinary Gate skipped authoritative child discriminator")
+			}
 			if gate.DecisionConsequences[0].TerminalForRun != wantTerminal {
 				t.Fatal("APPROVE consequence disagrees with the owner lifecycle")
 			}
@@ -253,5 +267,18 @@ func TestOwnerGateCompletionReadFailuresStayClosed(t *testing.T) {
 				t.Fatal("failed owner read did not close the consequence projection")
 			}
 		})
+	}
+}
+
+// TestOwnerGateCompletionRejectsChildOriginFailure prevents an unavailable discriminator from falling through to ordinary success.
+// TestOwnerGateCompletionRejectsChildOriginFailure запрещает обычный успешный прогноз при недоступном discriminator.
+func TestOwnerGateCompletionRejectsChildOriginFailure(t *testing.T) {
+	for _, cause := range []error{context.Canceled, errors.New("synthetic private database detail")} {
+		reader := &gateCompletionReader{t: t, originError: cause}
+		gate := entity.OwnerGate{Ref: "gat_fixture", ProjectRef: "prj_fixture", State: "OPEN", AllowedDecisions: []string{"APPROVE", "REJECT", "CANCEL"}}
+		err := (&Repository{}).projectGateIntent(t.Context(), reader, scope{organizationID: "tenant"}, &gate, false)
+		if !errors.Is(err, errs.ErrUnavailable) || reader.originReads != 1 || reader.metadataReads != 0 || len(gate.DecisionConsequences) != 0 {
+			t.Fatal("failed child discriminator published ordinary consequences", err)
+		}
 	}
 }

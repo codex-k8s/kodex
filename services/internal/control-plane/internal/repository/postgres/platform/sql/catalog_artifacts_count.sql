@@ -6,6 +6,7 @@ LEFT JOIN control_plane.runs r ON r.id=ar.run_id
 LEFT JOIN control_plane.sessions s ON s.id=r.session_id
 LEFT JOIN control_plane.run_nodes n ON n.id=ar.node_id
 WHERE ar.organization_id=@organization_id::uuid
+  AND control_plane.kubernetes_capture_artifact_visible(ar.organization_id,@actor_id::uuid,ar.id)
   AND (@project_ref='' OR p.ref=@project_ref)
   AND (@run_ref='' OR r.ref=@run_ref)
   AND (@query='' OR strpos(lower(ar.file_name),lower(@query)) > 0)

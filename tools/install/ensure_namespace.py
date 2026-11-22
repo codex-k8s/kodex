@@ -4,7 +4,7 @@ import argparse
 import json
 import subprocess
 
-NAMES = ('kodex-system', 'kodex-runtime', 'kodex-trust', 'kodex-secret-drafts')
+NAMES = ('kodex-system', 'kodex-runtime', 'kodex-trust', 'kodex-secret-drafts', 'kodex-ssh-identities')
 LABEL = 'app.kubernetes.io/part-of'
 
 

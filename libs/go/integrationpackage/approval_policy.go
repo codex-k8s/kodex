@@ -3,6 +3,8 @@ package integrationpackage
 import (
 	"encoding/json"
 	"errors"
+
+	"github.com/codex-k8s/kodex/libs/go/managedkubernetes"
 )
 
 // errApprovalPolicy is the safe refusal for a selected policy or invocation that exceeds package authority.
@@ -48,6 +50,12 @@ func (definition Package) CollaborativeWrite(capability Capability) bool {
 func (definition Package) ValidateInvocationApprovalPolicy(capability Capability, selected string, canonicalInput []byte) error {
 	if !capability.AllowsApprovalPolicy(selected) {
 		return errApprovalPolicy
+	}
+	if definition.Spec.Adapter == string(AdapterKubernetes) {
+		input, _, err := managedkubernetes.DecodeOperationInput(capability.Operation, canonicalInput)
+		if validateKubernetesDefinition(definition) != nil || err != nil || managedkubernetes.ValidateInvocationApprovalPolicy(input, capability.Risk, selected) != nil {
+			return errApprovalPolicy
+		}
 	}
 	if selected == string(ApprovalNone) && capability.Operation == "github.pull_request.review.create" && capability.ApprovalScope == nil {
 		var input struct {

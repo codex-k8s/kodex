@@ -197,7 +197,7 @@ func (repository *Repository) configureTelegramSubscriptionTx(ctx context.Contex
 		if err != nil || !notificationsPresent || !definition.ExecutableBy(integrationpackage.OwnerInteractionGateway, integrationpackage.RouteInteraction) {
 			return commandOutcome{}, errs.ErrForbidden
 		}
-		public, err := readConnection(ctx, tx, current, payload.ConnectionRef)
+		public, err := repository.readConnection(ctx, tx, current, payload.ConnectionRef)
 		if err != nil {
 			return commandOutcome{}, err
 		}

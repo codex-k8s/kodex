@@ -108,7 +108,7 @@ func StartWorkers(parent context.Context, workers ...Worker) *WorkerGroup {
 	for _, worker := range workers {
 		go func(workerValue Worker) {
 			defer wait.Done()
-			if err := workerValue(ctx); err != nil && !errors.Is(err, context.Canceled) {
+			if err := workerValue(ctx); err != nil && !workerCancellationOnly(err, 64) {
 				group.err <- err
 				cancel()
 			}

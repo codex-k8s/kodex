@@ -1,0 +1,49 @@
+apiVersion: integrations.kodex.io/v1
+kind: IntegrationPackage
+metadata:
+  key: ssh-execute
+  version: 1.0.0
+  origin: SHIPPED
+spec:
+  name: Произвольная SSH-команда
+  description: Отдельный broker-owned SSH профиль с owner-pinned identity и однократным исполнением; установка требует квалифицированных048/109.
+  category: deployment
+  adapter: SSH_TARGET
+  adapterOwner: integration-gateway
+  executionRoute: MANAGED_MCP
+  readiness: READY
+  credential: {kind: BROKER_IDENTITY, brokerPurpose: SSH_TARGET}
+  configurationFields:
+    - {"key": "target_ref", "type": "STRING", "format": "IDENTIFIER", "required": true, "maximumLength": 96}
+    - {"key": "service_subject_ref", "type": "STRING", "format": "IDENTIFIER", "required": false, "maximumLength": 96}
+  networkDestinations:
+    - {key: ssh_broker, source: STATIC, hostname: secret-broker.kodex-system.svc, port: 8443, tls: REQUIRED}
+  healthCheck: {operation: ssh.identity.inspect, timeoutSeconds: 5, maxAttempts: 1}
+  capabilities:
+    - key: ssh.identity.inspect
+      name: Проверить закреплённую SSH identity
+      description: Типизированная операция только выбранного target/user/profile; параметры не назначают credentials либо полномочия.
+      operation: ssh.identity.inspect
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
+      resourceScope: {kind: SSH_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result_json, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 20, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: ssh.execute
+      name: Выполнить exact согласованную команду
+      description: Типизированная операция только выбранного target/user/profile; параметры не назначают credentials либо полномочия.
+      operation: ssh.execute
+      risk: SENSITIVE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
+      resourceScope: {kind: SSH_TARGET, connectionFields: [target_ref]}
+      inputFields:
+        - {"key": "command", "type": "STRING", "format": "PLAIN", "required": true, "maximumLength": 8192}
+        - {"key": "stdin_base64", "type": "STRING", "format": "PLAIN", "required": false, "maximumLength": 21848, "allowEmpty": true}
+        - {"key": "maximum_output", "type": "INTEGER", "required": true, "minimum": 1, "maximum": 32768}
+      outputFields:
+        - {key: result_json, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+      execution: {idempotency: ONE_ATTEMPT, timeoutSeconds: 20, maxAttempts: 1, retryBackoffMilliseconds: 250}

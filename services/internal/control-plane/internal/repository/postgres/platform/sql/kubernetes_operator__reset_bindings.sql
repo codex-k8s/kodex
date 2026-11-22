@@ -1,0 +1,2 @@
+-- name: kubernetes_operator__reset_bindings :exec
+UPDATE control_plane.integration_personal_credentials SET state='CHECK_REQUIRED',version=version+1,verified_broker_identity_revision_id=NULL,verified_definition_digest=NULL,verified_configuration_digest=NULL,verified_capabilities='{}',denied_capabilities='{}',observed_permission_profiles='{}',expires_at=NULL WHERE credential_kind='BROKER_IDENTITY' AND broker_purpose='KUBERNETES_TARGET' AND state IN('READY','INVALID','CHECKING');

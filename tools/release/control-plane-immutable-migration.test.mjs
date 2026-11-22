@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 import { componentMigrationPublication, componentMigrationTarget, planComponentMigrationHandoff, componentServingInventory, readComponentServingInventory } from './portable-component-migration.mjs';
 import { activeDeploymentPods } from './stable-archive-transition.mjs';
-import { planImmutableControlPlaneMigration } from './control-plane-immutable-migration.mjs';
+import { planImmutableControlPlaneMigration, validWorkflowFileProvenanceBackupMigrationPrecondition,
+  validWorkflowFileProvenanceBackupMigrationPostcondition } from './control-plane-immutable-migration.mjs';
 import { validWorkspaceUnboundStopMigrationPrecondition, validWorkspaceUnboundStopMigrationPostcondition } from './control-plane-immutable-migration.mjs';
 import { validIntegrationResourcePoliciesMigrationPrecondition } from './control-plane-immutable-migration.mjs';
 import { validOpenCodeNativeMigrationPrecondition, validOpenCodeNativeMigrationPostcondition } from './control-plane-immutable-migration.mjs';
@@ -2014,6 +2015,30 @@ test('registered044/045/046 terminal commands accept only their exact factory ve
  }
 });
 
+test('ART 050 допускает сохранённый terminal Pod только для штатной migration Job',()=>{
+ const retained=retainedCLIJobFixture();
+ const name='control-plane-migrate-20261121000100';
+ retained.job.metadata.name=retained.pod.metadata.ownerReferences[0].name=name;
+ retained.job.spec.template.spec.containers[0].args=retained.pod.spec.containers[0].args=['up-artifact-retention-grant-catalog'];
+ const marker='kodex.dev/artifact-grant-schema-release';
+ retained.job.metadata.annotations={...retained.job.metadata.annotations,[marker]:'a'.repeat(64)};
+ const serving=({job,pod})=>activeDeploymentPods(componentServingInventory({items:[job,pod]},'control-plane','deployment'),'deployment');
+ assert.deepEqual(serving(retained),[]);
+ const items=[retained.job,retained.pod];
+ const kube=args=>args.includes('replicasets,pods,jobs')?servingMetadata(items):JSON.stringify(items.find(r=>r.kind===(args.includes('pod')?'Pod':'Job')));
+ assert.deepEqual(activeDeploymentPods(readComponentServingInventory(kube,'control-plane','deployment'),'deployment'),[]);
+ for(const change of [
+  r=>{delete r.job.metadata.annotations[marker];},r=>{r.job.metadata.annotations[marker]='invalid';},
+  r=>{r.job.metadata.name=r.pod.metadata.ownerReferences[0].name=name+'-attempt2';},
+  r=>{r.job.metadata.name=r.pod.metadata.ownerReferences[0].name='control-plane-migrate-20261121000200';},
+  r=>{r.job.status={active:1};},r=>{r.pod.metadata.ownerReferences[0].uid='foreign';},
+  r=>{r.pod.spec.containers[0].args=['up-workflow-file-provenance'];},
+  r=>{r.pod.status.containerStatuses[0].state={waiting:{}};},
+ ]){
+  const copy=structuredClone(retained);change(copy);assert.throws(()=>serving(copy),/STABLE_FOREIGN_SERVING_POD/);
+ }
+});
+
 test('namespace inventory не прячет Deployment descendants при дрейфе serving labels',()=>{
  const rs={kind:'ReplicaSet',metadata:{uid:'owned-rs',ownerReferences:[{kind:'Deployment',controller:true,uid:'deployment'}]}};
  const pod={kind:'Pod',metadata:{uid:'owned-pod',labels:{'app.kubernetes.io/name':'mutated','app.kubernetes.io/component':'migration'},ownerReferences:[{kind:'ReplicaSet',controller:true,uid:'owned-rs'}]},
@@ -2187,4 +2212,38 @@ test('PASS check predecessor не принимает UNKNOWN, изменённы
   assert.notEqual(f.run('plan',previous).status,0,scenario);
   assert.equal(f.read().calls.filter(a=>a.includes('create')).length,creates,scenario);
  }
+});
+
+test('ART 050→051 требует исходный каталог, отсутствие работ и подтверждённый join для apply', () => {
+  const before = {
+    profile:'WORKFLOW_FILE_PROVENANCE_BACKUP_051', database:'control_plane', readOnly:'on',
+    gooseVersion:20261121000100, serverVersionNum:180003, backupQualification:'CANONICAL_BACKUP',
+    artifactPredecessorApplied:true, publicSequenceSafe:true, historyMatches:true, schemaMatches:true,
+    schemaCatalog:{catalogDigest:'58532c2f03d49c8499e9113ce9e6d5a687c92d41581641885bf98396d4ec6ab2'},
+    activeRuntimeLeases:0, activeArchiveTasks:0, activeRuntimeRuns:0, activeRunNodes:0, activeSessionTurns:0,
+    claimedRuntimeLeases:0, openBuilds:0, pendingAdmissions:0, pendingPromotions:0, activeModelCatalogTasks:0,
+    activeRenewalTasks:0, activeIntegrationInvocations:0, activeIntegrationConnectionTests:0,
+    activePersonalCredentialTests:0, activeRepositoryBundles:0, activeConfigurationSources:0,
+    activeConfigurationWritebacks:0, activeInteractionDeliveries:0, workspaceVolumeIdle:true, oldClaimSessions:0,
+  };
+  assert.equal(validWorkflowFileProvenanceBackupMigrationPrecondition(before,true),true);
+  const runningClaimOwner={...before,oldClaimSessions:6};
+  assert.equal(validWorkflowFileProvenanceBackupMigrationPrecondition(runningClaimOwner),true);
+  assert.equal(validWorkflowFileProvenanceBackupMigrationPrecondition(runningClaimOwner,true),false);
+  for(const [field,value] of Object.entries(before)) {
+    if(value===0 && field!=='oldClaimSessions'){
+      assert.equal(validWorkflowFileProvenanceBackupMigrationPrecondition({...before,[field]:1},true),false,field);
+      assert.equal(validWorkflowFileProvenanceBackupMigrationPrecondition({...before,[field]:undefined},true),false,field);
+    }
+  }
+  for(const change of [{workspaceVolumeIdle:false},{artifactPredecessorApplied:false},{oldClaimSessions:-1},
+    {oldClaimSessions:0.5},{historyMatches:false},{publicSequenceSafe:false},{backupQualification:'NONE'}]) {
+    assert.equal(validWorkflowFileProvenanceBackupMigrationPrecondition({...before,...change}),false);
+  }
+  const after={...before,gooseVersion:20261121000200,
+    schemaCatalog:{catalogDigest:'31d4205868c2e96b508f8c1ce3572a55477407580486053a23c16044227d80ad'}};
+  assert.equal(validWorkflowFileProvenanceBackupMigrationPostcondition(after),true);
+  assert.equal(validWorkflowFileProvenanceBackupMigrationPrecondition(after,true),false);
+  assert.equal(validWorkflowFileProvenanceBackupMigrationPostcondition({...after,artifactPredecessorApplied:false}),false);
+  assert.equal(validWorkflowFileProvenanceBackupMigrationPostcondition({...after,artifactPredecessorApplied:undefined}),false);
 });

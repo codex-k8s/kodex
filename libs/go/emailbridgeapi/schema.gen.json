@@ -304,6 +304,14 @@
           "format": "int64",
           "minimum": 1,
           "description": "Назначаемое producer поколение credential binding подключения; поколения отдельных descriptors независимы."
+        },
+        "credential_owner_generation": {
+          "type": "integer",
+          "format": "int64",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "x-go-type-skip-optional-pointer": true,
+          "description": "Назначаемое mailbox owner поколение владения credentials; отсутствие сохраняется только в исторической конфигурации и не разрешает новый effect."
         }
       },
       "required": [

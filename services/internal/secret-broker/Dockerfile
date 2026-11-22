@@ -15,6 +15,11 @@ COPY libs/go/secretbrokerapi/ libs/go/secretbrokerapi/
 COPY libs/go/serviceruntime/ libs/go/serviceruntime/
 COPY libs/go/securefile/ libs/go/securefile/
 COPY libs/go/sttapi/ libs/go/sttapi/
+COPY libs/go/httpserver/ libs/go/httpserver/
+COPY libs/go/integrationpackage/ libs/go/integrationpackage/
+COPY libs/go/kubernetestransport/ libs/go/kubernetestransport/
+COPY libs/go/managedkubernetes/ libs/go/managedkubernetes/
+COPY libs/go/managedssh/ libs/go/managedssh/
 COPY services/internal/secret-broker/ services/internal/secret-broker/
 WORKDIR /workspace/services/internal/secret-broker
 RUN test "$(go env GOVERSION)" = "go1.26.10"

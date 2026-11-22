@@ -20,7 +20,7 @@ import (
 func personalCredentialTransportFixture(now time.Time) entity.PersonalIntegrationCredential {
 	return entity.PersonalIntegrationCredential{Ref: "ipc_fixture01", OrganizationID: "org_private_fixture", SubjectID: "usr_private_fixture",
 		ConnectionRef: "int_fixture01", ConnectionVersion: 4, Version: 2, Generation: 2,
-		CredentialPolicy: entity.IntegrationCredentialInitiatorRequired, State: "CHECK_REQUIRED",
+		CredentialPolicy: entity.IntegrationCredentialInitiatorRequired, State: "CHECK_REQUIRED", Kind: entity.IntegrationCredentialToken,
 		Credential: &entity.IntegrationCredentialRevision{Ref: "ipcr_private_fixture", Revision: 1, CreatedAt: now,
 			SecretRef: "kodex-system/kodex-integration-credentials#integration-private-fixture", SecretUID: "10000000-0000-4000-8000-000000000001",
 			SecretResourceVersion: "private-resource-version", ContentSHA256: strings.Repeat("a", 64)}}

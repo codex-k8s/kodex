@@ -24,6 +24,9 @@ var assistantGrantScopeIdentifier = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,100}$`
 // castAssistantIntegrationGrantCandidate validates the closed candidate reason and optional frozen or scoped GitHub boundary before projecting its exact kind, safe fields and digest to typed output.
 // castAssistantIntegrationGrantCandidate проверяет закрытую причину candidate и optional frozen либо scoped GitHub boundary перед передачей точных kind, безопасных полей и digest в typed output.
 func castAssistantIntegrationGrantCandidate(item entity.SystemAssistantIntegrationGrantCandidate) (*cp.SystemAssistantIntegrationGrantCandidate, error) {
+	if strings.HasPrefix(item.Capability.Key, "kubernetes.") && item.Capability.ResourceKind != "KUBERNETES_TARGET" {
+		return nil, errs.ErrUnavailable
+	}
 	reason, err := integrationCandidateReason(item.Reason)
 	if err != nil {
 		return nil, err
@@ -32,10 +35,13 @@ func castAssistantIntegrationGrantCandidate(item entity.SystemAssistantIntegrati
 		CurrentGrantRef: item.CurrentGrantRef, CurrentGrantVersion: item.CurrentGrantVersion, CurrentApprovalPolicy: integrationApprovalPolicy(item.CurrentApprovalPolicy),
 		CurrentApprovalScopePaths: append([]string{}, item.CurrentApprovalScopePaths...), CurrentGrantEnabled: item.CurrentGrantEnabled}
 	if item.ResourceScope != nil {
-		if !strings.HasPrefix(item.Capability.Key, "github.") {
+		if item.Capability.ResourceKind == "KUBERNETES_TARGET" {
+			if item.Capability.Key != item.Capability.Operation || integrationpackage.ValidateKubernetesCandidateScope(item.Capability.Key, item.ResourceScope) != nil {
+				return nil, errs.ErrUnavailable
+			}
+		} else if !strings.HasPrefix(item.Capability.Key, "github.") {
 			return nil, errs.ErrUnavailable
-		}
-		if item.Capability.ResourceKind == "GITHUB_SCOPE" {
+		} else if item.Capability.ResourceKind == "GITHUB_SCOPE" {
 			parsed, err := integrationpackage.ParseGitHubResourceScope(item.ResourceScope)
 			if err != nil || len(item.ResourceScope) != 1 && (parsed.Kind != "SELECTED" || len(item.ResourceScope) != 2) {
 				return nil, errs.ErrUnavailable
@@ -60,7 +66,7 @@ func castAssistantIntegrationGrantCandidate(item entity.SystemAssistantIntegrati
 			return nil, errs.ErrUnavailable
 		}
 		result.ResourceScope = &cp.IntegrationResourceScope{Kind: integrationResourceKind(item.Capability.ResourceKind), Values: item.ResourceScope, Digest: item.ResourceScopeDigest}
-	} else if item.ResourceScopeDigest != "" {
+	} else if item.ResourceScopeDigest != "" || item.Capability.ResourceKind == "KUBERNETES_TARGET" {
 		return nil, errs.ErrUnavailable
 	}
 	return result, nil

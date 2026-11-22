@@ -11,6 +11,7 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import KubernetesCaptureOrigin from "./KubernetesCaptureOrigin.vue";
 import { createRevisionHistory } from "./revision-history";
 
 const props = defineProps<{ artifact: Artifact }>();
@@ -93,6 +94,7 @@ async function download(value: ArtifactRevision) {
             <Download :size="15" aria-hidden="true" />
           </button>
         </div>
+        <KubernetesCaptureOrigin :origin="revision.captureOrigin" />
         <details>
           <summary>{{ t("common.details") }}</summary>
           <p>

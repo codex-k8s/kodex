@@ -3,12 +3,16 @@ import {readFileSync} from 'node:fs';
 import {fingerprint} from './scoped-release.mjs';
 import {inspectSource} from './application-source.mjs';
 import {authorityOwnerDatabase,validateAuthorityDatabaseIdentity} from './migration-owner-database.mjs';
+import {requirePairedAuthorityReader,readPairedAuthorityOwner} from './paired-token-owner-database.mjs';
 import {postgresBackupBoundary} from './backup-postgres-boundary.mjs';
 import {authorityReadbackContract} from './authority-readback-targets.mjs';
-import {readCatalogTarget,verifyCatalogTransition,validateCatalogPolicy} from './authority-catalog-transition.mjs';
+import {readCatalogTarget,verifyCatalogTransition,validateAuthorityPolicy,catalogPolicyTransition} from './authority-catalog-transition.mjs';
 import {canonicalRegistryMatches,deriveRegistryRotationIdentity,validateCatalogAuthorityEvidence,validateRetiredCatalogOwnerState} from './authority-rotation-transition.mjs';
 import {readComponentServingInventory,componentServingReady} from './portable-component-migration.mjs';
 import {activeDeploymentPods} from './stable-archive-transition.mjs';
+import {personalIntegrationsAuthorityTransition,validatePersonalIntegrationsAuthorityRegistry,
+ personalIntegrationsAuthorityReadbackContract} from './authority-personal-integrations-source.mjs';
+import {validatePersonalIntegrationsRotationJournal} from './personal-integrations-rotation-journal.mjs';
 
 const ensure=(value,code)=>{if(!value)throw Error(code);};
 const same=(a,b)=>fingerprint(a)===fingerprint(b);
@@ -29,7 +33,11 @@ export function catalogAuthorityBaselineSQL(){
 // единственный PostgreSQL container. OwnerReference сам по себе не равен STS.
 export function authorityPostgresIdentity(kube){
  const get=(kind,name)=>JSON.parse(kube(['-n','kodex-system','get',kind,name,'-o','json']));
- const pod=get('pod','kodex-postgresql-0'),set=get('statefulset','kodex-postgresql');
+ return authorityPostgresObservedIdentity(get('pod','kodex-postgresql-0'),get('statefulset','kodex-postgresql'));
+}
+
+// Те же строгие Pod/StatefulSet guards для полных объектов нативного клиента.
+export function authorityPostgresObservedIdentity(pod,set){
  const owner=pod.metadata?.ownerReferences?.filter(value=>value.controller===true);
  ensure(pod.apiVersion==='v1'&&pod.kind==='Pod'&&pod.metadata?.name==='kodex-postgresql-0'&&pod.metadata.namespace==='kodex-system'&&uuid(pod.metadata.uid)&&
   !pod.metadata.deletionTimestamp&&pod.metadata.labels?.['app.kubernetes.io/name']==='kodex-postgresql'&&
@@ -46,8 +54,8 @@ export function authorityPostgresIdentity(kube){
  return {pod:'kodex-postgresql-0',uid:pod.metadata.uid,ownerUID:set.metadata.uid};
 }
 
-export function validateCatalogAuthorityBaseline(proof,now=Date.now()){
- ensure(proof?.schema===catalogAuthorityBaselineSchema&&proof.policyRevision===106&&uuid(proof.operationID)&&uuid(proof.registryUID)&&uuid(proof.publisherUID)&&
+export function validateCatalogAuthorityBaseline(proof,now=Date.now(),policyRevision=106){
+ ensure(proof?.schema===catalogAuthorityBaselineSchema&&[106,110].includes(policyRevision)&&proof.policyRevision===policyRevision&&uuid(proof.operationID)&&uuid(proof.registryUID)&&uuid(proof.publisherUID)&&
   ['policySHA256','registryDataSHA256','registrySHA256','publisherSpecSHA256','snapshotSHA256','rotationPlanSHA256','rotationEvidenceSHA256','targetSHA256','requiredReadbackTargetsSHA256'].every(key=>sha(proof[key]))&&
   Number.isSafeInteger(proof.registryRevision)&&proof.registryRevision>0&&Number.isSafeInteger(proof.snapshotRevision)&&proof.snapshotRevision>0&&
   Number.isSafeInteger(proof.expectedReadbackCount)&&proof.expectedReadbackCount>0&&proof.expectedReadbackCount<=384&&
@@ -68,19 +76,47 @@ export function validateCatalogAuthorityBaseline(proof,now=Date.now()){
 // Смена времени READ и количества уже подтверждённых optional readers не
 // означает новую authority. Все owner/registry/publisher/backend pins неизменны.
 export function sameCatalogAuthorityBaseline(before,after){
- const immutable=proof=>Object.fromEntries(Object.entries(proof??{}).filter(([key])=>
-  !['baselineSHA256','observedAt','actualReadbackCount'].includes(key)));
- return same(immutable(before),immutable(after));
+ return catalogAuthorityBaselineIdentity(before)===catalogAuthorityBaselineIdentity(after);
 }
 
-export function readCatalogAuthorityBaseline({plan,events,expected,now=Date.now},kube,io={}){
- const original=validateCatalogAuthorityEvidence(plan,events);
+// Идентичность для сравнения двух независимо снятых и проверенных baseline.
+export function catalogAuthorityBaselineIdentity(proof){
+ return fingerprint(Object.fromEntries(Object.entries(proof??{}).filter(([key])=>
+  !['baselineSHA256','observedAt','actualReadbackCount'].includes(key))));
+}
+
+export function readCatalogAuthorityBaseline(input,kube,io={}){
+ return readCatalogAuthorityBaselineWithOwner(input,kube,io);
+}
+
+// Только paired110 использует sealed fixed reader. Registry/source/target,
+// publisher inventory, retired-state и late readback остаются общими; legacy
+// paths выполняют прежние identity/read без новой ветки или SQL override.
+export function readCatalogAuthorityBaselinePaired(input,kube,reader,io={}){
+ ensure(input.policyRevision===110,'CATALOG_BASELINE_POLICY_REJECTED');requirePairedAuthorityReader(reader);
+ let capture,boundary;
+ const baseline=readCatalogAuthorityBaselineWithOwner(input,kube,io,()=>{
+  capture=readPairedAuthorityOwner(reader);return capture;
+ },value=>{boundary=Object.freeze(value);});
+ return Object.freeze({baseline,head:capture.head,postgres:capture.postgres,backend:capture.backend,sqlSHA256:capture.sqlSHA256,boundary});
+}
+
+function readCatalogAuthorityBaselineWithOwner({plan,events,expected,policyRevision=106,now=Date.now},kube,io,readCapture,sealBoundary){
+ ensure([106,110].includes(policyRevision),'CATALOG_BASELINE_POLICY_REJECTED');
+ const personal=policyRevision===110,transition=personal?personalIntegrationsAuthorityTransition:catalogPolicyTransition;
+ ensure(plan.policyTransition?.profile===transition,'CATALOG_BASELINE_POLICY_REJECTED');
+ const original=personal?validatePersonalIntegrationsRotationJournal(plan,events):validateCatalogAuthorityEvidence(plan,events);
  ensure(plan.action==='rotate'&&original.jobUID&&events.some(row=>row.status==='APPLIED'&&row.operation==='REGISTRY_CAS')&&
   events.some(row=>row.status==='APPLIED'&&row.operation==='PUBLISHER_RESTART'),
   'CATALOG_BASELINE_ROTATION_RECEIPT_REQUIRED');
  ensure((io.inspectSource??inspectSource)(plan.source).revision===plan.revision,'EXACT_SOURCE_REQUIRED');
- const get=(kind,name)=>JSON.parse(kube(['-n','kodex-system','get',kind,name,'-o','json']));
- const target=readCatalogTarget(plan.policyTransition.targetProfile,plan.context,get);
+ const nativePublisher=readCapture&&io.readPublisher,publisherName='internal-rpc-authority-publisher',registryName=publisherName+'-target-registry';
+ // Нативный API возвращает managedFields. Сравниваем с той же полной формой
+ // kubectl в начальном и позднем чтении Deployment publisher.
+ const get=(kind,name)=>JSON.parse(kube(['-n','kodex-system','get',kind,name,'-o','json',
+  ...(nativePublisher&&((kind==='deployment'&&name===publisherName)||(kind==='configmap'&&name===registryName))?
+   ['--show-managed-fields=true']:[])]));
+ const target=readCatalogTarget(plan.policyTransition.targetProfile,plan.context,get,transition);
  verifyCatalogTransition(plan.policyTransition,target.transition);
  const {registry,publisher}=target;
  ensure(registry.metadata.uid===plan.registry.uid&&same(registry.data,plan.registry.desiredData)&&fingerprint(registry.data)===plan.registry.desiredDataSHA256&&
@@ -88,31 +124,40 @@ export function readCatalogAuthorityBaseline({plan,events,expected,now=Date.now}
   publisher.metadata.uid===plan.publisher.uid&&fingerprint(publisher.spec)===plan.publisher.desiredSpecSHA256&&
   publisher.spec.template.metadata.annotations?.['kodex.dev/authority-rotation-operation']===plan.ownerOperationID,
   'CATALOG_BASELINE_TARGET_CHANGED');
- const policy=validateCatalogPolicy(registry.data['authority-policy.json'],'desired',plan.policyTransition);
+ const policy=validateAuthorityPolicy(registry.data['authority-policy.json'],'desired',plan.policyTransition);
  const identity=deriveRegistryRotationIdentity(registry.data['key-delivery-targets.yaml']);
- ensure(policy.revision===106&&identity.ownerOperationID===plan.ownerOperationID&&identity.sourceRevision===plan.registry.sourceRevision&&
-  identity.sourceDigestSHA256===plan.registry.sourceDigestSHA256&&canonicalRegistryMatches(registry.data['key-delivery-targets.yaml'],
+ ensure(policy.revision===policyRevision&&identity.ownerOperationID===plan.ownerOperationID&&identity.sourceRevision===plan.registry.sourceRevision&&
+  identity.sourceDigestSHA256===plan.registry.sourceDigestSHA256,'CATALOG_BASELINE_REGISTRY_CHANGED');
+ const registryRaw=registry.data['key-delivery-targets.yaml'];
+ if(personal)validatePersonalIntegrationsAuthorityRegistry(registryRaw,plan.registry.predecessorRaw);
+ else ensure(canonicalRegistryMatches(registryRaw,
    readFileSync(`${plan.source}/deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml`,'utf8')),
   'CATALOG_BASELINE_REGISTRY_CHANGED');
- const readers=authorityReadbackContract(registry.data['key-delivery-targets.yaml']);
- ensure(componentServingReady(publisher,activeDeploymentPods(readComponentServingInventory(kube,'internal-rpc-authority-publisher',publisher.metadata.uid),publisher.metadata.uid),publisher.spec.replicas),
+ const readers=personal?personalIntegrationsAuthorityReadbackContract():authorityReadbackContract(registryRaw);
+ if(nativePublisher)nativePublisher(publisher,plan.policyTransition.targetProfile);
+ else ensure(componentServingReady(publisher,activeDeploymentPods(readComponentServingInventory(kube,publisherName,publisher.metadata.uid),publisher.metadata.uid),publisher.spec.replicas),
   'CATALOG_BASELINE_PUBLISHER_NOT_READY');
  const postgresIdentity=()=>authorityPostgresIdentity(kube),postgres=postgresIdentity();
- const database=authorityOwnerDatabase(kube,postgresIdentity),backend=expected?.postgresBackend??database.identity(postgres);
+ const capture=readCapture?.();
+ if(capture)ensure(same(postgres,capture.postgres),'CATALOG_BASELINE_POSTGRES_CHANGED');
+ const database=authorityOwnerDatabase(kube,postgresIdentity),backend=expected?.postgresBackend??capture?.backend??database.identity(postgres);
  if(expected)ensure(same(postgres,expected.postgres),'CATALOG_BASELINE_POSTGRES_CHANGED');
- const state=database.read(catalogAuthorityBaselineSQL(),postgres,backend);
+ if(capture)ensure(same(backend,capture.backend),'MIGRATION_DATABASE_INSTANCE_CHANGED');
+ const state=capture?capture.state:database.read(catalogAuthorityBaselineSQL(),postgres,backend);
  validateRetiredCatalogOwnerState(state,plan,identity,readers,now());
- ensure(same(get('configmap','internal-rpc-authority-publisher-target-registry'),registry)&&same(get('deployment','internal-rpc-authority-publisher'),publisher),
+ ensure(same(get('configmap',registryName),registry)&&same(get('deployment',publisherName),publisher),
   'CATALOG_BASELINE_TARGET_CHANGED');
+ if(capture)ensure(same(postgresIdentity(),postgres),'CATALOG_BASELINE_POSTGRES_CHANGED');
  const scope=Object.fromEntries(['context','clusterUID','namespaceUID','installationUID','installationSHA256'].map(key=>[key,plan.policyTransition[key]]));
  scope.context=plan.context;
- const body={schema:catalogAuthorityBaselineSchema,policyRevision:106,policySHA256:policy.sha256,operationID:state.operationId,
+ const body={schema:catalogAuthorityBaselineSchema,policyRevision,policySHA256:policy.sha256,operationID:state.operationId,
   registryUID:registry.metadata.uid,registryDataSHA256:fingerprint(registry.data),registryRevision:identity.sourceRevision,registrySHA256:identity.sourceDigestSHA256,
   publisherUID:publisher.metadata.uid,publisherSpecSHA256:fingerprint(publisher.spec),snapshotRevision:state.sourceRevision,snapshotSHA256:state.sourceDigestSHA256,
   ...readers,actualReadbackCount:state.actualReadbackCount,observedAt:state.observedAt,sqlSHA256:catalogAuthorityBaselineSQLSHA256,
   rotationPlanSHA256:fingerprint(plan),rotationEvidenceSHA256:fingerprint(events),targetSHA256:plan.policyTransition.targetSHA256,scope,postgres,postgresBackend:backend};
  const proof={...body,baselineSHA256:fingerprint(body)};
- validateCatalogAuthorityBaseline(proof,now());
+ validateCatalogAuthorityBaseline(proof,now(),policyRevision);
  if(expected)ensure(sameCatalogAuthorityBaseline(expected,proof),'CATALOG_BASELINE_CHANGED');
+ sealBoundary?.({registrySHA256:fingerprint(registry),publisherSHA256:fingerprint(publisher),showManagedFields:Boolean(nativePublisher)});
  return Object.freeze(proof);
 }

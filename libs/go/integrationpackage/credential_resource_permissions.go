@@ -46,6 +46,9 @@ type CredentialResourcePermissionContract struct {
 // CredentialResourcePermissionContractFor разрешает закрытую пару definition/capability. Срезы
 // создаются заново, поэтому caller не меняет реестр операций другого consumer.
 func CredentialResourcePermissionContractFor(definitionKey, capabilityKey string) (CredentialResourcePermissionContract, bool) {
+	if contract, exists := kubernetesPermissionContract(definitionKey, capabilityKey); exists {
+		return contract, true
+	}
 	if contract, exists := observabilityCredentialContract(definitionKey, capabilityKey); exists {
 		return contract, true
 	}
@@ -97,6 +100,16 @@ func CredentialResourcePermissionContractFor(definitionKey, capabilityKey string
 // CredentialResourcePermissionProfile выбирает только зарегистрированные проверки typed consumer
 // из executable package. Identity, grants, key pins и launch policy по-прежнему разрешает owner.
 func CredentialResourcePermissionProfile(definition Package, capability Capability) string {
+	if definition.Spec.Adapter == string(AdapterSSHTarget) {
+		return sshCredentialResourceProfile(definition, capability)
+	}
+	if definition.Spec.Adapter == string(AdapterKubernetes) {
+		contract, exists := kubernetesPermissionContract(definition.Metadata.Key, capability.Key)
+		if exists && validateKubernetesDefinition(definition) == nil && capability.Operation == contract.Operation && capability.Risk == contract.Risk {
+			return contract.Profile
+		}
+		return ""
+	}
 	if definition.Metadata.Key == "github" && definition.Spec.Adapter == string(AdapterGitHub) && capability.ResourceScope.Kind == "GITHUB_SCOPE" {
 		contract, exists := CredentialResourcePermissionContractForProfile("github", capability.Key, CredentialResourcePermissionGitHubScopedV1)
 		if exists && capability.Operation == contract.Operation && capability.Risk == contract.Risk && capability.AllowsApprovalPolicy(capability.ApprovalPolicy) {

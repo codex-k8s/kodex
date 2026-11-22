@@ -771,10 +771,15 @@ func castGraph(value entity.RunGraph) *controlplanev1.RunGraph {
 // castGate projects exact gate scope, actors, decision/consequence metadata, attachments and optional JSON-normalized integration intent; this read does not resolve a gate or execute its previewed effect.
 // castGate отображает точную область шлюза, авторов, метаданные решения и последствий, вложения и необязательное намерение интеграции с JSON-нормализованным предпросмотром; это чтение шлюз не закрывает и показанное действие не исполняет.
 func castGate(value entity.OwnerGate) *controlplanev1.OwnerGate {
+	child := castKubernetesOwnerGateChild(value.KubernetesChild)
+	if value.KubernetesChild != nil && (child == nil || value.IntegrationIntent != nil || value.ReworkPlan != nil) {
+		return nil
+	}
 	gate := &controlplanev1.OwnerGate{ResolutionKind: value.ResolutionKind, ReworkPlan: castWorkflowReworkPreview(value.ReworkPlan), Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, RunRef: value.RunRef, NodeRef: value.NodeRef, Title: value.Title, ContextSummary: value.ContextSummary, ConsequencesSummary: value.Prompt, RequestedBy: &controlplanev1.UserSummary{Ref: value.RequestedByRef, DisplayName: value.RequestedByName}, State: gateState(value.State), AllowedDecisions: gateDecisions(value.AllowedDecisions), Decision: gateDecision(value.Decision), DecisionComment: value.DecisionComment, OpenedAt: timestamp(value.CreatedAt), DecidedAt: optionalTimestamp(value.ResolvedAt), ExpiresAt: optionalTimestamp(value.ExpiresAt), ResolutionAttachmentSetRef: value.ResolutionAttachmentSetRef, NextActions: nextActions(value.NextActions)}
 	if value.ResolvedByName != "" {
 		gate.DecidedBy = &controlplanev1.UserSummary{DisplayName: value.ResolvedByName}
 	}
+	gate.KubernetesChild = child
 	gate.SourceAttachmentSetRef = value.SourceAttachmentSetRef
 	gate.ScopeKind = runtimeSecretScopeKind(value.ScopeKind)
 	gate.OrganizationRef = value.OrganizationRef
@@ -790,7 +795,7 @@ func castGate(value entity.OwnerGate) *controlplanev1.OwnerGate {
 // castArtifact projects authorized artifact lifecycle/scan/source/revision metadata and derives preview availability only from AVAILABLE; it returns no content and performs no new scan.
 // castArtifact отображает авторизованные метаданные жизненного цикла, проверки, источника и ревизии файла, выводя доступность предпросмотра только из AVAILABLE; содержимое не возвращает и новую проверку не выполняет.
 func castArtifact(value entity.Artifact) *controlplanev1.Artifact {
-	return &controlplanev1.Artifact{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, RunRef: value.RunRef, SessionRef: value.SessionRef, FileName: value.FileName, MediaType: value.MediaType, SizeBytes: value.SizeBytes, ScanState: scanState(value.ScanState), Source: artifactSource(value.Source), Revision: int32(value.Revision), AgentBindings: value.Bindings, PreviewAvailable: value.PreviewState == "AVAILABLE", CreatedAt: timestamp(value.CreatedAt), NextActions: nextActions(value.NextActions), Digest: value.Digest, LifecycleState: artifactLifecycleState(value.LifecycleState), DeletedAt: optionalTimestamp(value.DeletedAt), PurgeAfter: optionalTimestamp(value.PurgeAfter), CurrentRevisionRef: value.CurrentRevisionRef}
+	return &controlplanev1.Artifact{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, RunRef: value.RunRef, SessionRef: value.SessionRef, FileName: value.FileName, MediaType: value.MediaType, SizeBytes: value.SizeBytes, ScanState: scanState(value.ScanState), Source: artifactSource(value.Source), Revision: int32(value.Revision), AgentBindings: value.Bindings, PreviewAvailable: value.PreviewState == "AVAILABLE", CreatedAt: timestamp(value.CreatedAt), NextActions: nextActions(value.NextActions), Digest: value.Digest, LifecycleState: artifactLifecycleState(value.LifecycleState), DeletedAt: optionalTimestamp(value.DeletedAt), PurgeAfter: optionalTimestamp(value.PurgeAfter), CurrentRevisionRef: value.CurrentRevisionRef, CaptureOrigin: kubernetesArtifactCaptureToProto(value.CaptureOrigin)}
 }
 
 // castArtifactRevision projects one exact historical artifact revision and supplied scan/source/preview metadata, without replacing it with the current artifact or reading content.
@@ -798,7 +803,7 @@ func castArtifact(value entity.Artifact) *controlplanev1.Artifact {
 func castArtifactRevision(value entity.ArtifactRevision) *controlplanev1.ArtifactRevision {
 	return &controlplanev1.ArtifactRevision{Ref: value.Ref, ArtifactRef: value.ArtifactRef, Revision: value.Revision,
 		FileName: value.FileName, MediaType: value.MediaType, SizeBytes: value.SizeBytes, Digest: value.Digest,
-		ScanState: value.ScanState, Source: value.Source, PreviewAvailable: value.PreviewAvailable, CreatedAt: timestamp(value.CreatedAt)}
+		ScanState: value.ScanState, Source: value.Source, PreviewAvailable: value.PreviewAvailable, CreatedAt: timestamp(value.CreatedAt), CaptureOrigin: kubernetesArtifactCaptureToProto(value.CaptureOrigin)}
 }
 
 // castAttachmentSet projects exact family/revision/manifest metadata and ordered item pins including artifact version/digest/source, without finalizing the set or downloading attachments.
@@ -843,7 +848,9 @@ func castSchedule(value entity.Schedule) *controlplanev1.Schedule {
 // castDefinition projects a shipped integration catalog definition with version/digest/adapter readiness, authoritative connection counters and typed capability/input-field lists; BuiltIn does not itself grant execution rights.
 // castDefinition отображает поставляемое определение интеграции с версией, хешем, готовностью адаптера, авторитетными счётчиками подключений и типизированными списками возможностей и полей; BuiltIn сам не выдаёт право исполнения.
 func castDefinition(value entity.IntegrationDefinition) *controlplanev1.IntegrationDefinition {
+	kind, purpose := castCredentialDelivery(value.CredentialDelivery)
 	result := &controlplanev1.IntegrationDefinition{
+		CredentialDeliveryKind: kind, BrokerIdentityPurpose: purpose,
 		Version: value.Version, NextActions: append([]string{}, value.NextActions...),
 		Key: value.Key, Name: value.Name, Description: value.Description, Category: value.Category, BuiltIn: true, Available: value.Enabled,
 		SchemaVersion: value.SchemaVersion, DefinitionVersion: value.DefinitionVersion,
@@ -881,6 +888,12 @@ func castGrant(value entity.IntegrationGrant) *controlplanev1.IntegrationGrant {
 // castConnection projects public connection config, masked credential status/hint, optional credential and definition bindings, capabilities and grants; CONFIGURED is metadata, not successful connectivity or human approval.
 // castConnection отображает публичную конфигурацию подключения, скрытый статус реквизитов и подсказку, необязательные привязки реквизитов и определения, возможности и разрешения; CONFIGURED — метаданные, не успешное соединение и не одобрение человека.
 func castConnection(value entity.IntegrationConnection) *controlplanev1.IntegrationConnection {
+	kind, purpose := castCredentialDelivery(value.CredentialDelivery)
+	if value.CredentialRevision != nil && kind != controlplanev1.IntegrationCredentialDeliveryKind_INTEGRATION_CREDENTIAL_DELIVERY_KIND_TOKEN ||
+		value.BrokerIdentity != nil && kind != controlplanev1.IntegrationCredentialDeliveryKind_INTEGRATION_CREDENTIAL_DELIVERY_KIND_BROKER_IDENTITY {
+		kind = controlplanev1.IntegrationCredentialDeliveryKind_INTEGRATION_CREDENTIAL_DELIVERY_KIND_UNSPECIFIED
+		purpose = controlplanev1.IntegrationBrokerIdentityPurpose_INTEGRATION_BROKER_IDENTITY_PURPOSE_UNSPECIFIED
+	}
 	credentialsHint := "i18n:INTEGRATION_CREDENTIAL_NOT_CONFIGURED"
 	if value.MaskedCredentialsState == "CONFIGURED" {
 		credentialsHint = "i18n:INTEGRATION_CREDENTIAL_CONFIGURED"
@@ -888,6 +901,7 @@ func castConnection(value entity.IntegrationConnection) *controlplanev1.Integrat
 		credentialsHint = "i18n:INTEGRATION_CREDENTIAL_INVALID"
 	}
 	result := &controlplanev1.IntegrationConnection{
+		CredentialDeliveryKind: kind, BrokerIdentityPurpose: purpose,
 		CredentialPolicy: controlplanev1.IntegrationCredentialPolicy(controlplanev1.IntegrationCredentialPolicy_value["INTEGRATION_CREDENTIAL_POLICY_"+string(value.CredentialPolicy)]),
 		Ref:              value.Ref, Version: value.Version, DefinitionKey: value.DefinitionKey, Name: value.Name,
 		DefinitionVersion: value.DefinitionVersion, DefinitionDigest: value.DefinitionDigest,
@@ -896,8 +910,22 @@ func castConnection(value entity.IntegrationConnection) *controlplanev1.Integrat
 		PublicConfiguration: structure(value.PublicConfiguration), NextActions: nextActions(value.NextActions),
 		CreatedAt: timestamp(value.CreatedAt), UpdatedAt: timestamp(value.UpdatedAt),
 	}
-	if value.CredentialRevision != nil {
+	if value.KubernetesSetupRequirements != nil {
+		target, known := value.PublicConfiguration["target_ref"].(string)
+		if kind != controlplanev1.IntegrationCredentialDeliveryKind_INTEGRATION_CREDENTIAL_DELIVERY_KIND_BROKER_IDENTITY || purpose != controlplanev1.IntegrationBrokerIdentityPurpose_INTEGRATION_BROKER_IDENTITY_PURPOSE_KUBERNETES_TARGET || !known || target != value.KubernetesSetupRequirements.TargetRef {
+			return nil
+		}
+		result.KubernetesSetupRequirements = kubernetesSetupRequirementsToProto(value.KubernetesSetupRequirements, value.Version, value.CredentialPolicy)
+		if result.KubernetesSetupRequirements == nil {
+			return nil
+		}
+	}
+	if value.CredentialRevision != nil && kind == controlplanev1.IntegrationCredentialDeliveryKind_INTEGRATION_CREDENTIAL_DELIVERY_KIND_TOKEN {
 		result.CredentialRevision = castIntegrationCredential(*value.CredentialRevision)
+	}
+	if value.CredentialPolicy == entity.IntegrationCredentialProjectShared && kind == controlplanev1.IntegrationCredentialDeliveryKind_INTEGRATION_CREDENTIAL_DELIVERY_KIND_BROKER_IDENTITY &&
+		value.BrokerIdentity != nil && value.BrokerIdentity.ValidMetadata() && string(value.BrokerIdentity.Purpose) == value.CredentialDelivery.BrokerPurpose {
+		result.BrokerIdentityRef, result.BrokerIdentityRevision = value.BrokerIdentity.Ref, value.BrokerIdentity.Revision
 	}
 	if value.CredentialPolicy == entity.IntegrationCredentialInitiatorRequired {
 		result.CredentialsConfigured = false

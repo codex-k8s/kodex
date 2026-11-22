@@ -377,6 +377,15 @@ type TranscriptionCredentialProjection struct {
 // аутентификацию, атомарность или security-гарантии сами по себе; проверки остаются у реализаций и
 // доменных вызывающих.
 type Repository interface {
+	// GetPersonalEmailMailboxMutationReceipt reconciles only the current user's closed owner setup operation without issuing new execution authority.
+	// GetPersonalEmailMailboxMutationReceipt сверяет только закрытую owner setup operation текущего пользователя без выдачи новых полномочий исполнения.
+	GetPersonalEmailMailboxMutationReceipt(context.Context, value.Principal, string, string) (entity.EmailMailboxMutationReceipt, error)
+	// GetEmailMailboxOwnership reads the dedicated configuring-user view, never a generic credential binding.
+	// GetEmailMailboxOwnership читает отдельное представление настроившего пользователя, не generic credential binding.
+	GetEmailMailboxOwnership(context.Context, value.Principal, string) (entity.EmailMailboxOwnershipView, error)
+	// ListMyEmailMailboxes pages only current self-owned email connections after authoritative visibility filtering.
+	// ListMyEmailMailboxes выдаёт страницы только текущих собственных email connections после авторитетной фильтрации видимости.
+	ListMyEmailMailboxes(context.Context, value.Principal, string, query.Page) ([]entity.MyEmailMailbox, string, error)
 	// GetExecutionWorkflowCatalog requests the execution-visible workflow catalog for an exact principal
 	// and typed execution context, not a tenant-wide unfiltered definition dump.
 	// GetExecutionWorkflowCatalog запрашивает доступный исполнению каталог процессов для точных principal

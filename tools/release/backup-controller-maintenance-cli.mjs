@@ -1,4 +1,13 @@
 #!/usr/bin/env node
+import {isWorkflowFileProvenanceMigrationProfile,workflowFileProvenanceMigration,validWorkflowFileProvenanceComposedPostcondition,validWorkflowFileProvenancePredecessorCatalog,
+ workflowFileAbortIntent,workflowFileAbortAck} from './workflow-file-provenance-migration-contract.mjs';
+import {artifactGrantCatalogReceipt} from './artifact-retention-grant-catalog.mjs';
+import {readArtifactGrantCatalogPostcondition} from './artifact-retention-grant-catalog-release.mjs';
+import {bindPersonalArtifactSocketExecutor,migrationInspectTimeoutMs,resolvePersonalIntegrationsExecutorSource} from './personal-integrations-executor-source.mjs';
+import {readAuthorityPrivateJSON} from './authority-catalog-transition.mjs';
+import {personalMigrationAttempt,personalMigrationSuccessReceipt} from './personal-integrations-migration-recovery.mjs';
+import {personalIntegrationsReadersTerminalReceipt} from './personal-integrations-migration-witness.mjs';
+import {isPersonalIntegrationsMigrationProfile,validPersonalIntegrationsMigrationProof,requirePersonalIntegrationsDeliveryPrerequisite} from './personal-integrations-migration-contract.mjs';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
@@ -14,7 +23,7 @@ import {migrationOwnerDatabase} from './migration-owner-database.mjs';
 import {isProvenStoppedPod} from './stable-archive-transition.mjs';
 import {backupMigrationProfile} from './backup-migration-registry.mjs';
 import {planBackupControllerMaintenance,backupControllerMaintenanceStep,backupControllerMaintenanceHeader,
- readBackupProducerInventory,requireStoppedBackupController} from './backup-controller-maintenance.mjs';
+ readBackupProducerInventory,requireBackupProducerBoundary,requireResumedBackupController,requireStoppedBackupController} from './backup-controller-maintenance.mjs';
 
 const root=fileURLToPath(new URL('../../',import.meta.url)),namespace='kodex-system',name='backup-controller';
 const ensure=(ok,code)=>{if(!ok)throw Error(code);};
@@ -27,7 +36,7 @@ const telegramObservabilityRepairFlag='--telegram-observability-repair-plan';
 const telegramEgressRevisionRepairFlag='--telegram-egress-revision-repair-plan';
 const telegramRepairFlag='--telegram-port-repair-plan';
 const telegramRepairExecutorFlag='--telegram-port-repair-executor-sha';
-const telegramInspectTimeoutMs=300000;
+const personalInspectFlags=Object.freeze(['--api-open-plan','--api-open-evidence']);
 
 // Только полный набор final107 receipts. Scope и owner proof проверяет сам
 // migration inspect; backup consumer не заменяет его сохранённым ready boolean.
@@ -36,6 +45,12 @@ export function backupMigrationInspectReferences(profile,references={}){
  const keys=Object.keys(references);
  ensure(!Object.hasOwn(references,telegramRepairExecutorFlag)||Object.hasOwn(references,telegramRepairFlag),'BACKUP_MAINTENANCE_INSPECT_INPUT_INVALID');
  if(!keys.length)return {};
+ if(isPersonalIntegrationsMigrationProfile(profile)){
+  ensure(profile==='personal-integrations-backup'&&keys.length===personalInspectFlags.length&&personalInspectFlags.every(key=>
+   typeof references[key]==='string'&&references[key].startsWith('/')&&references[key]===resolve(references[key])&&!/[\r\n\0]/.test(references[key])),
+   'BACKUP_MAINTENANCE_INSPECT_INPUT_INVALID');
+  return Object.fromEntries(personalInspectFlags.map(key=>[key,references[key]]));
+ }
  ensure(profile==='telegram-notifications-backup'&&keys.every(key=>telegramInspectFlags.includes(key)||key===telegramRepairFlag||key===telegramRepairExecutorFlag||key===telegramObservabilityRepairFlag||key===telegramEgressRevisionRepairFlag)&&
   telegramInspectFlags.every(key=>Object.hasOwn(references,key))&&keys.every(key=>typeof references[key]==='string'&&
    (key===telegramRepairExecutorFlag?/^[a-f0-9]{40}$/.test(references[key]):references[key].startsWith('/')&&references[key]===resolve(references[key])&&!/[\r\n\0]/.test(references[key]))),
@@ -45,10 +60,33 @@ export function backupMigrationInspectReferences(profile,references={}){
 
 // Последний consumer передаёт immutable ссылки тому же закрытому CLI. Никакие
 // произвольные argv, source override либо иной profile через plan не разрешаются.
-export function backupMigrationInspectArguments({profile,context,kubeconfig,migrationPlanPath,migrationEvidencePath,references}){
+export function backupMigrationInspectArguments({profile,context,kubeconfig,migrationPlanPath,migrationEvidencePath,references,executorSHA,inspectionSource}){
+ ensure(inspectionSource===undefined||executorSHA&&typeof inspectionSource==='string'&&inspectionSource===resolve(inspectionSource)&&!/[\r\n\0]/.test(inspectionSource),'BACKUP_MAINTENANCE_INSPECT_INPUT_INVALID');
+ ensure(executorSHA===undefined||isPersonalIntegrationsMigrationProfile(profile)&&/^[a-f0-9]{40}$/.test(executorSHA),'BACKUP_MAINTENANCE_INSPECT_INPUT_INVALID');
  const pinned=backupMigrationInspectReferences(profile,references);
- return [new URL('./control-plane-migration.mjs',import.meta.url).pathname,'inspect','--profile',profile,'--context',context,
-  '--kubeconfig',kubeconfig,'--plan',migrationPlanPath,'--evidence',migrationEvidencePath,...Object.entries(pinned).flat()];
+ const cli=inspectionSource?resolve(inspectionSource,'tools/release/control-plane-migration.mjs'):new URL('./control-plane-migration.mjs',import.meta.url).pathname;
+ return [cli,'inspect','--profile',profile,'--context',context,
+  '--kubeconfig',kubeconfig,'--plan',migrationPlanPath,'--evidence',migrationEvidencePath,
+  ...(isPersonalIntegrationsMigrationProfile(profile)?['--evidence-read-only','true',...(executorSHA?['--personal-executor-sha',executorSHA]:[])]:[]),...Object.entries(pinned).flat()];
+}
+
+// У полного cohort plan отдельный bounded parser. Меньший лимит edge plan
+// сохраняется для остальных профилей, backup plans и их target descriptors.
+export function readBackupMigrationPlan(path,profile){
+ return isPersonalIntegrationsMigrationProfile(profile)?readAuthorityPrivateJSON(path):readPrivateJSON(path);
+}
+
+// Уже принятый terminal executor остаётся владельцем inspect. Исправление
+// backup reader не переопределяет его journal binding и не меняет оригинальный plan.
+export function personalTerminalInspectionExecutor(migration,events){
+ const bindings=events.filter(event=>event.type==='PERSONAL_INTEGRATIONS_TERMINAL_EXECUTOR_BOUND');
+ if(!bindings.length)return undefined;
+ ensure(bindings.length===1&&bindings[0].compatibility?.source===migration.source.path&&
+  bindings[0].compatibility?.revision===migration.source.revision,'PERSONAL_INTEGRATIONS_EXECUTOR_SOURCE_REJECTED');
+ const saved=bindings[0].compatibility;
+ const exact=resolvePersonalIntegrationsExecutorSource(saved.executorSource,{saved});
+ bindPersonalArtifactSocketExecutor({events},exact,{readOnly:true});
+ return exact;
 }
 
 // PostgreSQL identity не читает env, DSN либо credential values. Точный Pod и
@@ -91,16 +129,31 @@ export function readStoppedBackupMaintenance(kube,closed,{migrationPlanSHA256,re
 
 // Gate читает только закреплённый SQL текущего executor. Полная metadata
 // qualification отделена от runtime idle: resume не подменяет claim counters.
-export async function readCanonicalBackupOwner({kube,plan,readSQL,now=Date.now}){
+export async function readCanonicalBackupOwner({kube,plan,readSQL,migration,events,now=Date.now}){
  const configuration=backupMigrationProfile(plan.migrationProfile);
  const database=migrationOwnerDatabase(kube,()=>backupPostgresIdentity(kube));
  const version=database.read("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;SET LOCAL statement_timeout='15s';SELECT pg_catalog.json_build_object('version',(SELECT max(version_id) FROM public.goose_db_version WHERE is_applied),'backupSessions',(SELECT count(*) FROM pg_catalog.pg_stat_activity WHERE datname=pg_catalog.current_database() AND usesysid IN (WITH RECURSIVE backup_roles(oid) AS (SELECT oid FROM pg_catalog.pg_roles WHERE rolname='kodex_backup_reader' UNION SELECT m.member FROM pg_catalog.pg_auth_members m JOIN backup_roles r ON m.roleid=r.oid) SELECT oid FROM backup_roles)));ROLLBACK;\n",plan.postgres,plan.postgresBackend);
+ const extension=configuration.profile==='personal-integrations-backup'&&migration&&events?artifactGrantCatalogReceipt(migration,events):undefined;
+ if(extension){
+  ensure(version.version===extension.schemaVersion&&version.backupSessions===0&&
+   digest(readSQL(configuration.files.after))===plan.ownerSQLSHA256.after&&plan.ownerSQLSHA256.after===migration.postconditionSQLSHA256,
+   'BACKUP_MAINTENANCE_OWNER_NOT_IDLE');
+  const current=readArtifactGrantCatalogPostcondition(migration,sql=>database.read(sql,plan.postgres,plan.postgresBackend),extension.sqlSHA256);
+  ensure(current.schemaCatalogSHA256===extension.schemaCatalogSHA256,'BACKUP_MAINTENANCE_CANONICAL_ACL_REQUIRED');
+  return {schemaVersion:current.schemaVersion,canonicalBackup:true,schemaCatalogSHA256:current.schemaCatalogSHA256,observedAt:new Date(now()).toISOString()};
+ }
  ensure([configuration.before,configuration.after].includes(version.version)&&version.backupSessions===0,'BACKUP_MAINTENANCE_OWNER_NOT_IDLE');
  const phase=version.version===configuration.before?'before':'after',sql=readSQL(configuration.files[phase]);
  ensure(digest(sql)===plan.ownerSQLSHA256[phase],'BACKUP_MAINTENANCE_OWNER_SOURCE_CHANGED');
  const proof=database.read(sql,plan.postgres,plan.postgresBackend);
+ if(isPersonalIntegrationsMigrationProfile(configuration.profile))ensure(validPersonalIntegrationsMigrationProof(proof,true,phase==='before'),'BACKUP_MAINTENANCE_CANONICAL_ACL_REQUIRED');
+ if(isWorkflowFileProvenanceMigrationProfile(configuration.profile)){
+  ensure(phase==='before'?validWorkflowFileProvenancePredecessorCatalog(proof):validWorkflowFileProvenanceComposedPostcondition(proof),
+   'BACKUP_MAINTENANCE_CANONICAL_ACL_REQUIRED');
+ }else{
  ensure(proof.profile===configuration.proofPrefix+(phase==='before'?'PREDECESSOR_':'')+'V1'&&proof.database==='control_plane'&&proof.readOnly==='on'&&proof.gooseVersion===version.version&&proof.backupQualification==='CANONICAL_BACKUP'&&proof.publicSequenceSafe===true&&(phase!=='before'||proof.activeBackupSessions===0&&proof.workspaceOwnerIdle===true)&&
   same(proof.schemaCatalog,configuration.catalog.backup[phase]),'BACKUP_MAINTENANCE_CANONICAL_ACL_REQUIRED');
+ }
  return {schemaVersion:version.version,canonicalBackup:true,schemaCatalogSHA256:fingerprint(proof.schemaCatalog),observedAt:new Date(now()).toISOString()};
 }
 
@@ -115,7 +168,8 @@ export function readBackupMigrationJobPods(kube,jobName,jobUID){
   for(const row of rows){const [name,uid,resourceVersion,label,ownersRaw,...extra]=row.split('|');
    const owners=ownersRaw?JSON.parse(ownersRaw):[];
    ensure(/^[a-z0-9][a-z0-9.-]{0,252}$/.test(name??'')&&uid&&/^\d+$/.test(resourceVersion??'')&&Array.isArray(owners)&&!extra.length,'BACKUP_MAINTENANCE_JOB_INVENTORY_INVALID');
-   if(label===jobName||owners.some(owner=>owner.kind==='Job'&&owner.uid===jobUID&&owner.controller===true))selected.push({name,uid,resourceVersion});
+   if(label===jobName||owners.some(owner=>owner.kind==='Job'&&owner.controller===true&&
+    (jobUID?owner.uid===jobUID:owner.name===jobName)))selected.push({name,uid,resourceVersion});
   }
   ensure(new Set(selected.map(row=>row.uid)).size===selected.length,'BACKUP_MAINTENANCE_JOB_INVENTORY_INVALID');
   return selected.sort((a,b)=>a.uid.localeCompare(b.uid));
@@ -133,17 +187,39 @@ export function readBackupMigrationJobPods(kube,jobName,jobUID){
 export async function readBackupCleanupTerminal({kube,closed,migration,events,inspect,owner,resumePlanSHA256,now=Date.now}){
  verifyBackupMigrationScope(migration,closed);
  const configuration=backupMigrationProfile(closed.plan.migrationProfile);
- ensure(owner?.canonicalBackup===true&&[configuration.before,configuration.after].includes(owner.schemaVersion)&&/^[a-f0-9]{64}$/.test(owner.schemaCatalogSHA256??''),'BACKUP_MAINTENANCE_CANONICAL_ACL_REQUIRED');
+ const extension=configuration.profile==='personal-integrations-backup'?artifactGrantCatalogReceipt(migration,events):undefined;
+ const after=extension?.schemaVersion??configuration.after;
+ ensure(owner?.canonicalBackup===true&&[configuration.before,after].includes(owner.schemaVersion)&&/^[a-f0-9]{64}$/.test(owner.schemaCatalogSHA256??'')&&
+  (!extension||owner.schemaVersion===after&&owner.schemaCatalogSHA256===extension.schemaCatalogSHA256),'BACKUP_MAINTENANCE_CANONICAL_ACL_REQUIRED');
  const planSHA256=fingerprint(migration),intents=events.filter(event=>event.type==='CREATE_INTENT');
  ensure(events[0]?.type==='HEADER'&&events[0].planSHA256===planSHA256&&intents.length<=1,'BACKUP_MAINTENANCE_MIGRATION_JOURNAL_CHANGED');
+ const selected=isPersonalIntegrationsMigrationProfile(migration.profile)?personalMigrationAttempt(migration,events):{attempt:1,job:migration.job};
  const result=await inspect();
- if(!intents.length){
+ if(isWorkflowFileProvenanceMigrationProfile(migration.profile)&&owner.schemaVersion===configuration.before){
+  const abort=events.filter(e=>e.type===workflowFileAbortIntent),ack=events.filter(e=>e.type===workflowFileAbortAck);
+  const {observedAt,...identity}=result.abortPostcondition??{};
+  const age=now()-Date.parse(observedAt);
+  ensure(result.status==='ABORTED_NOT_APPLIED'&&result.evidenceReadOnly===true&&result.cpReady===true&&
+   ['BEFORE','RESUMED'].includes(result.cpStage)&&result.sourceRevision===migration.source.revision&&abort.length===1&&ack.length===1&&
+   Number.isFinite(age)&&age>=0&&age<=30000&&same(identity,abort[0].identity)&&identity.gooseVersion===configuration.before&&
+   result.abortSHA256===fingerprint(identity)&&result.abortSHA256===ack[0].abortSHA256&&
+   identity.schemaCatalogSHA256===owner.schemaCatalogSHA256,'BACKUP_MAINTENANCE_CLEANUP_NOT_TERMINAL');
+ }else if(!intents.length){
   ensure(owner.schemaVersion===configuration.before&&['CREATE_NOT_ATTEMPTED','STOPPED_NOT_CREATED','PASS'].includes(result.status)&&
    (result.status==='PASS'?result.operation==='check':!result.operation),'BACKUP_MAINTENANCE_CLEANUP_NOT_TERMINAL');
  }else{
-  ensure(['PASS','FAIL'].includes(result.status)&&result.jobName===migration.job.metadata.name&&result.jobUID&&
-   (owner.schemaVersion===configuration.after?result.status==='PASS':result.status==='FAIL'),'BACKUP_MAINTENANCE_CLEANUP_NOT_TERMINAL');
-  if(owner.schemaVersion===configuration.after)ensure(result.cpStage==='UPGRADED'&&result.cpReady===true&&result.pairReady===true&&result.forwardOnly===true,'BACKUP_MAINTENANCE_COHORT_NOT_RESUMED');
+  ensure(['PASS','FAIL'].includes(result.status)&&result.jobName===selected.job.metadata.name&&result.jobUID&&
+   (selected.attempt===1||selected.jobUID&&selected.jobUID===result.jobUID&&result.attempt===2)&&
+   (owner.schemaVersion===after?result.status==='PASS':result.status==='FAIL'),'BACKUP_MAINTENANCE_CLEANUP_NOT_TERMINAL');
+  if(owner.schemaVersion===after){
+   ensure(result.cpStage==='UPGRADED'&&result.cpReady===true&&result.pairReady===true&&result.forwardOnly===true&&
+    (!extension||result.servingSchema?.version===after&&result.servingSchema.jobUID===extension.jobUID&&result.servingSchema.schemaProofSHA256===extension.sqlSHA256),'BACKUP_MAINTENANCE_COHORT_NOT_RESUMED');
+   if(isPersonalIntegrationsMigrationProfile(migration.profile)){
+    const receipt=personalMigrationSuccessReceipt(migration,events);
+    ensure(receipt.jobUID===result.jobUID&&receipt.jobName===result.jobName,'BACKUP_MAINTENANCE_CLEANUP_NOT_TERMINAL');
+    personalIntegrationsReadersTerminalReceipt(migration,events);
+   }
+  }
   const job=JSON.parse(kube(['-n',namespace,'get','job',result.jobName,'-o','json']));
   ensure(job.metadata?.uid===result.jobUID&&!job.status?.active&&job.status?.conditions?.filter(c=>['Complete','Failed'].includes(c.type)&&c.status==='True').length===1,
    'BACKUP_MAINTENANCE_JOB_NOT_TERMINAL');
@@ -155,12 +231,98 @@ export async function readBackupCleanupTerminal({kube,closed,migration,events,in
  return {...readStoppedBackupMaintenance(kube,closed,{migrationPlanSHA256:planSHA256,resumePlanSHA256}),...owner,cleanupTerminal:true,migrationPlanSHA256:planSHA256};
 }
 
+// Пока stop journal не привязан к migration plan, он может закрыть окно
+// поставки и вернуть только исходный backup Deployment на exact ART 050.
+export async function readUnboundWorkflowFileBackup({kube,closed,plan,readSQL,now=Date.now}){
+ const resumePlanSHA256=fingerprint(plan);
+ ensure(isWorkflowFileProvenanceMigrationProfile(plan.migrationProfile)&&plan.resumeUnbound===true&&
+  closed.plan.migrationProfile===plan.migrationProfile&&fingerprint(closed.plan)===plan.stopPlanSHA256&&
+  !closed.events.some(event=>event.type==='BACKUP_MIGRATION_BOUND'),'BACKUP_MAINTENANCE_UNBOUND_REQUIRED');
+ const resumes=closed.events.filter(event=>event.type==='BACKUP_RESUME_INTENT');
+ ensure(resumes.every(event=>event.outcome==='UNBOUND_NOT_APPLIED'&&!event.migrationPlanSHA256&&
+  event.backupResumePlanSHA256===resumePlanSHA256&&event.maintenanceID===plan.maintenanceID),
+ 'BACKUP_MAINTENANCE_UNBOUND_REQUIRED');
+ const owner=await readUnboundWorkflowFileOwner(kube,plan,()=>readCanonicalBackupOwner({kube,plan,readSQL,now}));
+ return {...readStoppedBackupMaintenance(kube,closed,{resumePlanSHA256}),...owner,cleanupTerminal:true};
+}
+
+// Проверяем отсутствие DDL writer по точному имени Job и owner edges,
+// включая Pods без штатного label. Повторяем проверку после owner readback.
+async function readUnboundWorkflowFileOwner(kube,plan,readOwner){
+ ensure(isWorkflowFileProvenanceMigrationProfile(plan.migrationProfile),'BACKUP_MAINTENANCE_UNBOUND_REQUIRED');
+ const jobName=`control-plane-migrate-${workflowFileProvenanceMigration.after}`;
+ const jobAbsent=()=>!kube(['-n',namespace,'get','job',jobName,'--ignore-not-found=true','-o','json']).trim()&&
+  readBackupMigrationJobPods(kube,jobName,undefined).length===0;
+ ensure(jobAbsent(),'BACKUP_MAINTENANCE_UNBOUND_WRITER_FOUND');
+ const owner=await readOwner();
+ ensure(owner.schemaVersion===workflowFileProvenanceMigration.before&&jobAbsent(),'BACKUP_MAINTENANCE_UNBOUND_WRITER_FOUND');
+ return owner;
+}
+
+function requireWorkflowFileBackupReady(kube,plan){
+ const deployment=JSON.parse(kube(['-n',namespace,'get','deployment',name,'-o','json']));
+ requireResumedBackupController(plan,deployment,readComponentServingInventory(kube,name,plan.deploymentUID));
+ requireBackupProducerBoundary(readBackupProducerInventory(kube),plan.deploymentUID,false,plan.postgres);
+}
+
+// В работающем backup допустимы открытые сессии. Здесь проверяется только
+// неизменность схемы, ACL и привязки к исходному PostgreSQL backend.
+async function readReadyWorkflowFileBackupOwner(kube,plan,readSQL){
+ requireWorkflowFileBackupReady(kube,plan);
+ const owner=await readUnboundWorkflowFileOwner(kube,plan,()=>{
+  const sql=readSQL(backupMigrationProfile(plan.migrationProfile).files.before);
+  ensure(digest(sql)===plan.ownerSQLSHA256.before,'BACKUP_MAINTENANCE_OWNER_SOURCE_CHANGED');
+  const db=migrationOwnerDatabase(kube,()=>backupPostgresIdentity(kube));
+  const proof=db.read(sql,plan.postgres,plan.postgresBackend);
+  ensure(validWorkflowFileProvenancePredecessorCatalog(proof),'BACKUP_MAINTENANCE_CANONICAL_ACL_REQUIRED');
+  return {schemaVersion:proof.gooseVersion,schemaCatalogSHA256:fingerprint(proof.schemaCatalog)};
+ });
+ requireWorkflowFileBackupReady(kube,plan);
+ return owner;
+}
+
+// Отмена stop без INTENT только закрывает журнал под тем же lock, который
+// использует apply. Не останавливает живой backup для проверки его ACL.
+async function cancelUnstartedWorkflowFileBackupStop({kube,plan,journal,readSQL}){
+ const planSHA256=fingerprint(plan);
+ requireOpenBackupBoundary(journal.events,undefined,planSHA256);
+ ensure(plan.action==='stop'&&!journal.events.some(event=>event.type==='BACKUP_MIGRATION_BOUND'||event.type==='INTENT')&&
+  journal.events.filter(event=>event.type==='BACKUP_RESUME_INTENT').every(event=>event.outcome==='UNBOUND_NOT_STARTED'&&
+   event.maintenanceID===plan.maintenanceID&&!event.migrationPlanSHA256),'BACKUP_MAINTENANCE_STOP_ALREADY_STARTED');
+ const owner=await readReadyWorkflowFileBackupOwner(kube,plan,readSQL);
+ if(!journal.events.some(event=>event.type==='BACKUP_RESUME_INTENT'))
+  journal.append({type:'BACKUP_RESUME_INTENT',outcome:'UNBOUND_NOT_STARTED',backupResumePlanSHA256:planSHA256,
+   maintenanceID:plan.maintenanceID,owner});
+ return {state:'BEFORE',outcome:'UNBOUND_NOT_STARTED',boundaryClosed:true};
+}
+
+// Restore доверяет только закрытому unbound-журналу и новому owner readback.
+// Наличие работающего Deployment само по себе не подтверждает отмену stop.
+export async function readWorkflowFileUnboundBackupTerminal(kube,plan,events){
+ const resumes=events.filter(event=>event.type==='BACKUP_RESUME_INTENT');
+ const stopIntent=events.findLastIndex(event=>event.type==='INTENT'&&event.step==='apply');
+ const [receipt]=resumes;
+ ensure(events[0]?.type==='HEADER'&&Object.entries(backupControllerMaintenanceHeader(plan)).every(([key,value])=>events[0][key]===value)&&
+  resumes.length===1&&!events.some(event=>event.type==='BACKUP_MIGRATION_BOUND')&&receipt.maintenanceID===plan.maintenanceID&&
+  !receipt.migrationPlanSHA256&&/^[a-f0-9]{64}$/.test(receipt.backupResumePlanSHA256??'')&&
+  (receipt.outcome==='UNBOUND_NOT_STARTED'?stopIntent<0&&receipt.backupResumePlanSHA256===fingerprint(plan):
+   receipt.outcome==='UNBOUND_NOT_APPLIED'&&stopIntent>0&&events.some((event,index)=>index>stopIntent&&event.type==='OBSERVED'&&
+    event.state==='STOPPED'&&event.deploymentUID===plan.deploymentUID&&event.maintenanceID===plan.maintenanceID)),
+ 'BACKUP_MAINTENANCE_UNBOUND_TERMINAL_REQUIRED');
+ const owner=await readReadyWorkflowFileBackupOwner(kube,plan,file=>readFileSync(new URL(file,import.meta.url)));
+ ensure(same(owner,receipt.owner),'BACKUP_MAINTENANCE_UNBOUND_TERMINAL_CHANGED');
+ return {outcome:receipt.outcome,stopPlanSHA256:fingerprint(plan),evidenceSHA256:fingerprint(receipt),owner};
+}
+
 async function main(args){
  const phase=args.shift(),options={};
- while(args.length){const key=args.shift();ensure(['--action','--migration-profile','--context','--kubeconfig','--target','--plan','--evidence','--approved-plan-sha','--stopped-plan','--stopped-evidence','--migration-plan','--migration-evidence','--stopped-source-sha',...telegramInspectFlags,telegramRepairFlag,telegramRepairExecutorFlag,telegramObservabilityRepairFlag,telegramEgressRevisionRepairFlag].includes(key)&&!Object.hasOwn(options,key)&&args.length,'BACKUP_MAINTENANCE_ARGUMENT_INVALID');options[key]=args.shift();}
- ensure(['plan','apply','status'].includes(phase)&&options['--plan']&&options['--kubeconfig']?.startsWith('/')&&!/[\r\n\0]/.test(options['--kubeconfig'])&&
+ while(args.length){const key=args.shift();ensure(['--action','--migration-profile','--unbound-workflow-file-provenance','--context','--kubeconfig','--target','--plan','--evidence','--approved-plan-sha','--stopped-plan','--stopped-evidence','--migration-plan','--migration-evidence','--stopped-source-sha',...telegramInspectFlags,telegramRepairFlag,telegramRepairExecutorFlag,telegramObservabilityRepairFlag,telegramEgressRevisionRepairFlag].includes(key)&&!Object.hasOwn(options,key)&&args.length,'BACKUP_MAINTENANCE_ARGUMENT_INVALID');options[key]=args.shift();}
+ ensure(['plan','apply','status','cancel-stop'].includes(phase)&&options['--plan']&&options['--kubeconfig']?.startsWith('/')&&!/[\r\n\0]/.test(options['--kubeconfig'])&&
   /^[A-Za-z0-9_.:@/-]{1,160}$/.test(options['--context']??''),'BACKUP_MAINTENANCE_ARGUMENT_INVALID');
  ensure(!options['--stopped-source-sha']||phase==='plan'&&options['--action']==='resume'&&/^[a-f0-9]{40}$/.test(options['--stopped-source-sha']),'BACKUP_MAINTENANCE_ARGUMENT_INVALID');
+ const unboundFlag=options['--unbound-workflow-file-provenance'];
+ ensure(unboundFlag===undefined||unboundFlag==='true'&&phase==='plan'&&options['--action']==='resume'&&
+  !options['--migration-plan']&&!options['--migration-evidence'],'BACKUP_MAINTENANCE_ARGUMENT_INVALID');
  const suppliedInspect=Object.fromEntries([...telegramInspectFlags,telegramRepairFlag,telegramRepairExecutorFlag,telegramObservabilityRepairFlag,telegramEgressRevisionRepairFlag].filter(key=>Object.hasOwn(options,key)).map(key=>{ensure(typeof options[key]==='string'&&options[key].length>0&&!/[\r\n\0]/.test(options[key]),'BACKUP_MAINTENANCE_INSPECT_INPUT_INVALID');return [key,key===telegramRepairExecutorFlag?options[key]:resolve(options[key])];}));
  const env=Object.fromEntries(['HOME','PATH','LANG'].filter(key=>process.env[key]).map(key=>[key,process.env[key]]));
  const run=(cmd,argv,input,timeout=35000)=>{try{return execFileSync(cmd,argv,{cwd:root,env,input,encoding:'utf8',timeout,maxBuffer:4<<20,stdio:['pipe','pipe','pipe']});}catch{throw Error('BACKUP_MAINTENANCE_OPERATION_FAILED_OR_UNKNOWN');}};
@@ -187,7 +349,17 @@ async function main(args){
   // Исправленный executor не переопределяет прежний migration source или owner SQL.
   if(plan.executorSHA)ensure(same(plan.ownerSQLSHA256,closed.plan.ownerSQLSHA256),'BACKUP_MAINTENANCE_OWNER_SOURCE_CHANGED');
   if(closed){ensure(same(plan.postgres,closed.plan.postgres)&&same(plan.postgresBackend,closed.plan.postgresBackend),'BACKUP_MAINTENANCE_DATABASE_CHANGED');}
-  if(closed){ensure(options['--migration-plan']&&options['--migration-evidence'],'BACKUP_MAINTENANCE_MIGRATION_PROOF_REQUIRED');plan.resumeReferences=Object.fromEntries(['--stopped-plan','--stopped-evidence','--migration-plan','--migration-evidence'].map(key=>[key,resolve(options[key])]));}
+  if(closed){
+   const keys=['--stopped-plan','--stopped-evidence'];
+   if(unboundFlag){
+    ensure(isWorkflowFileProvenanceMigrationProfile(configuration.profile)&&
+     !closed.events.some(event=>event.type==='BACKUP_MIGRATION_BOUND')&&!Object.keys(suppliedInspect).length,
+     'BACKUP_MAINTENANCE_UNBOUND_REQUIRED');
+    plan.resumeUnbound=true;
+   }else keys.push('--migration-plan','--migration-evidence');
+   ensure(keys.every(key=>options[key]),'BACKUP_MAINTENANCE_MIGRATION_PROOF_REQUIRED');
+   plan.resumeReferences=Object.fromEntries(keys.map(key=>[key,resolve(options[key])]));
+  }
   if(Object.keys(suppliedInspect).length){
    ensure(plan.action==='resume','BACKUP_MAINTENANCE_INSPECT_INPUT_INVALID');
    plan.migrationInspectReferences=backupMigrationInspectReferences(configuration.profile,suppliedInspect);
@@ -197,14 +369,30 @@ async function main(args){
  ensure(options['--evidence']&&!options['--action']&&!options['--target'],'BACKUP_MAINTENANCE_ARGUMENT_INVALID');
  const plan=await readPrivateJSON(resolve(options['--plan']));
  const configuration=backupMigrationProfile(plan.migrationProfile);
+ if(phase==='apply')requirePersonalIntegrationsDeliveryPrerequisite(configuration.profile,'backup-maintenance');
  const inspectReferences=backupMigrationInspectReferences(configuration.profile,plan.migrationInspectReferences);
  ensure(!Object.keys(inspectReferences).length||plan.action==='resume','BACKUP_MAINTENANCE_INSPECT_INPUT_INVALID');
  ensure(Object.entries(suppliedInspect).every(([key,value])=>inspectReferences[key]===value),'BACKUP_MAINTENANCE_INSPECT_INPUT_CHANGED');
  ensure(!options['--migration-profile']||options['--migration-profile']===configuration.profile,'BACKUP_MAINTENANCE_PROFILE_CHANGED');
  ensure(plan.planPath===resolve(options['--plan'])&&plan.evidencePath===resolve(options['--evidence']),'BACKUP_MAINTENANCE_JOURNAL_PATH_CHANGED');
- if(plan.action==='resume'){for(const key of ['--stopped-plan','--stopped-evidence','--migration-plan','--migration-evidence']){const path=plan.resumeReferences?.[key];ensure(path?.startsWith('/')&&(!options[key]||resolve(options[key])===path),'BACKUP_MAINTENANCE_JOURNAL_PATH_CHANGED');options[key]=path;}}
+ ensure(plan.resumeUnbound===undefined||plan.resumeUnbound===true&&plan.action==='resume'&&isWorkflowFileProvenanceMigrationProfile(configuration.profile)&&
+  !options['--migration-plan']&&!options['--migration-evidence']&&!Object.keys(inspectReferences).length,
+  'BACKUP_MAINTENANCE_UNBOUND_REQUIRED');
+ if(plan.action==='resume'){
+  const keys=['--stopped-plan','--stopped-evidence'];
+  if(!plan.resumeUnbound)keys.push('--migration-plan','--migration-evidence');
+  for(const key of keys){
+   const path=plan.resumeReferences?.[key];
+   ensure(path?.startsWith('/')&&(!options[key]||resolve(options[key])===path),'BACKUP_MAINTENANCE_JOURNAL_PATH_CHANGED');
+   options[key]=path;
+  }
+ }
  ensure((plan.executorSHA??plan.sourceSHA)===sourceSHA&&portableRunnerTarget(plan.target,observed).allows(deployment)&&same(plan.postgres,observed.postgres),'BACKUP_MAINTENANCE_TARGET_CHANGED');
- ensure(phase==='apply'?options['--approved-plan-sha']===fingerprint(plan):!options['--approved-plan-sha'],'BACKUP_MAINTENANCE_EXACT_PLAN_REQUIRED');
+ ensure(['apply','cancel-stop'].includes(phase)?options['--approved-plan-sha']===fingerprint(plan):!options['--approved-plan-sha'],
+  'BACKUP_MAINTENANCE_EXACT_PLAN_REQUIRED');
+ ensure(phase!=='cancel-stop'||plan.action==='stop'&&isWorkflowFileProvenanceMigrationProfile(configuration.profile)&&
+  !options['--stopped-plan']&&!options['--stopped-evidence']&&!options['--migration-plan']&&!options['--migration-evidence'],
+  'BACKUP_MAINTENANCE_ARGUMENT_INVALID');
  let stopJournal,migrationJournal,journal;
  try{
   if(plan.action==='resume'&&phase==='apply'){
@@ -214,12 +402,27 @@ async function main(args){
    requireOpenBackupBoundary(closed.events,undefined,fingerprint(plan));
   }
   journal=privateJournal(options['--evidence'],backupControllerMaintenanceHeader(plan));
+  if(phase==='cancel-stop'){
+   console.log(JSON.stringify(await cancelUnstartedWorkflowFileBackupStop({kube,plan,journal,readSQL})));return;
+  }
+  if(plan.action==='stop'&&phase==='apply'&&isWorkflowFileProvenanceMigrationProfile(configuration.profile))
+   ensure(!journal.events.some(event=>event.type==='BACKUP_RESUME_INTENT'),'BACKUP_MAINTENANCE_BOUNDARY_CLOSED');
   const gate=async()=>{
    ensure(portableRunnerTarget(plan.target,freshObserved()).allows(get('deployment',name))&&same(backupPostgresIdentity(kube),plan.postgres),'BACKUP_MAINTENANCE_TARGET_CHANGED');
    if(plan.action==='stop'){ensure(same(migrationOwnerDatabase(kube,()=>backupPostgresIdentity(kube)).identity(plan.postgres),plan.postgresBackend),'BACKUP_MAINTENANCE_DATABASE_CHANGED');return {targetSHA256:fingerprint(plan.target),deploymentUID:plan.deploymentUID,sourceSHA};}
    ensure(closed&&stopJournal,'BACKUP_MAINTENANCE_STOP_LOCK_REQUIRED');
+   if(plan.resumeUnbound){
+    ensure(plan.sourceSHA===closed.plan.sourceSHA&&same(plan.ownerSQLSHA256,closed.plan.ownerSQLSHA256)&&
+     same(plan.postgres,closed.plan.postgres)&&same(plan.postgresBackend,closed.plan.postgresBackend),
+    'BACKUP_MAINTENANCE_OWNER_SOURCE_CHANGED');
+    const proof=await readUnboundWorkflowFileBackup({kube,closed,plan,readSQL});
+    if(!stopJournal.events.some(event=>event.type==='BACKUP_RESUME_INTENT'))
+      stopJournal.append({type:'BACKUP_RESUME_INTENT',outcome:'UNBOUND_NOT_APPLIED',backupResumePlanSHA256:fingerprint(plan),
+       maintenanceID:plan.maintenanceID,owner:{schemaVersion:proof.schemaVersion,schemaCatalogSHA256:proof.schemaCatalogSHA256}});
+    return proof;
+   }
    ensure(options['--migration-plan']&&options['--migration-evidence'],'BACKUP_MAINTENANCE_MIGRATION_PROOF_REQUIRED');
-   const migration=await readPrivateJSON(resolve(options['--migration-plan']));
+   const migration=await readBackupMigrationPlan(resolve(options['--migration-plan']),configuration.profile);
    verifyBackupMigrationScope(migration,closed);
    ensure(plan.sourceSHA===closed.plan.sourceSHA&&same(plan.ownerSQLSHA256,closed.plan.ownerSQLSHA256),'BACKUP_MAINTENANCE_OWNER_SOURCE_CHANGED');
    const migrationHeader={version:1,kind:'CONTROL_PLANE_MIGRATION',planSHA256:fingerprint(migration)};
@@ -228,15 +431,18 @@ async function main(args){
    const events=migrationJournal.events;
    ensure(events.filter(event=>event.type==='BACKUP_RESUME_INTENT').every(event=>event.backupResumePlanSHA256===fingerprint(plan)),
     'BACKUP_MAINTENANCE_MIGRATION_ALREADY_CLOSED');
+   const personal=isPersonalIntegrationsMigrationProfile(configuration.profile);
+   const inspection=personal?personalTerminalInspectionExecutor(migration,events):undefined;
    const inspectArgs=backupMigrationInspectArguments({profile:configuration.profile,context:options['--context'],kubeconfig:options['--kubeconfig'],
-    migrationPlanPath:resolve(options['--migration-plan']),migrationEvidencePath:resolve(options['--migration-evidence']),references:inspectReferences});
+    migrationPlanPath:resolve(options['--migration-plan']),migrationEvidencePath:resolve(options['--migration-evidence']),references:inspectReferences,
+    ...(inspection?{executorSHA:inspection.executorRevision,inspectionSource:inspection.executorSource}:personal&&plan.executorSHA?{executorSHA:plan.executorSHA}:{})});
    let result;
-   try { result=JSON.parse(execFileSync(process.execPath,inspectArgs,{cwd:root,env,encoding:'utf8',timeout:configuration.profile==='telegram-notifications-backup'?telegramInspectTimeoutMs:120000,maxBuffer:4<<20,stdio:['ignore','pipe','pipe']})); }
+   try { result=JSON.parse(execFileSync(process.execPath,inspectArgs,{cwd:root,env,encoding:'utf8',timeout:migrationInspectTimeoutMs(configuration.profile),maxBuffer:4<<20,stdio:['ignore','pipe','pipe']})); }
    catch(error){
     try { ensure(error.status===1,'BACKUP_MAINTENANCE_INSPECT_UNKNOWN');result=JSON.parse(String(error.stdout??''));ensure(result.status==='FAIL','BACKUP_MAINTENANCE_INSPECT_UNKNOWN'); }
     catch{throw Error('BACKUP_MAINTENANCE_INSPECT_UNKNOWN');}
    }
-   const owner=await readCanonicalBackupOwner({kube,plan,readSQL});
+   const owner=await readCanonicalBackupOwner({kube,plan,readSQL,migration,events});
    const proof=await readBackupCleanupTerminal({kube,closed,migration,events,owner,resumePlanSHA256:fingerprint(plan),inspect:async()=>result});
    if(!stopJournal.events.some(event=>event.type==='BACKUP_MIGRATION_BOUND'))stopJournal.append({type:'BACKUP_MIGRATION_BOUND',migrationPlanSHA256:fingerprint(migration)});
    if(!stopJournal.events.some(event=>event.type==='BACKUP_RESUME_INTENT'))stopJournal.append({type:'BACKUP_RESUME_INTENT',migrationPlanSHA256:fingerprint(migration),backupResumePlanSHA256:fingerprint(plan),maintenanceID:plan.maintenanceID});

@@ -10,6 +10,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/emailpolicy"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/jackc/pgx/v5"
@@ -69,13 +70,7 @@ func (repository *Repository) claimIntegrationInvocationCandidateTx(ctx context.
 	}
 	initiatorScope := scope
 	initiatorScope.actorRef = item.initiatorRef
-	accessUntil, accessErr := repository.requireAccessUntil(ctx, tx, initiatorScope, "integration.manage", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "INTEGRATION", ResourceRef: item.connectionRef})
-	if accessErr != nil {
-		if sshLane {
-			return nil, accessErr
-		}
-		return nil, nil
-	}
+
 	if item.definitionKey == "context7" {
 		if err := requireCurrentManagedMCPHealth(ctx, tx, scope.organizationID, item.nodeID, item.connectionRef); err != nil {
 			return nil, err
@@ -85,11 +80,27 @@ func (repository *Repository) claimIntegrationInvocationCandidateTx(ctx context.
 	if err != nil {
 		return nil, err
 	}
+	delivery, validDelivery := definition.ConnectionCredentialDelivery()
+	if !validDelivery {
+		return nil, errs.ErrForbidden
+	}
+	if delivery.Kind == integrationpackage.CredentialDeliveryBrokerIdentity &&
+		!((definition.Metadata.Key == integrationpackage.KubernetesDefinitionKey && delivery.BrokerPurpose == "KUBERNETES_TARGET") ||
+			((definition.Metadata.Key == integrationpackage.SSHManagedDefinitionKey || definition.Metadata.Key == integrationpackage.SSHExecuteDefinitionKey) && delivery.BrokerPurpose == "SSH_TARGET")) {
+		return nil, errs.ErrForbidden
+	}
 	capability, capabilityOK := definition.Capability(item.capabilityKey)
 	if !capabilityOK || item.grantVersion < 1 || item.grantRef == "" ||
 		capability.Risk != item.risk || capability.Operation != item.operation ||
 		definition.ValidateInvocationApprovalPolicy(capability, item.approvalPolicy, item.boundedInput) != nil {
 		return nil, errs.ErrForbidden
+	}
+	accessUntil, accessErr := repository.requireAccessUntil(ctx, tx, initiatorScope, integrationInvocationActorPermission(definition), entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "INTEGRATION", ResourceRef: item.connectionRef})
+	if accessErr != nil {
+		if sshLane || item.resourceKind == "KUBERNETES_TARGET" || item.resourceKind == "SSH_TARGET" {
+			return nil, accessErr
+		}
+		return nil, nil
 	}
 	if item.approvalPolicy == string(integrationpackage.ApprovalHumanScoped) {
 		resolvedScope, scopeErr := capability.ResolveApprovalScope(item.approvalScopePaths, item.boundedInput)
@@ -102,8 +113,28 @@ func (repository *Repository) claimIntegrationInvocationCandidateTx(ctx context.
 			return nil, err
 		}
 	}
-	leaseRef, _ := newRef("lea")
-	fence, _ := newRef("eff")
+	if item.definitionKey == "email" {
+		choice, err := repository.requireEmailInvocationMailboxTx(ctx, tx, scope, item.ref)
+		if err != nil {
+			return nil, err
+		}
+		if err := emailpolicy.ValidateCommandApprovalPolicy(choice.mailbox, item.operation, item.boundedInput, item.approvalPolicy); err != nil {
+			return nil, err
+		}
+		if item.approvalPolicy == string(integrationpackage.ApprovalHumanScoped) {
+			if err := requireEmailApprovalScopeTx(ctx, tx, scope, choice); err != nil {
+				return nil, err
+			}
+		}
+	}
+	leaseRef, err := newRef("lea")
+	if err != nil {
+		return nil, errs.ErrUnavailable
+	}
+	fence, err := newRef("eff")
+	if err != nil {
+		return nil, errs.ErrUnavailable
+	}
 	digest := sha256.Sum256([]byte(fence))
 	generation := item.generation + 1
 	expiresAt := time.Now().UTC().Add(30 * time.Second)
@@ -130,12 +161,7 @@ func (repository *Repository) claimIntegrationInvocationCandidateTx(ctx context.
 	if item.state == "UNKNOWN_OUTCOME" {
 		workMode = "RECOVER_READ_ONLY"
 	}
-	// Keep the persisted lease for admitted-result reconciliation; tighten only the outgoing dispatch envelope.
-	// Сохраняем DB lease для reconciliation допущенного результата; сужаем лишь выдаваемый dispatch envelope.
-	dispatchUntil := expiresAt
-	if item.credentialPolicy == entity.IntegrationCredentialInitiatorRequired && !accessUntil.IsZero() && accessUntil.Before(dispatchUntil) {
-		dispatchUntil = accessUntil
-	}
+	dispatchUntil := personalInvocationDispatchUntil(item.credentialPolicy, delivery.Kind, expiresAt, accessUntil)
 	claim := map[string]any{
 		"invocationRef": item.ref, "connectionRef": item.connectionRef, "definitionKey": item.definitionKey,
 		"definitionPackage": asJSON(definition),
@@ -148,9 +174,18 @@ func (repository *Repository) claimIntegrationInvocationCandidateTx(ctx context.
 		"workMode": workMode,
 		"leaseRef": leaseRef, "fence": fence, "generation": generation, "expiresAt": dispatchUntil,
 	}
-	if item.credentialPolicy == entity.IntegrationCredentialInitiatorRequired {
+	claim["credentialDeliveryKind"] = string(delivery.Kind)
+	if item.credentialPolicy == entity.IntegrationCredentialInitiatorRequired && delivery.Kind == integrationpackage.CredentialDeliveryToken {
 		claim["credentialAdmissionRequired"] = true
 		claim["resourcePermissionProfile"] = integrationpackage.CredentialResourcePermissionProfile(definition, capability)
+	}
+	if definition.Metadata.Key == integrationpackage.KubernetesDefinitionKey {
+		claim["credentialAdmissionRequired"] = false
+		claim["resourcePermissionProfile"] = integrationpackage.CredentialResourcePermissionKubernetesScopedV1
+	}
+	if delivery.Kind == integrationpackage.CredentialDeliveryBrokerIdentity && delivery.BrokerPurpose == "SSH_TARGET" {
+		claim["credentialAdmissionRequired"] = false
+		claim["resourcePermissionProfile"] = integrationpackage.CredentialResourcePermissionSSHScopedV1
 	}
 	if sshLane {
 		purpose := ""
@@ -173,4 +208,13 @@ func (repository *Repository) claimIntegrationInvocationCandidateTx(ctx context.
 		claim["credential"] = item.credential
 	}
 	return claim, nil
+}
+
+// personalInvocationDispatchUntil tightens only the ordinary personal TOKEN dispatch envelope; broker identities, EMAIL/NONE and shared calls retain their owner-specific lease contracts. It never changes the persisted reconciliation lease or authorizes an unknown delivery kind.
+// personalInvocationDispatchUntil сужает лишь ordinary personal TOKEN dispatch envelope; broker identities, EMAIL/NONE и shared calls сохраняют собственные owner lease contracts. DB reconciliation lease не меняется; unknown delivery kind не получает допуска.
+func personalInvocationDispatchUntil(policy entity.IntegrationCredentialPolicy, kind integrationpackage.CredentialDeliveryKind, lease, allowance time.Time) time.Time {
+	if policy == entity.IntegrationCredentialInitiatorRequired && kind == integrationpackage.CredentialDeliveryToken && !allowance.IsZero() && allowance.Before(lease) {
+		return allowance
+	}
+	return lease
 }

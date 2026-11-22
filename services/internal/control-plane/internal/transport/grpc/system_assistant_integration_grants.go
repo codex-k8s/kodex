@@ -14,7 +14,7 @@ import (
 // ChangeSystemAssistantIntegrationGrant передаёт подключение, возможность, enabled и поля
 // одобрения отдельной команде grant системного ассистента, оставляя eligibility владельцу.
 func (server *Server) ChangeSystemAssistantIntegrationGrant(ctx context.Context, request *controlplanev1.ChangeSystemAssistantIntegrationGrantRequest) (*controlplanev1.ChangeSystemAssistantIntegrationGrantResponse, error) {
-	payload := command.SystemAssistantIntegrationGrantInput{ConnectionRef: request.GetConnectionRef(), CapabilityKey: request.GetCapabilityKey(), Enabled: request.GetEnabled(), ApprovalPolicy: strings.TrimPrefix(request.GetApprovalPolicy().String(), "INTEGRATION_APPROVAL_POLICY_"), ApprovalScopePaths: request.GetApprovalScopePaths()}
+	payload := command.SystemAssistantIntegrationGrantInput{ConnectionRef: request.GetConnectionRef(), CapabilityKey: request.GetCapabilityKey(), Enabled: request.GetEnabled(), ApprovalPolicy: strings.TrimPrefix(request.GetApprovalPolicy().String(), "INTEGRATION_APPROVAL_POLICY_"), ApprovalScopePaths: request.GetApprovalScopePaths(), KubernetesNamespace: request.GetKubernetesNamespace(), KubernetesGrantRef: request.GetKubernetesGrantRef()}
 	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_ChangeSystemAssistantIntegrationGrant_FullMethodName, command.ChangeSystemAssistantIntegrationGrant, request.GetMutation(), payload, func(result command.Result) *controlplanev1.ChangeSystemAssistantIntegrationGrantResponse {
 		return &controlplanev1.ChangeSystemAssistantIntegrationGrantResponse{Connection: castConnection(*result.Connection)}
 	})
@@ -33,6 +33,14 @@ func (server *Server) GetSystemAssistantIntegrationGrantCandidates(ctx context.C
 		}
 		response := &controlplanev1.GetSystemAssistantIntegrationGrantCandidatesResponse{ScopeKind: runtimeSecretScopeKind(result.ScopeKind), OrganizationRef: result.OrganizationRef, AssistantRef: result.AssistantRef, AssistantVersion: result.AssistantVersion, ConnectionRef: result.ConnectionRef, ConnectionVersion: result.ConnectionVersion, DefinitionVersion: result.DefinitionVersion, DefinitionDigest: result.DefinitionDigest, Items: []*controlplanev1.SystemAssistantIntegrationGrantCandidate{}, Total: result.Total, Page: &controlplanev1.PageInfo{NextPageToken: result.NextPageToken}}
 		for _, item := range result.Items {
+			if item.Capability.ResourceKind == "KUBERNETES_TARGET" || strings.HasPrefix(item.Capability.Key, "kubernetes.") {
+				candidate, err := castAssistantIntegrationGrantCandidate(item)
+				if err != nil {
+					return nil, err
+				}
+				response.Items = append(response.Items, candidate)
+				continue
+			}
 			reason, err := integrationCandidateReason(item.Reason)
 			if err != nil {
 				return nil, err

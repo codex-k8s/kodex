@@ -90,21 +90,32 @@ func githubPageFixtureAdapter(t *testing.T, file *github.RepositoryContent) (*Ad
 // RU: githubPageFixtureRead запускает типизированный адаптер и разбирает текстовую страницу, требуя точные effect/input/provider/response привязки квитанции без whole-file base64 fallback.
 func githubPageFixtureRead(t *testing.T, adapter *Adapter, credential *CredentialRevision, input map[string]any) githubContentPage {
 	t.Helper()
-	request := invocationRequest(t, adapter.definitions["github"], "github.repository.content.read", input, credential)
-	result, err := adapter.Execute(t.Context(), request)
-	if err != nil {
-		t.Fatal(err)
+	return githubPageFixtureReader(t, adapter, credential)(input)
+}
+
+// githubPageFixtureReader captures only the immutable pinned fixture package; each page rebuilds input/receipt pins and its synthetic lease, then runs the unchanged production adapter and compatibility checks.
+// RU: githubPageFixtureReader сохраняет только неизменяемый пакет оснастки; каждая страница заново получает input/receipt pins и синтетический lease, затем проходит прежний production adapter и compatibility checks.
+func githubPageFixtureReader(t *testing.T, adapter *Adapter, credential *CredentialRevision) func(map[string]any) githubContentPage {
+	t.Helper()
+	definition := invocationFixtureDefinition(t, adapter.definitions["github"], "github.repository.content.read")
+	return func(input map[string]any) githubContentPage {
+		t.Helper()
+		request := invocationRequest(t, definition, "github.repository.content.read", input, credential)
+		result, err := adapter.Execute(t.Context(), request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var page githubContentPage
+		if json.Unmarshal([]byte(result.Summary), &page) != nil || strings.Contains(result.Summary, "content_base64") {
+			t.Fatal("native read returned an invalid page or a whole-file fallback")
+		}
+		responseHash := sha256.Sum256([]byte(result.Summary))
+		if result.Receipt.ResponseDigest != hex.EncodeToString(responseHash[:]) || result.Receipt.InputDigest != request.InputDigest ||
+			result.Receipt.EffectKey != request.EffectKey || result.Receipt.ProviderEffectRef != "github-content:"+page.SHA {
+			t.Fatal("page receipt lost the existing invocation pins")
+		}
+		return page
 	}
-	var page githubContentPage
-	if json.Unmarshal([]byte(result.Summary), &page) != nil || strings.Contains(result.Summary, "content_base64") {
-		t.Fatal("native read returned an invalid page or a whole-file fallback")
-	}
-	responseHash := sha256.Sum256([]byte(result.Summary))
-	if result.Receipt.ResponseDigest != hex.EncodeToString(responseHash[:]) || result.Receipt.InputDigest != request.InputDigest ||
-		result.Receipt.EffectKey != request.EffectKey || result.Receipt.ProviderEffectRef != "github-content:"+page.SHA {
-		t.Fatal("page receipt lost the existing invocation pins")
-	}
-	return page
 }
 
 // TestGitHubContentPagesReadFullPinnedSourceToEOF reconstructs complete ASCII, escaped and Unicode fixture sources through contiguous pages, checking digests, rune boundaries and an unambiguous replayable empty EOF.
@@ -127,6 +138,7 @@ func TestGitHubContentPagesReadFullPinnedSourceToEOF(t *testing.T) {
 		t.Run(fixture.name, func(t *testing.T) {
 			file := githubPageFixtureFile(fixture.content, "AGENTS.md")
 			adapter, credential, count := githubPageFixtureAdapter(t, file)
+			readPage := githubPageFixtureReader(t, adapter, credential)
 			sourceHash := sha256.Sum256([]byte(fixture.content))
 			offset := int64(0)
 			var reconstructed strings.Builder
@@ -138,7 +150,7 @@ func TestGitHubContentPagesReadFullPinnedSourceToEOF(t *testing.T) {
 				if offset > 0 {
 					input["offset_bytes"], input["expected_sha"] = offset, file.GetSHA()
 				}
-				page := githubPageFixtureRead(t, adapter, credential, input)
+				page := readPage(input)
 				chunkHash := sha256.Sum256([]byte(page.Text))
 				if page.Path != file.GetPath() || page.Type != "file" || page.SHA != file.GetSHA() || page.CommitSHA != githubPageFixtureCommit ||
 					page.Size != len(fixture.content) || page.OffsetBytes != offset || page.NextOffsetBytes != offset+int64(len(page.Text)) ||
@@ -160,7 +172,7 @@ func TestGitHubContentPagesReadFullPinnedSourceToEOF(t *testing.T) {
 				t.Fatalf("one MiB source did not use exactly 64 complete pages: %d", *count)
 			}
 			// Повтор страницы EOF возвращает только пустой текст с теми же pins.
-			page := githubPageFixtureRead(t, adapter, credential, map[string]any{"path": file.GetPath(), "ref": githubPageFixtureCommit,
+			page := readPage(map[string]any{"path": file.GetPath(), "ref": githubPageFixtureCommit,
 				"offset_bytes": offset, "expected_sha": file.GetSHA()})
 			if !page.EOF || page.Text != "" || page.NextOffsetBytes != offset {
 				t.Fatal("EOF replay changed the source")

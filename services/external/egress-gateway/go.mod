@@ -22,7 +22,7 @@ require (
 	github.com/codex-k8s/kodex/libs/go/observability v0.0.0
 	github.com/codex-k8s/kodex/libs/go/runtimecontract v0.0.0
 	github.com/codex-k8s/kodex/libs/go/securefile v0.0.0
-	github.com/codex-k8s/kodex/libs/go/serviceruntime v0.0.0-00010101000000-000000000000
+	github.com/codex-k8s/kodex/libs/go/serviceruntime v0.0.0
 	github.com/google/jsonschema-go v0.3.0
 	github.com/prometheus/client_golang v1.23.2
 )

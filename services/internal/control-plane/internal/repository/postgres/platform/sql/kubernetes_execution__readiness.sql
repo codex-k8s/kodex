@@ -1,0 +1,15 @@
+-- name: kubernetes_execution__readiness :one
+SELECT EXISTS(SELECT 1 FROM control_plane.kubernetes_operator_current)
+ AND has_table_privilege(session_user,'control_plane.kubernetes_execution_plans','SELECT') AND has_table_privilege(session_user,'control_plane.kubernetes_execution_plans','INSERT')
+ AND has_table_privilege(session_user,'control_plane.kubernetes_execution_children','SELECT') AND has_table_privilege(session_user,'control_plane.kubernetes_execution_children','INSERT')
+ AND has_table_privilege(session_user,'control_plane.kubernetes_execution_effects','SELECT') AND has_table_privilege(session_user,'control_plane.kubernetes_execution_effects','INSERT') AND has_table_privilege(session_user,'control_plane.kubernetes_execution_effects','UPDATE')
+ AND has_table_privilege(session_user,'control_plane.kubernetes_execution_streams','SELECT') AND has_table_privilege(session_user,'control_plane.kubernetes_execution_streams','INSERT') AND has_table_privilege(session_user,'control_plane.kubernetes_execution_streams','UPDATE')
+ AND has_table_privilege(session_user,'control_plane.kubernetes_execution_frames','SELECT') AND has_table_privilege(session_user,'control_plane.kubernetes_execution_frames','INSERT') AND has_table_privilege(session_user,'control_plane.kubernetes_execution_frames','UPDATE')
+ AND has_table_privilege(session_user,'control_plane.kubernetes_execution_completions','SELECT') AND has_table_privilege(session_user,'control_plane.kubernetes_execution_completions','INSERT')
+ AND has_table_privilege(session_user,'control_plane.kubernetes_identity_health_attempts','SELECT') AND has_table_privilege(session_user,'control_plane.kubernetes_identity_health_attempts','INSERT')
+ AND has_table_privilege(session_user,'control_plane.kubernetes_identity_health_completions','SELECT') AND has_table_privilege(session_user,'control_plane.kubernetes_identity_health_completions','INSERT')
+ AND has_table_privilege(session_user,'control_plane.integration_connection_tests','SELECT') AND has_table_privilege(session_user,'control_plane.integration_connection_tests','UPDATE')
+ AND EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid='control_plane.kubernetes_identity_health_attempts'::regclass AND attname='shared_test_id' AND atttypid='uuid'::regtype AND attnum>0 AND NOT attisdropped)
+ AND EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='control_plane.kubernetes_identity_health_attempts'::regclass AND conname='kubernetes_health_test_source_oneof' AND contype='c' AND convalidated)
+ AND EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='control_plane.kubernetes_identity_health_attempts'::regclass AND conname='kubernetes_health_shared_test_org_fk' AND contype='f' AND convalidated AND confrelid='control_plane.integration_connection_tests'::regclass)
+ AND has_function_privilege(session_user,'control_plane.kubernetes_execution_child_grant_current(uuid,uuid)','EXECUTE');

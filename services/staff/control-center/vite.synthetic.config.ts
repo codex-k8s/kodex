@@ -10,6 +10,18 @@ export default mergeConfig(base, {
     outDir: "dist-synthetic",
     rolldownOptions: {
       input: {
+        sshCredentialInput: fileURLToPath(
+          new URL("./e2e/fixtures/ssh-credential-input.html", import.meta.url),
+        ),
+        kubernetesStreamInput: fileURLToPath(
+          new URL(
+            "./e2e/fixtures/kubernetes-stream-input.html",
+            import.meta.url,
+          ),
+        ),
+        personalEmail: fileURLToPath(
+          new URL("./e2e/fixtures/personal-email.html", import.meta.url),
+        ),
         telegramNotifications: fileURLToPath(
           new URL(
             "./e2e/fixtures/telegram-notifications.html",

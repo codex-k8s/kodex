@@ -334,7 +334,7 @@ def main():
         elif args.mode == 'verify-bootstrap':
             if completion is not None and completion['origin'] in bootstrap_completion.ORIGINS[2:]:
                 verify_upgrade_preconditions(state, resources,
-                    versioned_materializer=completion['origin'] == bootstrap_completion.ORIGINS[3])
+                    versioned_materializer=completion['origin'] in (bootstrap_completion.ORIGINS[3], bootstrap_completion.ADOPTION_ORIGIN))
             verify_completed_bootstrap(state, resources, completion)
             print(json.dumps({'status':'BOOTSTRAP_COMPLETION_VERIFIED','effects_replayed':False}))
         elif args.mode == 'existing-job':

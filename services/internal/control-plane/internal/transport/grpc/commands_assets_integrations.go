@@ -669,7 +669,7 @@ func (server *Server) SetIntegrationConnectionEnabled(ctx context.Context, reque
 // ChangeIntegrationGrant переносит разрешение capability подключения и
 // политику согласования в отдельную версионируемую команду без самовыдачи прав.
 func (server *Server) ChangeIntegrationGrant(ctx context.Context, request *controlplanev1.ChangeIntegrationGrantRequest) (*controlplanev1.ChangeIntegrationGrantResponse, error) {
-	payload := command.IntegrationGrantInput{ConnectionRef: request.GetConnectionRef(), CapabilityKey: request.GetCapabilityKey(), AgentRef: request.GetAgentRef(), WorkflowRef: request.GetWorkflowRef(), Enabled: request.GetEnabled(), ApprovalScopePaths: request.GetApprovalScopePaths(), ApprovalPolicy: strings.TrimPrefix(request.GetApprovalPolicy().String(), "INTEGRATION_APPROVAL_POLICY_")}
+	payload := command.IntegrationGrantInput{ConnectionRef: request.GetConnectionRef(), CapabilityKey: request.GetCapabilityKey(), AgentRef: request.GetAgentRef(), WorkflowRef: request.GetWorkflowRef(), Enabled: request.GetEnabled(), ApprovalScopePaths: request.GetApprovalScopePaths(), ApprovalPolicy: strings.TrimPrefix(request.GetApprovalPolicy().String(), "INTEGRATION_APPROVAL_POLICY_"), KubernetesNamespace: request.GetKubernetesNamespace(), KubernetesGrantRef: request.GetKubernetesGrantRef()}
 	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_ChangeIntegrationGrant_FullMethodName, command.ChangeIntegrationGrant, request.GetMutation(), payload, func(result command.Result) *controlplanev1.ChangeIntegrationGrantResponse {
 		return &controlplanev1.ChangeIntegrationGrantResponse{Connection: castConnection(*result.Connection)}
 	})

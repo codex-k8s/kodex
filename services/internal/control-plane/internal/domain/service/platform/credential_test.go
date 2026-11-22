@@ -49,8 +49,9 @@ func (repository *integrationCredentialRepository) GetIntegrationConnection(_ co
 		return *repository.connection, nil
 	}
 	return entity.IntegrationConnection{
-		CredentialPolicy: entity.IntegrationCredentialProjectShared,
-		Ref:              ref, DefinitionKey: "github", Version: 3, CredentialSecretKey: "token", NextActions: []string{"CONFIGURE_CREDENTIAL"},
+		CredentialPolicy:   entity.IntegrationCredentialProjectShared,
+		CredentialDelivery: integrationpackage.CredentialDelivery{Kind: integrationpackage.CredentialDeliveryToken},
+		Ref:                ref, DefinitionKey: "github", Version: 3, CredentialSecretKey: "token", NextActions: []string{"CONFIGURE_CREDENTIAL"},
 	}, nil
 }
 
@@ -68,8 +69,9 @@ func TestConfigureIntegrationCredentialRequiresPublishedOpenAPIPin(t *testing.T)
 	}
 	base := definitions["openapi-mcp"]
 	repository := &integrationCredentialRepository{connection: &entity.IntegrationConnection{
-		CredentialPolicy: entity.IntegrationCredentialProjectShared,
-		Ref:              "intconn_openapi", DefinitionKey: "openapi-mcp", DefinitionDigest: base.Digest,
+		CredentialPolicy:   entity.IntegrationCredentialProjectShared,
+		CredentialDelivery: integrationpackage.CredentialDelivery{Kind: integrationpackage.CredentialDeliveryToken},
+		Ref:                "intconn_openapi", DefinitionKey: "openapi-mcp", DefinitionDigest: base.Digest,
 		Version: 3, CredentialSecretKey: "token", NextActions: []string{"CONFIGURE_CREDENTIAL"},
 		Capabilities: []entity.IntegrationCapability{{Key: "openapi.read"}},
 	}}
@@ -116,6 +118,47 @@ func (integrationCredentialMaterializer) Materialize(_ context.Context, _ string
 		SecretRef: "integration-credentials", SecretUID: "secret-uid", SecretResourceVersion: "12",
 		ContentSHA256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 	}, nil
+}
+
+// countedIntegrationCredentialMaterializer observes whether forbidden metadata reached storage.
+// countedIntegrationCredentialMaterializer отслеживает попадание forbidden metadata в storage.
+type countedIntegrationCredentialMaterializer struct{ calls int }
+
+// Materialize counts real service-boundary calls while returning only synthetic immutable metadata.
+// Materialize считает actual service-boundary calls, возвращая только synthetic immutable metadata.
+func (materializer *countedIntegrationCredentialMaterializer) Materialize(ctx context.Context, ref string, raw []byte) (MaterializedCredential, error) {
+	materializer.calls++
+	return (integrationCredentialMaterializer{}).Materialize(ctx, ref, raw)
+}
+
+// TestGenericCredentialSetupRequiresFreshTokenDelivery refuses UNKNOWN/NONE/BI before any materializer call.
+// A stale key/action hint cannot replace the explicit current owner package representation.
+// TestGenericCredentialSetupRequiresFreshTokenDelivery отклоняет UNKNOWN/NONE/BI до materializer call.
+// Stale key/action hint не заменяет explicit current owner package representation.
+func TestGenericCredentialSetupRequiresFreshTokenDelivery(t *testing.T) {
+	for _, delivery := range []integrationpackage.CredentialDelivery{
+		{}, {Kind: integrationpackage.CredentialDeliveryNone},
+		{Kind: integrationpackage.CredentialDeliveryBrokerIdentity, BrokerPurpose: "KUBERNETES_TARGET"},
+		{Kind: integrationpackage.CredentialDeliveryToken, BrokerPurpose: "KUBERNETES_TARGET"},
+	} {
+		repository := &integrationCredentialRepository{connection: &entity.IntegrationConnection{
+			Ref: "intconn_exact_kind", DefinitionKey: "github", Version: 3, CredentialPolicy: entity.IntegrationCredentialProjectShared,
+			CredentialSecretKey: "stale-token-hint", NextActions: []string{"CONFIGURE_CREDENTIAL"}, CredentialDelivery: delivery,
+		}}
+		materializer := &countedIntegrationCredentialMaterializer{}
+		service, err := New(repository, WithCredentialMaterializer(materializer))
+		if err != nil {
+			t.Fatal("compose generic credential fixture")
+		}
+		version := int64(3)
+		_, err = service.ConfigureIntegrationCredential(context.Background(), value.Principal{
+			ActorID: "external-actor", AuthorityTenant: "external-tenant", Permission: "platform.command.integrations.configure-credential",
+			CorrelationRef: "exact-kind-fixture", CallerWorkload: "control-api-gateway", CredentialRevision: 1,
+		}, value.Mutation{IdempotencyKey: "exact-kind-setup-fixture", ExpectedVersion: &version}, repository.connection.Ref, []byte("synthetic-value"))
+		if !errors.Is(err, errs.ErrForbidden) || materializer.calls != 0 || repository.executed.Kind != "" {
+			t.Fatalf("non-TOKEN owner metadata entered the generic materialization path: calls=%d command=%s", materializer.calls, repository.executed.Kind)
+		}
+	}
 }
 
 // TestConfigureIntegrationCredentialDoesNotResolveOpaquePrincipalAgain checks credential reads and

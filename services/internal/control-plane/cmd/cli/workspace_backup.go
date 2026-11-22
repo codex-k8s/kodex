@@ -50,6 +50,8 @@ var workspaceBackupStatements embed.FS
 // validPostgresCommand замыкает dispatch на прежние diagnostic commands и зарегистрированные точные maintenance operations.
 func validPostgresCommand(command string) bool {
 	switch command {
+	case artifactRetentionGrantCommand, workflowFileProvenanceCommand, personalIntegrationsUpgradeCommand, personalIntegrationsBackupUpgradeCommand:
+		return true
 	case "check", "up", "status", workspaceBackupUpgradeCommand, githubBackupUpgradeCommand, sentryUpgradeCommand, sentryBackupUpgradeCommand, telegramUpgradeCommand, telegramBackupUpgradeCommand, workspaceBackupRestoreCommand:
 		return true
 	default:
@@ -90,7 +92,7 @@ func restoreWorkspaceBackupACL(ctx context.Context, database *sql.DB) error {
 		return err
 	}
 	switch version {
-	case 20261026001500, 20261026001600, 20261026001700, 20261027000100, 20261028000100, 20261029000100, 20261029000200, 20261029000300, 20261030000100, 20261105000100, 20261106000100, 20261107000100, 20261108000100, 20261109000100, 20261113000100, 20261114120000, 20261114130000, 20261114140000:
+	case 20261026001500, 20261026001600, 20261026001700, 20261027000100, 20261028000100, 20261029000100, 20261029000200, 20261029000300, 20261030000100, 20261105000100, 20261106000100, 20261107000100, 20261108000100, 20261109000100, 20261113000100, 20261114120000, 20261114130000, 20261114140000, 20261114150000, 20261114160000, 20261114170000:
 		return executeWorkspaceBackupStatement(ctx, database, fmt.Sprintf("restore_%d.sql", version))
 	default:
 		return errors.New("workspace backup restore schema is not registered")
@@ -120,7 +122,10 @@ func executeWorkspaceBackupUpgrade(ctx context.Context, database *sql.DB, migrat
 // executeBackupUpgradeWithStatement runs a registered normalization or read-only preflight once and always attempts independent bounded forward ACL restoration after its confirmed commit; unknown commits stop before migration.
 // executeBackupUpgradeWithStatement выполняет зарегистрированную normalization либо read-only preflight один раз и всегда пробует независимое bounded forward восстановление ACL после подтверждённого commit; неизвестный commit останавливает вход в миграцию.
 func executeBackupUpgradeWithStatement(ctx context.Context, database *sql.DB, normalization string, migrate func(context.Context, *sql.DB) error) error {
-	if normalization != "normalize.sql" && normalization != "normalize_20261113000100.sql" && normalization != "check_sentry_20261114120000_backup.sql" && normalization != "check_telegram_20261114130000_backup.sql" {
+	switch normalization {
+	case "normalize.sql", "normalize_20261113000100.sql", "check_sentry_20261114120000_backup.sql", "check_telegram_20261114130000_backup.sql",
+		"check_integrations_20261114140000_backup.sql", "check_integrations_20261114150000_backup.sql", "check_integrations_20261114160000_backup.sql":
+	default:
 		return errors.New("backup normalization is not registered")
 	}
 	if err := executeWorkspaceBackupStatement(ctx, database, normalization); err != nil {

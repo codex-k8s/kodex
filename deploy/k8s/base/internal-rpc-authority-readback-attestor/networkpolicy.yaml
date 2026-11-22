@@ -31,6 +31,7 @@ spec:
                   - automation-scheduler
                   - secret-broker
                   - session-archive
+                  - artifact-retention
                   - control-api-gateway
                   - integration-gateway
                   - email-bridge

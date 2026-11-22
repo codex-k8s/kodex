@@ -57,7 +57,7 @@ func (repository *Repository) bindIntegrationPackage(ctx context.Context, tx pgx
 	if err != nil || definition.Metadata.Key != connection.definitionKey {
 		return errs.ErrInvalid
 	}
-	stored, err := readConnection(ctx, tx, current, connectionRef)
+	stored, err := repository.readConnection(ctx, tx, current, connectionRef)
 	if err != nil {
 		return err
 	}
@@ -94,7 +94,7 @@ func (repository *Repository) bindIntegrationPackage(ctx context.Context, tx pgx
 // bindings сохраняет existing projection. Перестраивает capability/schema metadata без execution
 // admission; поздние errors могут оставить partial item mutations, которые caller обязан
 // отбросить.
-func projectConnectionPackage(ctx context.Context, querier connectionQuerier, current scope, item *entity.IntegrationConnection) error {
+func (repository *Repository) projectConnectionPackage(ctx context.Context, querier connectionQuerier, current scope, item *entity.IntegrationConnection) error {
 	var format, content string
 	err := querier.QueryRow(ctx, queryIntegrationPackageBoundRevision, current.organizationID, item.Ref).Scan(&format, &content)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -102,7 +102,8 @@ func projectConnectionPackage(ctx context.Context, querier connectionQuerier, cu
 			// Поставленный шаблон не исполняется до явной привязки ревизии владельца.
 			item.MaskedCredentialsState = "NOT_CONFIGURED"
 		}
-		return nil
+		item.CredentialDelivery, err = repository.credentialDeliveryForExactPackageSnapshot(item.DefinitionKey, item.DefinitionVersion, item.DefinitionDigest, "", "")
+		return err
 	}
 	if err != nil || (format != "JSON" && format != "YAML") {
 		return errs.ErrUnavailable
@@ -110,6 +111,10 @@ func projectConnectionPackage(ctx context.Context, querier connectionQuerier, cu
 	definition, err := integrationpackage.Parse([]byte(content))
 	if err != nil || definition.Metadata.Key != item.DefinitionKey || definition.Metadata.Version != item.DefinitionVersion || definition.Digest != item.DefinitionDigest {
 		return errs.ErrUnavailable
+	}
+	item.CredentialDelivery, err = repository.credentialDeliveryForExactPackageSnapshot(item.DefinitionKey, item.DefinitionVersion, item.DefinitionDigest, format, content)
+	if err != nil {
+		return err
 	}
 	item.DefinitionName = definition.Spec.Name
 	item.CredentialSecretKey = ""

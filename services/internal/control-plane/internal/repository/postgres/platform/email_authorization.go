@@ -73,6 +73,7 @@ type emailAuthorizationSource struct {
 	operation, effectKey, definitionVersion, definitionDigest, risk        string
 	boundedInput, resourceScope, configuration                             []byte
 	gateApproved                                                           bool
+	accessUntil                                                            time.Time
 }
 
 // emailBindingSource prefers InvocationRef when present and otherwise returns ConnectionTestRef
@@ -102,12 +103,12 @@ func emailFenceDigest(binding entity.EmailExecutionBinding) string {
 // uses its actor ref for current integration/project/agent access, checks the exact callable email
 // package/risk/resource scope and current mailbox. It delegates canonical
 // command/digest/policy/gate checks, then bounds decision expiry by the lease and authorization
-// maximum age. AgentScope is present only for an agent source; shared exact scopes are explanatory
+// maximum age and the earliest current permission allowance. AgentScope is present only for an agent source; shared exact scopes are explanatory
 // output. It creates no receipt, commit or external email effect itself.
 // emailAuthorization разрешает exact live invocation/test source в caller transaction, использует
 // его actor ref для current integration/project/agent access, проверяет exact callable email
 // package/risk/resource scope и current mailbox. Делегирует canonical command/digest/policy/gate
-// checks, затем ограничивает decision expiry lease и authorization maximum age. AgentScope
+// checks, затем ограничивает decision expiry lease, authorization maximum age и наиболее ранним текущим permission allowance. AgentScope
 // присутствует только для agent source; общие exact scopes являются пояснительным output. Сам не
 // создаёт receipt, commit или внешний email effect.
 func (repository *Repository) emailAuthorization(ctx context.Context, tx pgx.Tx, current scope, input query.EmailAuthorization) (entity.EmailAuthorization, emailAuthorizationSource, error) {
@@ -121,7 +122,7 @@ func (repository *Repository) emailAuthorization(ctx context.Context, tx pgx.Tx,
 		&source.id, &source.connectionRef, &source.actorRef, &source.agentRef, &source.projectRef, &source.projectID, &source.grantRef,
 		&source.operation, &source.effectKey, &source.boundedInput, &source.resourceScope, &source.configuration,
 		&source.definitionVersion, &source.definitionDigest, &source.risk, &source.gateApproved)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) && !accessInfrastructureFailure(err) {
 		return entity.EmailAuthorization{}, source, errs.ErrForbidden
 	}
 	if err != nil {
@@ -129,21 +130,29 @@ func (repository *Repository) emailAuthorization(ctx context.Context, tx pgx.Tx,
 	}
 	actor := current
 	actor.actorRef = source.actorRef
-	if err := repository.requireAccess(ctx, tx, actor, "integration.manage", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "INTEGRATION", ResourceRef: source.connectionRef}); err != nil {
-		return entity.EmailAuthorization{}, source, errs.ErrForbidden
+	source.accessUntil, err = repository.requireAccessUntil(ctx, tx, actor, "integration.manage", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "INTEGRATION", ResourceRef: source.connectionRef})
+	if err != nil {
+		return entity.EmailAuthorization{}, source, concealAccessDenial(err, errs.ErrForbidden)
 	}
 	if source.agentRef != "" {
 		for _, target := range []struct{ permission, kind, ref string }{
 			{"project.view", "PROJECT", source.projectRef}, {"agent.view", "AGENT", source.agentRef},
 		} {
-			if err := repository.requireAccess(ctx, tx, actor, target.permission, entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: target.kind, ResourceRef: target.ref}); err != nil {
-				return entity.EmailAuthorization{}, source, errs.ErrForbidden
+			until, err := repository.requireAccessUntil(ctx, tx, actor, target.permission, entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: target.kind, ResourceRef: target.ref})
+			if err != nil {
+				return entity.EmailAuthorization{}, source, concealAccessDenial(err, errs.ErrForbidden)
+			}
+			if !until.IsZero() && (source.accessUntil.IsZero() || until.Before(source.accessUntil)) {
+				source.accessUntil = until
 			}
 		}
 	}
 	definition, packageErr := repository.integrationPackage(ctx, tx, current.organizationID, source.connectionRef, "email", source.definitionVersion, source.definitionDigest)
+	if packageErr != nil {
+		return entity.EmailAuthorization{}, source, concealAccessDenial(packageErr, errs.ErrForbidden)
+	}
 	capability, capabilityFound := definition.Capability(source.operation)
-	if packageErr != nil || !capabilityFound || !capability.CallableByAgent() || definition.Metadata.Version != source.definitionVersion ||
+	if !capabilityFound || !capability.CallableByAgent() || definition.Metadata.Version != source.definitionVersion ||
 		definition.Digest != source.definitionDigest || capability.Risk != source.risk {
 		return entity.EmailAuthorization{}, source, errs.ErrForbidden
 	}
@@ -162,13 +171,58 @@ func (repository *Repository) emailAuthorization(ctx context.Context, tx pgx.Tx,
 	if mailbox.ConnectionRef != source.connectionRef || mailbox.OrganizationRef != current.organizationRef {
 		return entity.EmailAuthorization{}, source, errs.ErrForbidden
 	}
+	if input.Binding.InvocationRef != "" {
+		choice, err := repository.requireEmailInvocationMailboxTx(ctx, tx, current, input.Binding.InvocationRef)
+		if err != nil {
+			return entity.EmailAuthorization{}, source, err
+		}
+		var candidate integrationInvocationCandidate
+		if err := scanIntegrationInvocationCandidate(tx.QueryRow(ctx, queryWorkersClaimintegrationinvocationsSelectIntegrationInvocationsOrganizationIdState,
+			current.organizationID, 1, "integration-gateway", "MANAGED_MCP", false, input.Binding.InvocationRef, false, false, false), &candidate); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) && !accessInfrastructureFailure(err) {
+				return entity.EmailAuthorization{}, source, errs.ErrForbidden
+			}
+			return entity.EmailAuthorization{}, source, serializableTransactionError(err, errs.ErrUnavailable)
+		}
+		if candidate.definitionKey != "email" || candidate.ref != input.Binding.InvocationRef ||
+			emailpolicy.ValidateCommandApprovalPolicy(choice.mailbox, candidate.operation, candidate.boundedInput, candidate.approvalPolicy) != nil {
+			return entity.EmailAuthorization{}, source, errs.ErrForbidden
+		}
+		if candidate.approvalPolicy == "HUMAN_SCOPED" {
+			if err := lockIntegrationApprovalCallTx(ctx, tx, current.organizationID, candidate.id); err != nil {
+				return entity.EmailAuthorization{}, source, err
+			}
+			if err := requireEmailApprovalScopeTx(ctx, tx, current, choice); err != nil {
+				return entity.EmailAuthorization{}, source, err
+			}
+		}
+	} else {
+		owner, err := requireEmailCredentialOwnerTx(ctx, tx, current, source.connectionRef, source.actorRef, mailbox.CredentialOwnerGeneration)
+		if err != nil {
+			return entity.EmailAuthorization{}, source, err
+		}
+		if mailbox.CredentialOwnerGeneration != owner.owner.Generation {
+			return entity.EmailAuthorization{}, source, errs.ErrForbidden
+		}
+		var matches bool
+		if err := tx.QueryRow(ctx, queryEmailConnectionTestMailboxMatches, pgx.StrictNamedArgs{
+			"organization_id": current.organizationID, "test_id": source.id, "mailbox_ref": mailbox.Ref,
+			"mailbox_revision": mailbox.Revision, "mailbox_source_digest": mailbox.SourceDigest,
+			"owner_generation": owner.owner.Generation,
+		}).Scan(&matches); err != nil {
+			return entity.EmailAuthorization{}, source, serializableTransactionError(err, errs.ErrUnavailable)
+		}
+		if !matches {
+			return entity.EmailAuthorization{}, source, errs.ErrForbidden
+		}
+	}
 	exact, policy, err := emailpolicy.AuthorizeCommand(mailbox, source.operation, source.effectKey, source.boundedInput, input, source.gateApproved)
 	if err != nil {
 		return entity.EmailAuthorization{}, source, err
 	}
-	expires := time.Now().UTC().Add(emailpolicy.AuthorizationMaximumAge)
-	if input.Binding.ExpiresAt.Before(expires) {
-		expires = input.Binding.ExpiresAt.UTC()
+	expires := emailAuthorizationUntil(time.Now(), input.Binding.ExpiresAt, source.accessUntil)
+	if err := emailAuthorizationCreditError(ctx, expires); err != nil {
+		return entity.EmailAuthorization{}, source, err
 	}
 	result := entity.EmailAuthorization{Allowed: true, GateApproved: source.gateApproved, ActorRef: source.actorRef,
 		AgentRef: source.agentRef, OrganizationRef: current.organizationRef, ProjectRef: source.projectRef,
@@ -195,6 +249,7 @@ func (repository *Repository) emailAuthorization(ctx context.Context, tx pgx.Tx,
 // восстанавливает caller fence только после commit; replay не продлевает authorization. Прежние
 // ignored marshal/rollback errors не меняются, SMTP/IMAP/POP action не выполняется.
 func (repository *Repository) ResolveEmailAuthorization(ctx context.Context, principal value.Principal, input query.EmailAuthorization) (entity.EmailAuthorization, error) {
+	observed := time.Now()
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	if principal.CallerWorkload != "email-bridge" || principal.ProjectRef != "" {
@@ -242,7 +297,10 @@ func (repository *Repository) ResolveEmailAuthorization(ctx context.Context, pri
 	var previousInput, previousDecision []byte
 	if err := tx.QueryRow(ctx, queryEmailAuthorizationGet, current.organizationID, emailBindingSource(input.Binding), input.Binding.LeaseRef,
 		input.Binding.Generation, emailFenceDigest(input.Binding)).Scan(&ref, &previousInput, &previousDecision); err != nil {
-		return entity.EmailAuthorization{}, errs.ErrForbidden
+		if errors.Is(err, pgx.ErrNoRows) && !accessInfrastructureFailure(err) {
+			return entity.EmailAuthorization{}, errs.ErrForbidden
+		}
+		return entity.EmailAuthorization{}, errs.ErrUnavailable
 	}
 	var previous entity.EmailAuthorization
 	var previousQuery query.EmailAuthorization
@@ -256,9 +314,19 @@ func (repository *Repository) ResolveEmailAuthorization(ctx context.Context, pri
 	if !bytes.Equal(canonicalInput, inputJSON) || !bytes.Equal(canonicalDecision, previousCanonical) || !previous.ExpiresAt.After(time.Now()) {
 		return entity.EmailAuthorization{}, errs.ErrForbidden
 	}
+	// The original stored expiry remains the ceiling even if the same actor later receives a longer grant.
+	// Исходный сохранённый expiry остаётся верхней границей, даже если actor позднее получает более долгий grant.
+	until := emailAuthorizationUntil(observed, previous.ExpiresAt, source.accessUntil)
+	if err := emailAuthorizationCreditError(ctx, until); err != nil {
+		return entity.EmailAuthorization{}, err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return entity.EmailAuthorization{}, errs.ErrUnavailable
 	}
+	if err := emailAuthorizationCreditError(ctx, until); err != nil {
+		return entity.EmailAuthorization{}, err
+	}
+	previous.ExpiresAt = until
 	previous.Binding.Fence = input.Binding.Fence
 	return previous, nil
 }

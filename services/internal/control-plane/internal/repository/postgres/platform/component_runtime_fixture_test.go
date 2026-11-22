@@ -39,7 +39,8 @@ func newSyntheticRuntimeComponentRepository(t *testing.T, ctx context.Context, p
 		customize(r)
 	}
 	if err = r.Bootstrap(ctx); err != nil {
-		t.Fatal(err)
+		phase, code, reason := bootstrapFixtureDiagnostic(err)
+		t.Fatalf("bootstrap failed: phase=%s SQLSTATE=%s reason=%s", phase, code, reason)
 	}
 	return r
 }
@@ -142,22 +143,19 @@ func resolveRunLaunchComponentPrincipals(t *testing.T, ctx context.Context, r *R
 	return owner, worker
 }
 
-// newNamespacedRoleImageComponentRepository creates the fixed synthetic openai-codex/gpt-5
-// adapter with fresh in-memory object storage, applies only the namespaced role-image policy,
-// then bootstraps with the exact caller context. It preserves the three original Fatal error
-// paths and does not configure a provider credential. Pool ownership, tracer, deadline,
-// principals and scenario assertions stay with the caller; no provider or cluster is contacted.
-// newNamespacedRoleImageComponentRepository создаёт фиксированный тестовый adapter
-// openai-codex/gpt-5 с новым in-memory object storage, применяет только namespaced role-image
-// policy и выполняет Bootstrap с точным context вызывающего. Сохраняет три исходных Fatal
-// error paths и не настраивает provider credential. Pool, tracer, deadline, principals и
-// проверки сценария остаются у вызывающего; обращения к provider или кластеру отсутствуют.
+// newNamespacedRoleImageComponentRepository bootstraps the namespaced image policy and the
+// installed synthetic OpenCode descriptor needed for agent prompt previews. The caller owns the
+// pool, tracer and deadline. No provider credentials or live observations are created.
+// newNamespacedRoleImageComponentRepository инициализирует namespaced image policy и
+// синтетический дескриптор OpenCode, необходимый для preview промпта агента. Пул, трассировщик и
+// deadline принадлежат вызывающему. Credentials и наблюдения внешнего провайдера не создаются.
 func newNamespacedRoleImageComponentRepository(t *testing.T, ctx context.Context, pool *pgxpool.Pool) *Repository {
 	t.Helper()
 	repository, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
 	if err != nil {
 		t.Fatal(err)
 	}
+	configureComponentModelProvider(t, repository)
 	if err := repository.ConfigureRoleImages(namespacedRoleImageComponentConfig()); err != nil {
 		t.Fatal(err)
 	}

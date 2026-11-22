@@ -4,8 +4,8 @@ title: Общие библиотеки Go
 type: guide
 status: approved
 owner: architect
-version: 1.0.9
-updated: 2026-11-13
+version: 1.0.14
+updated: 2026-11-21
 ---
 
 # Общие библиотеки Go
@@ -18,6 +18,14 @@ snapshots. Semantic PLATFORM sections проверяются по закрыто
 slots и effective capabilities; user sections не могут назначать platform slot.
 Строгий JSON consumer отклоняет duplicate keys до typed decode: один
 `DisallowUnknownFields` эту неоднозначность не закрывает.
+Для закрытого plain DTO проверка AST также требует точного регистра явных
+JSON tags: стандартный decoder иначе принимает case aliases. Необязательное
+поле можно пропустить; `null` допускается только по явному контракту caller,
+а не выводится из `omitempty`. `internalrpcauth.DecodeExactJSON` выполняет
+эту проверку до стандартного typed decode; maps, embedded promotion и custom
+JSON/text unmarshaling не усыновляются как plain DTO, даже когда такое поле
+пропущено либо равно null. Byte budget, обязательность,
+семантика значений и authority остаются у вызывающего компонента.
 
 `GO-DOC-006` определяет, какой код принадлежит `libs/go`, а какой остается в
 deployable-компоненте. Структуру сервиса задают `GO-DOC-001` и
@@ -143,6 +151,26 @@ resource/token границами и лимитами соединений. Ло
 `context.Background()`. Composition root передает lifecycle и базовый shutdown
 context явно.
 
+Для синхронных обработчиков `ActivityGate` ведёт admission и положительный
+join; `RequestLifecycle` добавляет application cancellation без изменения
+проверенных request values. `httpserver.RequestGate` использует то же ядро.
+Consumer освобождает слот лишь после всей своей work и cleanup. Timeout,
+`context.Done`, HTTP Close либо gRPC Stop не подтверждают завершение handler.
+Остановка admission и отмена запросов выполняются до ожидания worker group;
+bounded transport shutdown принадлежит worker, поэтому внешний RunShutdown
+не становится недостижимым из-за заблокированного GracefulStop.
+Общие dependencies освобождаются только после join всех их consumers.
+Неподтверждённый join завершает процесс с ошибкой, сохраняя зависимости для
+ещё выполняющейся очистки. Hijack и detached workers требуют отдельного join.
+
+Долгоживущий transport после подтверждённого открытия принадлежит worker lifecycle,
+а не завершившемуся unary request. Отмена request до handoff прерывает все стадии
+dial, TLS и HTTP upgrade. Наличие `DialContext` в API библиотеки не доказывает
+прерывание уже подключённого socket: это проверяется на закреплённой версии с
+зависшим peer. Если нужен callback, он закрывает exact connection и положительно
+присоединяется до возврата; после handoff действует отдельный lifecycle/expiry
+watcher. Потеря opening reply не даёт права повторить внешний effect.
+
 ### `grpcserver`
 
 Общая gRPC boundary:
@@ -168,6 +196,23 @@ Service-specific mapping domain errors остается в
 - connection limits;
 - bounded graceful shutdown;
 - безопасные стандартные headers.
+
+`serviceruntime.ActivityGate` является общим ядром admission/positive join
+для synchronous caller-owned activities без context, goroutine либо authority.
+HTTP `RequestGate` делегирует ему счётчик и join, сохраняя HTTP status/body.
+Новый RPC/domain consumer использует то же ядро, владея своим cancel context
+и закрывая dependencies только после actual join.
+`RequestLifecycle` связывает request context с caller-owned app cancellation,
+сохраняет incoming values и earlier deadline, предоставляет Begin/release и
+StopAdmission()/Close(ctx)/Wait(ctx)/Joined. StopAdmission закрывает admission
+и отменяет contexts перед bounded transport shutdown, но не ждёт handlers.
+Собственный AfterFunc callback joined отдельно;
+server Stop и canceled context не заменяют actual handler release.
+`RequestGate` ограничивает лишь одновременно допущенные synchronous HTTP handlers.
+После Close он запрещает новую работу, а Wait подтверждает фактический выход
+всех допущенных handlers либо возвращает ошибку бюджета. Timeout не разрешает
+закрывать ещё используемые dependencies. Это не ограничение agent loop, grant
+либо remote effects; hijacked connections и detached child work владеют отдельным join.
 
 Бизнесовые HTTP/WebSocket endpoints принадлежат gateway и не добавляются в
 технический server внутреннего сервиса.
@@ -476,3 +521,17 @@ runtime-controller, control-plane и public gateway. Копии независи
 TTFT/usage не превращается в ноль. Closed validation остаётся в runtimecontract,
 owner authority — в CP, receipt и metrics lifecycle — у deployable. Adapter не
 выполняет I/O, не назначает actor/session и не добавляет provider fallback.
+
+### Join и исход worker
+
+`WorkerGroup.Joined()` подтверждает только фактический выход всех workers через
+существующий collector `done`. Отмена контекста, `Stop` и timeout `Wait` не
+подтверждают join. После положительного join результат перечитывается без
+отменённого observation context, чтобы сохранить ошибку завершившейся работы.
+
+Обычная отмена исключается из результата только если вся bounded unwrap-цепочка
+содержит исключительно `context.Canceled`. `errors.Is(err, context.Canceled)`
+недостаточно: `errors.Join(context.Canceled, fatalCleanupError)` обязан сохранить
+fatal error. Цикл, неизвестная leaf-ошибка либо слишком глубокая цепочка закрыто
+считаются failure. Это не политика результата доменной операции: подтверждённый
+owner terminal отдельно проверяет профильный consumer.

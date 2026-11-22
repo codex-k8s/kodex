@@ -45,6 +45,7 @@ import (
 // и переключатели сбоев; счётчики отражают эффекты стенда, а не реальную доставку.
 type providerFixture struct {
 	oauthAuth                atomic.Int32
+	plainAuth                atomic.Int32
 	mu                       sync.Mutex
 	raw                      string
 	uidlLines, listLines     string
@@ -67,13 +68,21 @@ type providerFixture struct {
 // certificate создаёт краткоживущий самоподписанный сертификат P-256 для
 // локального клиентского и серверного TLS с ожидаемым URI и локальными именами.
 func certificate(t *testing.T) (tls.Certificate, []byte) {
+	return certificateForNames(t, []string{"mail.example.test", "localhost"})
+}
+
+// certificateForNames issues a short-lived fixture certificate with only the explicit DNS names;
+// protocol tests retain normal hostname/CA verification instead of wildcard or insecure TLS.
+// certificateForNames выпускает короткоживущий fixture certificate только с явными DNS names;
+// protocol tests сохраняют обычную hostname/CA verification без wildcard либо insecure TLS.
+func certificateForNames(t *testing.T, names []string) (tls.Certificate, []byte) {
 	t.Helper()
 	key, e := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if e != nil {
 		t.Fatal(e)
 	}
 	uri, _ := url.Parse(httptransport.CallerSPIFFE)
-	template := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "fixture"}, DNSNames: []string{"mail.example.test", "localhost"}, IPAddresses: []net.IP{net.ParseIP("127.0.0.1")}, URIs: []*url.URL{uri}, NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour), IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth}}
+	template := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "fixture"}, DNSNames: names, IPAddresses: []net.IP{net.ParseIP("127.0.0.1")}, URIs: []*url.URL{uri}, NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour), IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth}}
 	der, e := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
 	if e != nil {
 		t.Fatal(e)
@@ -91,10 +100,13 @@ func certificate(t *testing.T) (tls.Certificate, []byte) {
 // implicit mode wraps TLS immediately, and cleanup closes listeners and joins handlers.
 // newFixture запускает временные локальные почтовые серверы с ограниченным
 // временем соединений; implicit сразу включает TLS, очистка закрывает и ждёт обработчики.
-func newFixture(t *testing.T, mode string) *providerFixture {
+func newFixture(t *testing.T, mode string, names ...string) *providerFixture {
 	t.Helper()
 	f := &providerFixture{}
 	f.cert, f.ca = certificate(t)
+	if len(names) > 0 {
+		f.cert, f.ca = certificateForNames(t, names)
+	}
 	f.raw = "From: Sender <recipient@example.test>\r\nTo: sender@example.test\r\nCc: copy@example.test\r\nSubject: Fixture search\r\nMessage-ID: <source@example.test>\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=fixture\r\n\r\n--fixture\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nOriginal body\r\n--fixture\r\nContent-Type: text/plain\r\nContent-Disposition: attachment; filename=note.txt\r\nContent-Transfer-Encoding: base64\r\n\r\nYXR0YWNobWVudA==\r\n--fixture--\r\n"
 	var listeners []net.Listener
 	t.Cleanup(func() {
@@ -171,6 +183,12 @@ func (f *providerFixture) serveSMTP(c net.Conn) {
 				continue
 			}
 			fields := strings.Fields(line)
+			if len(fields) == 3 && fields[1] == "PLAIN" {
+				decoded, err := base64.StdEncoding.DecodeString(fields[2])
+				if err == nil && string(decoded) == "\x00fixture-value\x00fixture-value" {
+					f.plainAuth.Add(1)
+				}
+			}
 			if len(fields) > 1 && fields[1] == "OAUTHBEARER" {
 				if len(fields) != 3 {
 					_ = tp.PrintfLine("535 Authentication failed")

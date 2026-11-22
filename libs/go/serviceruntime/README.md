@@ -37,3 +37,46 @@ internal-rpc-authority — сохраняют собственную PostgreSQL/
 workers; при успехе передаёт pool своему Run. `StartupProbeFailure` содержит
 приватные Cause/Budget отдельно, не реализует Error и не печатает значения.
 Это не повтор business command, SQL transaction, bootstrap либо миграции.
+
+## Локальная admission и положительный join
+
+`NewActivityGate(maximum)` задаёт1..128 одновременно допущенных synchronous
+activities, не запуская goroutine, context либо I/O. `Enter` возвращает
+idempotent release; caller откладывает его до завершения всей своей work,
+включая cancellation callbacks. Закрытая admission и overload имеют разные
+фиксированные ошибки. `Close` запрещает новые входы, `Wait(ctx)` подтверждает
+выход всех ранее допущенных activities. Timeout не освобождает slots и не
+доказывает join; idle open gate тоже не joined. Nil/zero gate закрыто
+отклоняется без panic.
+
+Gate не владеет transport/server, не назначает authority и не заменяет
+runtime/agent/effect budgets. Отмена контекстов принадлежит consumer.
+`httpserver.RequestGate` использует это ядро для HTTP handlers; SSH execution
+service должен использовать тот же контракт для собственного caller-owned lifecycle.
+Зависимости закрываются только после положительного join. Неуспешный
+shutdown требует явного отказа процесса без ложного утверждения quiescence.
+
+`NewRequestLifecycle(appCtx, maximum)` добавляет caller-owned application
+cancellation поверх этого ядра для synchronous RPC/domain handlers. `Begin`
+возвращает linked request context и idempotent release. Значения берутся из
+incoming request, не из application context; применяется более ранний deadline.
+`StopAdmission()` закрывает admission и синхронно отменяет admitted contexts
+без ожидания handlers; этот hook вызывается перед bounded transport shutdown.
+Он не доказывает join. `Close(ctx)` сначала выполняет тот же stop,
+затем ждёт реальные releases и завершение/снятие собственного parent callback.
+`Wait(ctx)` и `Joined()` не подменяют join одним `context.Done` или server Stop.
+Parent context не отменяется библиотекой. Canceled constructor, nil contexts и
+zero lifecycle закрыто отклоняются. Дополнительная waiter goroutine не создаётся.
+
+Consumer вызывает release после своих synchronous operations и cleanup;
+остановка транспорта/дочерних workers остаётся его обязанностью. Timeout
+не разрешает закрыть dependencies, которыми ещё пользуется unjoined handler.
+Callback `context.AfterFunc` также явно joined: успешный stop означает снятие,
+а false сам по себе не означает completion. Проверены актуальные документы
+Go context через Context7 и race/cancel/deadline/ambient-value regression cases.
+
+`WorkerGroup.Joined()` читает только существующий collector `done`: ошибка
+завершившегося worker сохраняется отдельно от факта local join. `Stop()`, отмена
+контекста и timeout `Wait` не разрешают закрывать зависимости, пока `Joined()`
+ложен. Это не доказательство остановки удалённого процесса.
+Проверка: `timeout 120s go test -race -count=1 -p=1 ./...` из каталога модуля.

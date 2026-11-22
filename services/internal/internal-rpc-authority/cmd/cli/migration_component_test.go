@@ -63,18 +63,24 @@ func TestAuthorityBaselineGooseComponent(t *testing.T) {
 		testAuthorityDistributeStatusUpgrade(t, port, database)
 		return
 	}
+	if err := upArtifactRetentionIssuer(ctx, database); err == nil {
+		t.Fatal("artifact-retention upgrade accepted an earlier schema")
+	}
+	if err := goose.UpToContext(ctx, database, "migrations", artifactRetentionIssuerBefore); err != nil {
+		t.Fatal("apply exact artifact-retention issuer predecessor", err)
+	}
 	for attempt := range 2 {
-		if err := goose.UpContext(ctx, database, "migrations"); err != nil {
-			t.Fatalf("apply authority migration attempt %d: %v", attempt+1, err)
+		if err := upArtifactRetentionIssuer(ctx, database); err != nil {
+			t.Fatalf("apply authority issuer migration attempt %d: %v", attempt+1, err)
 		}
 		version, err := goose.GetDBVersionContext(ctx, database)
-		if err != nil || version != 20261115000100 {
+		if err != nil || version != 20261115000200 {
 			t.Fatal("authority migration version readback failed")
 		}
 		var rows, maximumID int64
 		if err := database.QueryRowContext(ctx,
 			"SELECT count(*), max(id) FROM public.goose_db_version",
-		).Scan(&rows, &maximumID); err != nil || rows != 11 {
+		).Scan(&rows, &maximumID); err != nil || rows != 12 {
 			t.Fatal("authority migration history readback failed")
 		}
 		if attempt == 0 {

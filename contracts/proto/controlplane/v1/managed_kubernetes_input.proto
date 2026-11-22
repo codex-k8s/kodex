@@ -1,0 +1,123 @@
+syntax = "proto3";
+
+package controlplane.v1;
+
+import "controlplane/v1/control_plane.proto";
+import "controlplane/v1/managed_kubernetes.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1;controlplanev1";
+
+// Authenticated actor context и owner graph определяют current original root/node/grant.
+// Root visibility общая; Submit дополнительно требует current grant/source/live lease.
+// Stop закрывает прежний tool без необходимости сохранять execution authority.
+// Public locators, sequence либо payload не создают authority; bytes не идут в prompt/event/audit.
+service ManagedKubernetesStreamInputService {
+  rpc ListManagedKubernetesStreamInputs(ListManagedKubernetesStreamInputsRequest) returns (ListManagedKubernetesStreamInputsResponse);
+  rpc GetManagedKubernetesStreamInput(GetManagedKubernetesStreamInputRequest) returns (GetManagedKubernetesStreamInputResponse);
+  rpc SubmitManagedKubernetesStreamInput(SubmitManagedKubernetesStreamInputRequest) returns (SubmitManagedKubernetesStreamInputResponse);
+  rpc StopManagedKubernetesStream(StopManagedKubernetesStreamRequest) returns (StopManagedKubernetesStreamResponse);
+}
+
+// ACKNOWLEDGED означает owner-confirmed local write, не remote execution success.
+// UNKNOWN не разрешает повторную выдачу bytes либо автоматический Submit.
+enum ManagedKubernetesStreamInputSubmissionState {
+  MANAGED_KUBERNETES_STREAM_INPUT_SUBMISSION_STATE_UNSPECIFIED = 0;
+  MANAGED_KUBERNETES_STREAM_INPUT_SUBMISSION_STATE_QUEUED = 1;
+  MANAGED_KUBERNETES_STREAM_INPUT_SUBMISSION_STATE_CLAIMED = 2;
+  MANAGED_KUBERNETES_STREAM_INPUT_SUBMISSION_STATE_ACKNOWLEDGED = 3;
+  MANAGED_KUBERNETES_STREAM_INPUT_SUBMISSION_STATE_UNKNOWN = 4;
+  MANAGED_KUBERNETES_STREAM_INPUT_SUBMISSION_STATE_REJECTED = 5;
+  MANAGED_KUBERNETES_STREAM_INPUT_SUBMISSION_STATE_CANCELLED = 6;
+}
+
+message ManagedKubernetesStreamInputSubmission {
+  string ref = 1;
+  string invocation_ref = 2;
+  string stream_ref = 3;
+  int64 generation = 4;
+  // Sequence назначается только владельцем внутри exact stream.
+  uint64 sequence = 5;
+  string channel = 6;
+  string payload_digest = 7;
+  uint32 byte_count = 8;
+  bool end_of_input = 9;
+  ManagedKubernetesStreamInputSubmissionState state = 10;
+}
+
+message ManagedKubernetesStreamInputView {
+  string invocation_ref = 1;
+  string stream_ref = 2;
+  string run_ref = 3;
+  string node_ref = 4;
+  int64 generation = 5;
+  string operation = 6;
+  string namespace = 7;
+  string pod_name = 8;
+  string container = 9;
+  ManagedKubernetesOwnerStreamState state = 10;
+  // Monotonic purpose-specific input_version; не effect либо frame credit.
+  int64 version = 11;
+  repeated string input_channels = 12;
+  repeated string closed_input_channels = 13;
+  uint32 maximum_frame_bytes = 14;
+  uint64 maximum_total_bytes = 15;
+  uint64 acknowledged_sequence = 16;
+  ManagedKubernetesStreamInputSubmission pending = 17;
+  google.protobuf.Timestamp hard_deadline = 18;
+  string reason_code = 19;
+  // Read-only owner-selected coordinates, never Submit authority.
+  ManagedKubernetesResourceAddress resource = 20;
+  string target_ref = 21;
+  int64 target_revision = 22;
+  string connection_ref = 23;
+  // Outstanding physical storage quotas per organization/direction; historical receipts do not consume them.
+  uint64 maximum_staged_bytes = 24;
+  uint32 maximum_staged_objects = 25;
+}
+
+message ListManagedKubernetesStreamInputsRequest {
+  string run_ref = 1;
+  string node_ref = 2;
+  PageRequest page = 3;
+}
+message ListManagedKubernetesStreamInputsResponse {
+  repeated ManagedKubernetesStreamInputView items = 1;
+  PageInfo page = 2;
+}
+message GetManagedKubernetesStreamInputRequest {
+  string invocation_ref = 1;
+  string stream_ref = 2;
+  // Metadata readback одного потерянного Submit ACK, никогда не выдаёт bytes.
+  string submission_idempotency_key = 3;
+}
+message GetManagedKubernetesStreamInputResponse {
+  ManagedKubernetesStreamInputView view = 1;
+  ManagedKubernetesStreamInputSubmission submission = 2;
+}
+message SubmitManagedKubernetesStreamInputRequest {
+  string invocation_ref = 1;
+  string stream_ref = 2;
+  MutationContext mutation = 3;
+  // Только owner-approved source class; FILE_CONTENT задаёт pinned artifact reader.
+  string channel = 4;
+  // Не более32768 private bytes. Empty допустим лишь для explicit supported EOF.
+  bytes payload = 5;
+  string payload_digest = 6;
+  bool end_of_input = 7;
+}
+message SubmitManagedKubernetesStreamInputResponse {
+  ManagedKubernetesStreamInputView view = 1;
+  ManagedKubernetesStreamInputSubmission submission = 2;
+}
+
+// Closure-only: исходный tool invocation/stream разрешается владельцем до OCC.
+// Не отменяет весь Run и не утверждает остановку удалённого процесса либо local join.
+message StopManagedKubernetesStreamRequest {
+  string invocation_ref = 1;
+  string stream_ref = 2;
+  MutationContext mutation = 3;
+}
+message StopManagedKubernetesStreamResponse {
+  ManagedKubernetesStreamInputView view = 1;
+}

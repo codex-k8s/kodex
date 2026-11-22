@@ -1,9 +1,11 @@
+import { isSSHBrokerDefinition } from "./ssh-identity-setup-context";
 import type {
   IntegrationConnection,
   IntegrationConnectionInput,
   IntegrationConfigurationField,
   IntegrationDefinition,
 } from "@/shared/api/generated/openapi/types.gen";
+import { readCredentialDelivery } from "./credential-delivery";
 import { integrationInteger, readIntegerBounds } from "./integer-bounds";
 
 export interface PendingCredentialSetup {
@@ -163,6 +165,11 @@ export function canConfigureCredential(
 ): boolean {
   const nextActions = connection.nextActions as readonly string[];
   return (
+    !isSSHBrokerDefinition(connection.definitionKey) &&
+    readCredentialDelivery(connection.credentialDelivery)?.kind === "TOKEN" &&
+    connection.definitionKey !== "email" &&
+    definition?.key !== "email" &&
+    definitionRequiresCredential(definition) &&
     connection.credentialPolicy === "PROJECT_SHARED" &&
     definition?.available === true &&
     !connection.credentialsConfigured &&

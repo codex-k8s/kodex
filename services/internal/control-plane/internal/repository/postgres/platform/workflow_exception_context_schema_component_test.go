@@ -42,14 +42,19 @@ func TestWorkflowExceptionContextMigrationProofComponent(t *testing.T) {
 				defer stop()
 				_ = conn.Close(cleanup)
 			}()
+			version := workspaceComponentSchemaVersion(t, ctx, conn)
 			if fixture.rejected != "" {
 				mutation, err := os.ReadFile("testdata/sql/workflow_exception_context_schema_" + fixture.name + ".sql")
 				if err != nil {
 					t.Fatal("read disposable rework schema drift")
 				}
 				if _, err := conn.Exec(ctx, string(mutation)); err != nil {
-					t.Fatal("apply disposable rework schema drift")
+					t.Fatal("apply disposable rework schema drift", err)
 				}
+			}
+			if version == workflowFileProvenanceFixtureVersion {
+				assertWorkflowFileProvenanceCatalog(t, ctx, conn, fixture.rejected == "")
+				return
 			}
 			actual, proof := readWorkspaceVolumeSchemaProof(t, ctx, conn)
 			if proof["legacyReworkProfile"] != "LEGACY_OWNER_REWORK_V1" || proof["workflowExceptionContextProfile"] != "SERVER_EXCEPTION_CONTEXT_V1" {

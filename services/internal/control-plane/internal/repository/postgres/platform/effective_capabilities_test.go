@@ -62,17 +62,17 @@ func TestIntegrationCapabilityAuthoritySeparatesConnectionsAndRisk(t *testing.T)
 	authority := capabilityAuthority{subject: subject, evaluatedAt: time.Now().UTC(), bindings: []entity.AccessBinding{{State: "ACTIVE", Subject: subject,
 		RoleVersion: entity.AccessRoleVersion{PermissionKeys: []string{"integration.view"}}, Scope: target}}}
 	capability := integrationpackage.Capability{Key: "integration.read", Risk: "READ"}
-	if !integrationCapabilityAllowed(authority, capability, target) {
+	if !integrationCapabilityAllowed(authority, integrationpackage.Package{}, capability, target) {
 		t.Fatal("exact read permission was rejected")
 	}
 	target.ResourceRef = "int_denied"
-	if integrationCapabilityAllowed(authority, capability, target) {
+	if integrationCapabilityAllowed(authority, integrationpackage.Package{}, capability, target) {
 		t.Fatal("same capability key escaped its connection boundary")
 	}
 	target.ResourceRef = "int_allowed"
 	for _, risk := range []string{"WRITE", "SENSITIVE", "unknown", ""} {
 		capability.Risk = risk
-		if integrationCapabilityAllowed(authority, capability, target) {
+		if integrationCapabilityAllowed(authority, integrationpackage.Package{}, capability, target) {
 			t.Fatal("read permission escalated to a write capability")
 		}
 	}
@@ -143,5 +143,48 @@ func TestEffectiveCapabilityReasonsPreserveIntersection(t *testing.T) {
 		if actual := effectiveCapabilityReason(test.requested, test.allowed, test.ready, test.workflow, test.required); actual != test.reason {
 			t.Fatalf("capability reason: got %s want %s", actual, test.reason)
 		}
+	}
+}
+
+// TestKubernetesAssignedCapabilityUsesViewWithoutGrantManagement keeps the exact package boundary.
+// Revoked/foreign target permissions and forged operation/risk remain denied; legacy writes need manage.
+// TestKubernetesAssignedCapabilityUsesViewWithoutGrantManagement сохраняет exact package boundary.
+// Revoked/foreign target permission и forged operation/risk отклоняются; legacy WRITE требует manage.
+func TestKubernetesAssignedCapabilityUsesViewWithoutGrantManagement(t *testing.T) {
+	shipped, err := integrationpackage.LoadShipped()
+	if err != nil {
+		t.Fatal("load exact shipped packages")
+	}
+	definition := shipped[integrationpackage.KubernetesDefinitionKey]
+	capability, known := definition.Capability("kubernetes.patch")
+	if !known {
+		t.Fatal("missing shipped Kubernetes patch")
+	}
+	subject := entity.AccessSubject{Ref: "usr_assigned", Kind: "USER", Active: true}
+	target := entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "INTEGRATION", ResourceRef: "int_assigned"}
+	authority := capabilityAuthority{subject: subject, evaluatedAt: time.Now().UTC(), bindings: []entity.AccessBinding{{State: "ACTIVE", Subject: subject, RoleVersion: entity.AccessRoleVersion{PermissionKeys: []string{"integration.view"}}, Scope: target}}}
+	if !integrationCapabilityAllowed(authority, definition, capability, target) || authority.allowed("integration.manage", target) {
+		t.Fatal("assigned Kubernetes use required or granted management")
+	}
+	foreign := definition
+	foreign.Metadata.Key = "foreign-kubernetes"
+	if integrationCapabilityAllowed(authority, foreign, capability, target) {
+		t.Fatal("foreign package borrowed Kubernetes use policy")
+	}
+	for _, change := range []func(*integrationpackage.Capability){func(c *integrationpackage.Capability) { c.Risk = "unknown" }, func(c *integrationpackage.Capability) { c.Operation = "kubernetes.exec" }, func(c *integrationpackage.Capability) { c.Key = "caller-chosen" }} {
+		changed := capability
+		change(&changed)
+		if integrationCapabilityAllowed(authority, definition, changed, target) {
+			t.Fatal("forged capability acquired assigned use policy")
+		}
+	}
+	target.ResourceRef = "int_foreign"
+	if integrationCapabilityAllowed(authority, definition, capability, target) {
+		t.Fatal("assigned use escaped exact Connection")
+	}
+	target.ResourceRef = "int_assigned"
+	authority.bindings[0].State = "REVOKED"
+	if integrationCapabilityAllowed(authority, definition, capability, target) {
+		t.Fatal("revoked actor retained runtime capability")
 	}
 }

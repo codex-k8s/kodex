@@ -45,8 +45,8 @@ const authoritySnapshotPredecessorMigration = "migrations/20260909000300_authori
 // authorityDistributeStatusMigration указывает additive delivered-snapshot status contract; exact bytes закрепляются независимо от каждого опубликованного predecessor.
 const authorityDistributeStatusMigration = "migrations/20261115000100_authority_distribute_delivery_status.sql"
 
-// TestParseCommandAcceptsFreshOnlyCommands accepts the forward up action and rejects four retired or unsupported command forms without loading configuration or opening a database.
-// TestParseCommandAcceptsFreshOnlyCommands принимает прямое действие up и отклоняет четыре устаревшие или неподдерживаемые формы команды без загрузки конфигурации и открытия БД.
+// TestParseCommandAcceptsFreshOnlyCommands accepts the full and scoped forward migration commands and rejects retired or unsupported command forms without loading configuration or opening a database.
+// TestParseCommandAcceptsFreshOnlyCommands принимает полный и адресный режим прямой миграции и отклоняет устаревшие или неподдерживаемые формы команды без загрузки конфигурации и открытия БД.
 func TestParseCommandAcceptsFreshOnlyCommands(t *testing.T) {
 	t.Parallel()
 
@@ -57,7 +57,11 @@ func TestParseCommandAcceptsFreshOnlyCommands(t *testing.T) {
 	if action != commandUp {
 		t.Fatalf("unexpected up command: %q", action)
 	}
-	for _, arguments := range [][]string{{"migrate", "deploy"}, {"expand"}, {"contract"}, {"version"}} {
+	action, err = parseCommand([]string{"up-artifact-retention-issuer"})
+	if err != nil || action != commandUpArtifactRetentionIssuer {
+		t.Fatalf("parse scoped issuer upgrade: %v", err)
+	}
+	for _, arguments := range [][]string{{"migrate", "deploy"}, {"expand"}, {"contract"}, {"version"}, {"up-artifact-retention-issuer", "--force"}} {
 		if _, parseErr := parseCommand(arguments); parseErr == nil {
 			t.Fatalf("retired migration command was accepted: %v", arguments)
 		}
@@ -171,8 +175,8 @@ func TestSnapshotPromotionUsesExactRequiredReadbackTargets(t *testing.T) {
 	}
 }
 
-// TestAuthorityMigrationHistoryPreservesPublishedBaseline requires the exact ten-file ordered forward history and the fixed SHA-256 of the published baseline and additive delivered-status successor. It catches byte drift without applying, rolling back or editing migrations.
-// TestAuthorityMigrationHistoryPreservesPublishedBaseline требует точную упорядоченную историю десяти прямых файлов и фиксированный SHA-256 опубликованной исходной миграции и additive delivered-status successor. Изменение байтов обнаруживается без применения, отката или редактирования миграций.
+// TestAuthorityMigrationHistoryPreservesPublishedBaseline requires the exact eleven-file ordered forward history and the fixed SHA-256 of the published baseline and additive delivered-status successor. It catches byte drift without applying, rolling back or editing migrations.
+// TestAuthorityMigrationHistoryPreservesPublishedBaseline требует точную упорядоченную историю одиннадцати прямых файлов и фиксированный SHA-256 опубликованной исходной миграции и additive delivered-status successor. Изменение байтов обнаруживается без применения, отката или редактирования миграций.
 func TestAuthorityMigrationHistoryPreservesPublishedBaseline(t *testing.T) {
 	t.Parallel()
 
@@ -180,7 +184,7 @@ func TestAuthorityMigrationHistoryPreservesPublishedBaseline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list migrations: %v", err)
 	}
-	if len(entries) != 10 || entries[0] != baselineMigration || entries[1] != workloadBoundaryMigration || entries[2] != snapshotWorkloadSignerMigration || entries[3] != "migrations/20260908000100_authority_bounded_freshness.sql" || entries[4] != authorityRotationLifecycleMigration || entries[5] != authorityNormalRotationOperationMigration || entries[6] != authoritySnapshotPredecessorMigration || entries[7] != "migrations/20260912000100_authority_legacy_registry_provenance.sql" || entries[8] != "migrations/20260912000200_authority_legacy_proof_budget.sql" || entries[9] != authorityDistributeStatusMigration {
+	if len(entries) != 11 || entries[0] != baselineMigration || entries[1] != workloadBoundaryMigration || entries[2] != snapshotWorkloadSignerMigration || entries[3] != "migrations/20260908000100_authority_bounded_freshness.sql" || entries[4] != authorityRotationLifecycleMigration || entries[5] != authorityNormalRotationOperationMigration || entries[6] != authoritySnapshotPredecessorMigration || entries[7] != "migrations/20260912000100_authority_legacy_registry_provenance.sql" || entries[8] != "migrations/20260912000200_authority_legacy_proof_budget.sql" || entries[9] != authorityDistributeStatusMigration || entries[10] != "migrations/20261115000200_artifact_retention_issuer.sql" {
 		t.Fatalf("unexpected forward migration set: %v", entries)
 	}
 	content, err := os.ReadFile(baselineMigration)

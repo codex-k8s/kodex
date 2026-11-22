@@ -1,12 +1,19 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, useId } from "vue";
+import { computed, onBeforeUnmount, onMounted, useId } from "vue";
 import { useI18n } from "vue-i18n";
 import { KeyRound, RefreshCw, Search } from "@lucide/vue";
 import {
   personalConnectionAllows,
   usePersonalConnections,
 } from "../personal-connections";
+import { personalCredentialDelivery } from "../credential-delivery";
+import SSHIdentitySetupPanel from "./SSHIdentitySetupPanel.vue";
+import { personalSSHSetupContext } from "../ssh-identity-setup-context";
 import GitHubRepositoryScopeSelector from "./GitHubRepositoryScopeSelector.vue";
+import { usesMultilineSSHCredential } from "../credential-input";
+import KubernetesResourceMaterialPanel from "./KubernetesResourceMaterialPanel.vue";
+import KubernetesIdentitySetupPanel from "./KubernetesIdentitySetupPanel.vue";
+import { isPersonalKubernetesSetup } from "../kubernetes-identity-setup-api";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 
 const { t } = useI18n();
@@ -25,6 +32,12 @@ const {
   success,
   unavailable,
 } = model;
+const entries = computed(() =>
+  items.value.map((connection) => ({
+    connection,
+    sshContext: personalSSHSetupContext(connection),
+  })),
+);
 onMounted(() => {
   window.addEventListener("pagehide", model.suspend);
   void model.load();
@@ -84,7 +97,7 @@ onBeforeUnmount(() => window.removeEventListener("pagehide", model.suspend));
     </p>
 
     <article
-      v-for="connection in items"
+      v-for="{ connection, sshContext } in entries"
       :key="connection.connectionRef"
       class="card personal-connection"
       :data-connection-ref="connection.connectionRef"
@@ -102,6 +115,21 @@ onBeforeUnmount(() => window.removeEventListener("pagehide", model.suspend));
       </p>
       <p v-if="!connection.available || !connection.enabled" class="muted">
         {{ t("personalConnections.unavailable") }}
+      </p>
+      <p
+        v-if="!personalCredentialDelivery(connection)"
+        class="muted"
+        role="status"
+      >
+        {{ t("personalConnections.metadataUnknown") }}
+      </p>
+      <p
+        v-else-if="
+          personalCredentialDelivery(connection)?.kind === 'BROKER_IDENTITY'
+        "
+        class="muted"
+      >
+        {{ t("personalConnections.brokerManaged") }}
       </p>
       <template v-if="connection.credential">
         <p v-if="connection.credential.expiresAt">
@@ -129,6 +157,12 @@ onBeforeUnmount(() => window.removeEventListener("pagehide", model.suspend));
           }}
         </p>
       </template>
+      <SSHIdentitySetupPanel
+        v-if="sshContext"
+        :context="sshContext"
+        :disabled="!!busyRef || loading || requiresRefresh || unavailable"
+        @changed="model.load()"
+      />
       <GitHubRepositoryScopeSelector
         v-if="
           connection.definitionKey === 'github' &&
@@ -139,6 +173,44 @@ onBeforeUnmount(() => window.removeEventListener("pagehide", model.suspend));
         "
         :connection="connection"
         @changed="model.load()"
+      />
+      <KubernetesIdentitySetupPanel
+        v-if="isPersonalKubernetesSetup(connection)"
+        :context="{
+          connectionRef: connection.connectionRef,
+          connectionVersion: connection.connectionVersion,
+          expectedVersion: connection.credential?.version ?? 0,
+          requirements: connection.kubernetesSetupRequirements,
+          policy: connection.policy,
+          available: connection.available,
+          enabled: connection.enabled,
+        }"
+        :disabled="
+          !!busyRef ||
+          loading ||
+          requiresRefresh ||
+          unavailable ||
+          connection.credential?.state === 'CHECKING'
+        "
+        @changed="model.load()"
+      />
+      <KubernetesResourceMaterialPanel
+        v-if="isPersonalKubernetesSetup(connection)"
+        :context="{
+          connectionRef: connection.connectionRef,
+          connectionVersion: connection.connectionVersion,
+          expectedVersion: connection.credential?.version ?? 0,
+          policy: connection.policy,
+          available: connection.available,
+          enabled: connection.enabled,
+        }"
+        :disabled="
+          !!busyRef ||
+          loading ||
+          requiresRefresh ||
+          unavailable ||
+          connection.credential?.state === 'CHECKING'
+        "
       />
       <p class="muted">{{ t("personalConnections.permissionsHelp") }}</p>
       <p
@@ -218,8 +290,27 @@ onBeforeUnmount(() => window.removeEventListener("pagehide", model.suspend));
         class="personal-editor"
         @submit.prevent="model.execute(connection.connectionRef, 'SAVE')"
       >
-        <label :for="`${prefix}-key`">{{ t("personalConnections.key") }}</label>
+        <label :for="`${prefix}-key`">{{
+          t(
+            usesMultilineSSHCredential(connection.definitionKey)
+              ? "integrations.sshPrivateKeyValue"
+              : "personalConnections.key",
+          )
+        }}</label>
+        <textarea
+          v-if="usesMultilineSSHCredential(connection.definitionKey)"
+          :id="`${prefix}-key`"
+          v-model="credentialValue"
+          name="personal-integration-key"
+          rows="7"
+          autocomplete="off"
+          maxlength="16384"
+          autocapitalize="none"
+          spellcheck="false"
+          required
+        />
         <input
+          v-else
           :id="`${prefix}-key`"
           v-model="credentialValue"
           name="personal-integration-key"
@@ -229,7 +320,15 @@ onBeforeUnmount(() => window.removeEventListener("pagehide", model.suspend));
           spellcheck="false"
           required
         />
-        <p class="muted">{{ t("personalConnections.keyHelp") }}</p>
+        <p class="muted">
+          {{
+            t(
+              usesMultilineSSHCredential(connection.definitionKey)
+                ? "integrations.sshPrivateKeyHelp"
+                : "personalConnections.keyHelp",
+            )
+          }}
+        </p>
         <div class="personal-actions">
           <button
             class="button button--primary"

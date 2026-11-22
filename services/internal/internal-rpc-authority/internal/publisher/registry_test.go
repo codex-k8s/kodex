@@ -4,16 +4,17 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"testing"
 )
 
-// TestCanonicalDeliveryRegistriesLoad checks exact107 and frozen106 membership from read-only files.
-// Current web profiles share the base source and retain separate full-render qualification.
-// TestCanonicalDeliveryRegistriesLoad проверяет точный состав107 и frozen106 из файлов только для чтения.
-// Текущие web-профили используют общий base source и отдельную квалификацию полного render.
+// TestCanonicalDeliveryRegistriesLoad verifies the exact startup readership and registry revision
+// for the current authority policy and the two preserved predecessor fixtures.
+// TestCanonicalDeliveryRegistriesLoad проверяет точный состав обязательных получателей и ревизию
+// реестра для текущей политики полномочий и двух сохранённых предшествующих конфигураций.
 func TestCanonicalDeliveryRegistriesLoad(t *testing.T) {
 	t.Parallel()
 
@@ -22,9 +23,7 @@ func TestCanonicalDeliveryRegistriesLoad(t *testing.T) {
 		t.Fatal("не удалось определить путь теста")
 	}
 	repositoryRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", "..", "..", "..", ".."))
-	// baseStartupTargets preserves all106 bindings;107 adds only the interaction issuer.
-	// baseStartupTargets сохраняет все bindings106;107 добавляет только interaction issuer.
-	baseStartupTargets := []string{
+	startup106 := []string{
 		"role-image-builder.authorization-issuer",
 		"automation-scheduler.authorization-issuer",
 		"secret-broker.authorization-issuer",
@@ -40,16 +39,21 @@ func TestCanonicalDeliveryRegistriesLoad(t *testing.T) {
 		"stt-tts-service.authorization-verifier",
 		"email-bridge.authorization-issuer",
 	}
+	startup107 := slices.Concat(startup106, []string{"interaction-gateway.authorization-issuer"})
+	startup110 := slices.Concat(startup107, []string{"artifact-retention.authorization-issuer"})
 	for _, testCase := range []struct {
 		relative             string
+		wantSourceRevision   uint64
 		wantStartupReadbacks int
 		wantRegistered       int
 		requiredTargets      []string
 	}{
-		{relative: "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml", wantStartupReadbacks: 15, wantRegistered: 17,
-			requiredTargets: append(append([]string(nil), baseStartupTargets...), "interaction-gateway.authorization-issuer")},
-		{relative: "tools/release/fixtures/authority106-key-delivery-targets.yaml", wantStartupReadbacks: 14, wantRegistered: 16,
-			requiredTargets: baseStartupTargets},
+		{relative: "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml", wantSourceRevision: 9,
+			wantStartupReadbacks: 16, wantRegistered: 18, requiredTargets: startup110},
+		{relative: "tools/release/fixtures/authority107-key-delivery-targets.yaml", wantSourceRevision: 8,
+			wantStartupReadbacks: 15, wantRegistered: 17, requiredTargets: startup107},
+		{relative: "tools/release/fixtures/authority106-key-delivery-targets.yaml", wantSourceRevision: 7,
+			wantStartupReadbacks: 14, wantRegistered: 16, requiredTargets: startup106},
 	} {
 		source, err := os.ReadFile(filepath.Join(repositoryRoot, testCase.relative))
 		if err != nil {
@@ -62,6 +66,9 @@ func TestCanonicalDeliveryRegistriesLoad(t *testing.T) {
 		registry, err := LoadRegistry(projected)
 		if err != nil {
 			t.Fatalf("реестр %s не прошёл runtime-валидацию: %v", testCase.relative, err)
+		}
+		if registry.SourceRevision != testCase.wantSourceRevision {
+			t.Fatalf("registry %s has source revision %d, expected %d", testCase.relative, registry.SourceRevision, testCase.wantSourceRevision)
 		}
 		if len(registry.Targets) != testCase.wantRegistered {
 			t.Fatalf("registry %s contains %d registered targets, expected %d", testCase.relative, len(registry.Targets), testCase.wantRegistered)

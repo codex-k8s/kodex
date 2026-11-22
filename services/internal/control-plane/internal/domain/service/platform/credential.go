@@ -80,7 +80,8 @@ func (service *Service) ConfigureIntegrationCredential(
 	if connection.Version != *mutation.ExpectedVersion {
 		return entity.IntegrationConnection{}, errs.ErrVersionMismatch
 	}
-	if connection.CredentialSecretKey == "" || !containsString(connection.NextActions, "CONFIGURE_CREDENTIAL") {
+	if connection.CredentialDelivery.Kind != integrationpackage.CredentialDeliveryToken || connection.CredentialDelivery.BrokerPurpose != "" ||
+		connection.CredentialSecretKey == "" || !containsString(connection.NextActions, "CONFIGURE_CREDENTIAL") {
 		return entity.IntegrationConnection{}, errs.ErrForbidden
 	}
 	definitions, err := integrationpackage.LoadShipped()

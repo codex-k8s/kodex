@@ -5,6 +5,7 @@ from pathlib import Path
 import tempfile
 import subprocess
 import sys
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -77,8 +78,8 @@ class ImageUpgradeTests(unittest.TestCase):
                         expected[index] = script
                 self.assertEqual(prepared[:-1], expected)
 
-    def prepared(self):
-        old, target, before, after, profile = fixture(20261108000100, 20261108000100)
+    def prepared(self, version=20261108000100):
+        old, target, before, after, profile = fixture(version, version)
         profile.update(schema=upgrade.IMAGE_SCHEMA, upgrade_kind=upgrade.IMAGE_KIND)
         state = MaterializerState(old)
         state.current[materializer.JOB]['status']['conditions'] = [{'type':'Complete','status':'True'}]
@@ -388,6 +389,57 @@ class ImageUpgradeTests(unittest.TestCase):
         with self.assertRaises(Rejected): upgrade.capture(state, prepared, old, receipt, 'e' * 64, image_render_inputs=(before, after))
         self.assertEqual(state.calls, [])
 
+    def test_composed_051_capture_and_apply_use_the_release_sql_and_exact_verifier(self):
+        version = upgrade.WORKFLOW_FILE_PROVENANCE_SCHEMA
+        old, _, before, after, profile, state, receipt = self.prepared(version)
+        state.kubeconfig = Path('/operator.example.invalid/kubeconfig')
+        directory = Path(upgrade.__file__).resolve().parent.parent / 'release'
+        query = (directory / 'workflow-file-provenance-backup-migration.sql').read_bytes()
+        composed_digest = '31d4205868c2e96b508f8c1ce3572a55477407580486053a23c16044227d80ad'
+        proof = {'profile': 'WORKFLOW_FILE_PROVENANCE_BACKUP_051', 'database': 'control_plane',
+                 'readOnly': 'on', 'gooseVersion': version, 'serverVersionNum': 180003,
+                 'backupQualification': 'CANONICAL_BACKUP', 'publicSequenceSafe': True, 'historyMatches': True,
+                 'schemaMatches': True, 'artifactPredecessorApplied': True,
+                 'schemaCatalog': {'catalogDigest': composed_digest}}
+        run = subprocess.run
+
+        def fake_kubectl(args, **kwargs):
+            if args[0] == 'node':
+                return run(args, **kwargs)
+            self.assertEqual(args, ['kubectl', '--kubeconfig', str(state.kubeconfig), '--context', state.context,
+                                    '--request-timeout=15s', '-n', 'kodex-system', 'exec', '-i',
+                                    'kodex-postgresql-0', '--', 'psql', '-XqAt', '-U', 'postgres', '-d',
+                                    'control_plane', '-v', 'ON_ERROR_STOP=1'])
+            self.assertEqual(kwargs['input'], query)
+            return SimpleNamespace(returncode=0, stdout=json.dumps(proof).encode())
+
+        prepared = upgrade.prepare(before, after, profile)
+        self.assertEqual(completion.desired_jobs(prepared), completion.desired_jobs(old))
+        with patch.object(completion, 'verify_schemas'), patch.object(upgrade, 'verify_schemas'), \
+                patch.object(upgrade.subprocess, 'run', side_effect=fake_kubectl):
+            result = upgrade.capture(state, prepared, old, receipt, 'e' * 64, image_render_inputs=(before, after))
+            self.assertEqual(result['jobs'], receipt['jobs'])
+            self.assertEqual(upgrade.verify_apply(state, prepared, result)['status'], 'SAME_SCHEMA_UPGRADE_APPLY_VERIFIED')
+
+            for change in ({'readOnly': 'off'}, {'backupQualification': 'CUSTOM_BACKUP'},
+                           {'gooseVersion': version - 100}, {'schemaMatches': False},
+                           {'schemaCatalog': {'catalogDigest': '0' * 64}},
+                           {'artifactPredecessorApplied': False,
+                            'schemaCatalog': {'catalogDigest': 'f5116ee01372580ef4b06106afa3cdbb1a79c3f424740711d281aaf8879e4788'}}):
+                with self.subTest(change=change), patch.dict(proof, change), \
+                        self.assertRaisesRegex(Rejected, 'UPGRADE_SCHEMA_CATALOG_REJECTED'):
+                    upgrade.verify_apply(state, prepared, result)
+
+    def test_051_profile_cannot_select_plain_catalog_or_forward_migration(self):
+        _, _, _, _, profile, _, _ = self.prepared(upgrade.WORKFLOW_FILE_PROVENANCE_SCHEMA)
+        with self.assertRaisesRegex(Rejected, 'UPGRADE_SCHEMA_PATH_REJECTED'):
+            upgrade.validate({**profile, 'schema_profile': 'plain'})
+        forward = {k: v for k, v in profile.items() if k != 'upgrade_kind'}
+        forward['schema'] = upgrade.SCHEMA
+        forward['from_schema_heads'] = {**profile['from_schema_heads'], 'control-plane': 20261121000100}
+        with self.assertRaisesRegex(Rejected, 'UPGRADE_SCHEMA_PATH_REJECTED'):
+            upgrade.validate(forward)
+
     def test_new_origin_does_not_accept_forward_receipt_or_fabricated_migration_evidence(self):
         old, _, before, after, profile, state, receipt = self.prepared()
         prepared = upgrade.prepare(before, after, profile)
@@ -421,6 +473,10 @@ class ImageUpgradeTests(unittest.TestCase):
         for _ in range(2):
             with patch.object(completion, 'verify_schemas'), patch.object(upgrade, 'schema_proof', return_value='f' * 64):
                 upgrade.verify_apply(state, second, final)
+        with patch.object(completion, 'verify_schemas'), patch.object(upgrade, 'schema_proof') as proof, \
+                self.assertRaisesRegex(Rejected, 'UPGRADE_PREPARED_RENDER_DRIFT'):
+            upgrade.verify_apply(state, second, first_receipt)
+        proof.assert_not_called()
 
 
 if __name__ == '__main__': unittest.main()

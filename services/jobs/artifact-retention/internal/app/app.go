@@ -12,11 +12,16 @@ import (
 	"strings"
 	"time"
 
+	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	"github.com/codex-k8s/kodex/libs/go/httpserver"
+	"github.com/codex-k8s/kodex/libs/go/objectstorage"
 	"github.com/codex-k8s/kodex/libs/go/objectstorage/s3store"
 	sharedobservability "github.com/codex-k8s/kodex/libs/go/observability"
 	"github.com/codex-k8s/kodex/libs/go/securefile"
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
+	"github.com/codex-k8s/kodex/services/jobs/artifact-retention/internal/capture"
+	controlowner "github.com/codex-k8s/kodex/services/jobs/artifact-retention/internal/clients/controlplane"
 	"github.com/codex-k8s/kodex/services/jobs/artifact-retention/internal/prepared"
 	retentionpostgres "github.com/codex-k8s/kodex/services/jobs/artifact-retention/internal/repository/postgres"
 	"github.com/codex-k8s/kodex/services/jobs/artifact-retention/internal/retention"
@@ -26,6 +31,15 @@ import (
 // maximumSecretBytes caps protected credential and CA files before parsing.
 // RU: maximumSecretBytes ограничивает защищённые файлы реквизитов и CA до разбора.
 const maximumSecretBytes = 16 << 10
+
+const (
+	// captureIssuerUID pins the actual shared issuer sidecar's Unix peer identity.
+	// captureIssuerUID закрепляет actual Unix peer identity общего issuer sidecar.
+	captureIssuerUID = 29001
+	// captureIssuerGID pins the sidecar's projected socket group from the canonical component.
+	// captureIssuerGID закрепляет projected socket group sidecar из canonical component.
+	captureIssuerGID = 29000
+)
 
 // Run starts telemetry, verifies PostgreSQL and object storage, then owns workers and ordered shutdown.
 // RU: Run запускает telemetry, проверяет PostgreSQL и объектное хранилище, затем владеет workers и порядком остановки.
@@ -60,7 +74,33 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		return errors.New("artifact-retention object storage startup barrier failed")
 	}
 	preparedRepository := retentionpostgres.New(pool)
+	if deleter, ok := any(objects).(objectstorage.SingleAttemptDeleter); !ok || deleter.CheckDeleteOnce(startup) != nil {
+		pool.Close()
+		return errors.New("artifact-retention single-attempt deletion is unavailable")
+	}
+	if err := preparedRepository.CheckManual(startup); err != nil {
+		pool.Close()
+		return err
+	}
 	if err := preparedRepository.CheckPrepared(startup); err != nil {
+		pool.Close()
+		return err
+	}
+	control, err := controlplaneclient.Dial(startup, controlplaneclient.Config{
+		RPCProfile:     config.RPCProfile,
+		CallerWorkload: serviceName, Target: config.ControlPlaneTarget, TLSServerName: config.ControlPlaneTLSServerName,
+		CAFile: config.ControlPlaneCAFile, ClientCertificateFile: config.ControlPlaneCertificateFile,
+		ClientPrivateKeyFile: config.ControlPlanePrivateKeyFile, ApplicationGrantFile: config.ApplicationGrantFile,
+		ExpectedIssuerUID: captureIssuerUID, ExpectedIssuerGID: captureIssuerGID, DialTimeout: 5 * time.Second,
+		Operations: controlplaneclient.ArtifactRetentionCaptureOperations(),
+	})
+	if err != nil {
+		pool.Close()
+		return err
+	}
+	defer func() { resultErr = errors.Join(resultErr, control.Close()) }()
+	captures := capture.NewProcessor(preparedRepository, controlowner.NewCapture(cp.NewManagedKubernetesOwnerServiceClient(control.ManagedKubernetesCaptureConnection())))
+	if err := captures.Check(startup, config.InstanceID); err != nil {
 		pool.Close()
 		return err
 	}
@@ -80,9 +120,11 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	workers := serviceruntime.StartWorkers(
 		lifecycle,
 		technical.Worker(),
-		monitorReadiness(pool, objects, readiness, metrics, logger, config),
+		monitorReadiness(pool, objects, readiness, metrics, logger, config, captures),
 		runRetentionLoop(processor, retentionMetrics, logger, config),
 		runPreparedLoop(prepared.NewProcessor(preparedRepository, objects), logger, config),
+		runPreparedLoop(prepared.NewProcessor(retentionpostgres.NewKubernetesCleanup(preparedRepository), objects), logger, config),
+		runCaptureLoop(captures, retentionMetrics, logger, config),
 	)
 	err = workers.Wait(context.WithoutCancel(lifecycle))
 	readiness.Set(false, "stopping")
@@ -163,11 +205,11 @@ type dependencyChecker interface {
 	Check(context.Context) error
 }
 
-// monitorReadiness periodically checks PostgreSQL, object storage and prepared statements
+// monitorReadiness periodically checks PostgreSQL, object storage, prepared statements and the protected capture producer
 // before publishing a local readiness snapshot and bounded availability metrics.
-// RU: monitorReadiness периодически проверяет PostgreSQL, объектное хранилище и prepared statements
+// RU: monitorReadiness периодически проверяет PostgreSQL, объектное хранилище, prepared statements и защищённый capture producer
 // перед публикацией локального снимка готовности и ограниченных метрик доступности.
-func monitorReadiness(pool *pgxpool.Pool, objects dependencyChecker, readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics, logger *slog.Logger, config Config) serviceruntime.Worker {
+func monitorReadiness(pool *pgxpool.Pool, objects dependencyChecker, readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics, logger *slog.Logger, config Config, captures *capture.Processor) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		ticker := time.NewTicker(config.ReadinessInterval)
 		defer ticker.Stop()
@@ -179,6 +221,12 @@ func monitorReadiness(pool *pgxpool.Pool, objects dependencyChecker, readiness *
 			}
 			if err == nil {
 				err = retentionpostgres.New(pool).CheckPrepared(check)
+			}
+			if err == nil {
+				err = retentionpostgres.New(pool).CheckManual(check)
+			}
+			if err == nil {
+				err = captures.Check(check, config.InstanceID)
 			}
 			cancel()
 			if err == nil {

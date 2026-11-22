@@ -19,7 +19,20 @@ command -v docker >/dev/null 2>&1 || fail 'docker is required'
 command -v pg_isready >/dev/null 2>&1 || fail 'pg_isready is required'
 command -v psql >/dev/null 2>&1 || fail 'psql is required'
 
-docker run --rm -d --name "$container_name" \
+storage_arguments=()
+case "${KODEX_TEST_POSTGRES_STORAGE:-disk}" in
+  disk) ;;
+  ram)
+    storage_arguments=(--pull never --read-only --memory 1073741824 --memory-swap 1073741824
+      --cpus 1 --pids-limit 128 --log-driver none
+      --tmpfs '/var/lib/postgresql:rw,noexec,nosuid,nodev,size=536870912,mode=0700,uid=70,gid=70'
+      --tmpfs '/var/run/postgresql:rw,noexec,nosuid,nodev,size=16777216,mode=0775'
+      --tmpfs '/tmp:rw,noexec,nosuid,nodev,size=16777216,mode=1777')
+    ;;
+  *) fail 'invalid disposable PostgreSQL storage mode' ;;
+esac
+
+docker run --rm -d --name "$container_name" "${storage_arguments[@]}" \
   -e POSTGRES_HOST_AUTH_METHOD=trust \
   -p 127.0.0.1::5432 \
   docker.io/library/postgres:18.3-alpine3.23@sha256:54451ecb8ab38c24c3ec123f2fd501303a3a1856a5c66e98cecf2460d5e1e9d7 \
@@ -70,7 +83,7 @@ SELECT
            AND procedure.proname = 'publisher_append_snapshot_history'
            AND procedure.pronargs = 11
       )
-  AND (SELECT count(*) = 14
+  AND (SELECT count(*) = 15
          FROM pg_catalog.pg_roles
         WHERE rolname IN (
           'ira_restore_controller_g1',
@@ -86,6 +99,7 @@ SELECT
           'ira_integration_gateway_issuer_g1',
           'ira_interaction_gateway_issuer_g1',
           'ira_email_bridge_issuer_g1',
+          'ira_artifact_retention_issuer_g1',
           'ira_runtime_controller_issuer_g1'
         ) AND rolcanlogin)
   AND (SELECT count(*) = 2
@@ -132,13 +146,54 @@ SQL
 )
 [[ "$assertion" == "t" ]] || fail 'fresh authority baseline readback rejected'
 
-for principal in ira_email_bridge_issuer_g1 ira_interaction_gateway_issuer_g1; do
+# Повторяем команды активации в том же одноразовом PostgreSQL, с тем же
+# локальным сокетом и psql, что использует адресная поставка.
+issuer_psql=(docker exec -i "$container_name" env -i PATH=/usr/local/bin:/usr/bin:/bin
+  psql -XqAt --host=/var/run/postgresql --port=5432 --username=postgres
+  --dbname=internal_rpc_authority --no-password -v ON_ERROR_STOP=1)
+issuer_identity=$("${issuer_psql[@]}" -c "SELECT system_identifier::text || ':' || oid::text FROM pg_catalog.pg_control_system(), pg_catalog.pg_database WHERE datname=current_database();")
+[[ "$issuer_identity" =~ ^([1-9][0-9]{0,19}):([1-9][0-9]{0,9})$ ]] || fail 'disposable authority backend identity is invalid'
+issuer_system_identifier=${BASH_REMATCH[1]}
+issuer_database_oid=${BASH_REMATCH[2]}
+issuer_guard=$(<"$repository_root/tools/release/artifact-retention-issuer-login-precondition.sql")
+issuer_guard=${issuer_guard/@DATABASE_OID@/$issuer_database_oid}
+wrong_issuer_guard=${issuer_guard/@SYSTEM_IDENTIFIER@/0}
+issuer_guard=${issuer_guard/@SYSTEM_IDENTIFIER@/$issuer_system_identifier}
+issuer_status() {
+  "${issuer_psql[@]}" <"$repository_root/tools/release/artifact-retention-issuer-login-readback.sql"
+}
+issuer_before=$(issuer_status)
+[[ "$issuer_before" == '{"scram": false, "configured": false, "verifierSHA256": null}' ]] ||
+  fail 'disposable issuer already has credentials'
+if "${issuer_psql[@]}" -c "$wrong_issuer_guard" >/dev/null 2>&1; then
+  fail 'issuer login accepted the wrong backend'
+fi
+[[ "$(issuer_status)" == "$issuer_before" ]] || fail 'wrong backend attempt modified the issuer'
+issuer_fixture_password=$(od -An -N32 -tx1 /dev/urandom | tr -d '[:space:]')
+[[ "$issuer_fixture_password" =~ ^[a-f0-9]{64}$ ]] || fail 'disposable issuer password generation failed'
+issuer_initialize() {
+  printf '%s\n%s\n' "$issuer_fixture_password" "$issuer_fixture_password" |
+    "${issuer_psql[@]}" -c "$issuer_guard" -c '\password ira_artifact_retention_issuer_g1' \
+      -c "COMMIT; SELECT 'ISSUER_LOGIN_INITIALIZED';"
+}
+issuer_result=$(issuer_initialize 2>/dev/null) || fail 'initial issuer login command failed'
+[[ "$issuer_result" == $'\nISSUER_LOGIN_INITIALIZED' ]] || fail 'initial issuer login acknowledgement rejected'
+issuer_after=$(issuer_status)
+[[ "$issuer_after" =~ ^\{\"scram\":\ true,\ \"configured\":\ true,\ \"verifierSHA256\":\ \"[a-f0-9]{64}\"\}$ ]] ||
+  fail 'initial issuer login has no SCRAM verifier'
+if issuer_initialize >/dev/null 2>&1; then
+  fail 'issuer password was initialized twice'
+fi
+unset issuer_fixture_password
+[[ "$(issuer_status)" == "$issuer_after" ]] || fail 'duplicate attempt changed the SCRAM verifier'
+
+for principal in ira_email_bridge_issuer_g1 ira_interaction_gateway_issuer_g1 ira_artifact_retention_issuer_g1; do
   issuer_dsn="postgresql://${principal}@127.0.0.1:${port}/internal_rpc_authority?sslmode=disable"
   issuer_assertion=$(psql "$issuer_dsn" --no-password --set ON_ERROR_STOP=1 \
-    --tuples-only --no-align --quiet <<'SQL'
+    --tuples-only --no-align --quiet --set principal="$principal" <<'SQL'
 SET ROLE internal_rpc_authority_issuer;
 SELECT current_user = 'internal_rpc_authority_issuer'
-  AND session_user IN ('ira_email_bridge_issuer_g1', 'ira_interaction_gateway_issuer_g1')
+  AND session_user = :'principal'
   AND (SELECT rolcanlogin AND NOT rolsuper AND NOT rolcreatedb AND NOT rolcreaterole
        AND NOT rolinherit AND NOT rolreplication AND NOT rolbypassrls
        FROM pg_roles WHERE rolname = session_user)

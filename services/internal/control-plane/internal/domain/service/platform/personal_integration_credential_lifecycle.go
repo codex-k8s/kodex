@@ -17,7 +17,8 @@ func ReplacePersonalIntegrationCredential(binding entity.PersonalIntegrationCred
 	if err := personalIntegrationCredentialMutationAuthority(binding, initiator, expectedVersion); err != nil {
 		return entity.PersonalIntegrationCredential{}, err
 	}
-	if !validStoredIntegrationCredential(&credential) || binding.Credential != nil &&
+	if binding.Kind != entity.IntegrationCredentialToken || binding.BrokerIdentity != nil || binding.BrokerPurpose != "" ||
+		!validStoredIntegrationCredential(&credential) || binding.Credential != nil &&
 		(credential.Ref == binding.Credential.Ref || credential.Revision <= binding.Credential.Revision) {
 		return entity.PersonalIntegrationCredential{}, errs.ErrInvalid
 	}
@@ -70,6 +71,9 @@ func personalIntegrationCredentialMutationAuthority(binding entity.PersonalInteg
 	if binding.Ref == "" || binding.ConnectionRef == "" || binding.Version < 1 || binding.Generation < 1 {
 		return errs.ErrUnavailable
 	}
+	if binding.Kind != entity.IntegrationCredentialToken && binding.Kind != entity.IntegrationCredentialBrokerIdentity {
+		return errs.ErrUnavailable
+	}
 	if binding.Version != expectedVersion {
 		return errs.ErrVersionMismatch
 	}
@@ -88,6 +92,7 @@ func personalIntegrationCredentialMutationAuthority(binding entity.PersonalInteg
 func clearPersonalIntegrationCredentialVerification(binding *entity.PersonalIntegrationCredential) {
 	binding.GitHubDiscovery = nil
 	binding.VerifiedCredentialRef = ""
+	binding.VerifiedBrokerIdentityRef = ""
 	binding.VerifiedDefinitionDigest = ""
 	binding.VerifiedConfigurationDigest = ""
 	binding.VerifiedCapabilities = nil

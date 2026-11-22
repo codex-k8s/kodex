@@ -25,6 +25,32 @@ import (
 // capability/grant enablement и retry/publication/binding действия проходят свежие проверки до
 // сохранения устаревших прав receipt replay.
 func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, current scope, input command.Command) error {
+	if input.Kind == command.CreatePersonalEmailMailboxConnection {
+		return authorizePersonalEmailConnectionTx(ctx, tx, current, input)
+	}
+	if input.Kind == command.ConfigureEmailCredential {
+		if input.Principal.CallerWorkload != "control-api-gateway" || input.Principal.Permission != "platform.command.email-mailbox.configure-credential" || current.authorityProjectID != "" {
+			return errs.ErrForbidden
+		}
+		payload, ok := input.Payload.(command.EmailCredentialInput)
+		if !ok || payload.OwnerGeneration < 1 {
+			return errs.ErrInvalid
+		}
+		if err := repository.requireAccess(ctx, tx, current, "integration.manage", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "INTEGRATION", ResourceRef: payload.ConnectionRef}); err != nil {
+			return errs.ErrNotFound
+		}
+		owner, err := requireEmailMailboxManagerTx(ctx, tx, current, payload.ConnectionRef)
+		if err != nil {
+			return err
+		}
+		if owner.state != "ACTIVE" || owner.owner.Generation != payload.OwnerGeneration {
+			return errs.ErrForbidden
+		}
+		return nil
+	}
+	if emailMailboxOwnershipCommand(input.Kind) {
+		return repository.authorizeEmailMailboxOwnershipTx(ctx, tx, current, input)
+	}
 	if input.Kind == command.ConfigureTelegramSubscription {
 		return repository.authorizeTelegramSubscriptionTx(ctx, tx, current, input)
 	}
@@ -599,6 +625,9 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 				return "", resolvedAccessTarget{}, errs.ErrNotFound
 			}
 		}
+		if _, err := requireEmailMailboxManagerTx(ctx, tx, current, connectionRef); err != nil {
+			return "", resolvedAccessTarget{}, err
+		}
 		return repository.resolveCommandTarget(ctx, tx, current, "integration.manage", "INTEGRATION", connectionRef, "")
 	case command.IntegrationGrantInput:
 		if payload.AgentRef != "" {
@@ -645,6 +674,9 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 				var connectionRef, mailboxRef string
 				if err := tx.QueryRow(ctx, queryEmailMailboxConfigurationOwner, current.organizationID, payload.ConfigurationRef).Scan(&connectionRef, &mailboxRef); err != nil {
 					return "", resolvedAccessTarget{}, errs.ErrNotFound
+				}
+				if _, err := requireEmailMailboxManagerTx(ctx, tx, current, connectionRef); err != nil {
+					return "", resolvedAccessTarget{}, err
 				}
 				return repository.resolveCommandTarget(ctx, tx, current, "integration.manage", "INTEGRATION", connectionRef, "")
 			}

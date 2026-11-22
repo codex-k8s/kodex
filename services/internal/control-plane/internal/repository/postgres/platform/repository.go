@@ -50,6 +50,7 @@ const (
 // Repository реализует хранение владельца через переданные pool и object store с настроенными
 // scanners, каталогами и credential descriptors; закрытие pool ему не принадлежит.
 type Repository struct {
+	sshIdentityUploadEndpoint       *value.SSHIdentityUploadEndpoint
 	interactionPublicOrigin         string
 	modelMeasurementObserver        func(runtimecontract.ModelMeasurement)
 	sshComposeSigningKey            []byte
@@ -73,6 +74,10 @@ type Repository struct {
 	roleImageBootstrapCopySelection func(entity.RoleImageRecipeInput) (entity.RoleEnvironmentSelection, error)
 	runtimeSecretNamespace          string
 	runtimeSecretStagingNamespace   string
+	kubernetesOperator              *value.KubernetesOperatorRegistry
+	kubernetesOperatorDigest        string
+	kubernetesCaptureSlots          chan struct{}
+	kubernetesCaptureSpool          *kubernetesCaptureSpoolDirectory
 }
 
 // ProviderCredentialConfig contains only immutable Kubernetes Secret identity, resource version
@@ -113,7 +118,7 @@ func New(pool *pgxpool.Pool, defaultRuntimeProvider, defaultRuntimeModel string,
 	}
 	return &Repository{
 		pool: pool, defaultRuntimeProvider: defaultRuntimeProvider, defaultRuntimeModel: defaultRuntimeModel,
-		objects: objects, integrationDefinitions: definitions, runtimeSecretNamespace: "kodex-runtime", runtimeSecretStagingNamespace: "kodex-secret-drafts",
+		objects: objects, integrationDefinitions: definitions, runtimeSecretNamespace: "kodex-runtime", runtimeSecretStagingNamespace: "kodex-secret-drafts", kubernetesCaptureSlots: make(chan struct{}, 1),
 	}, nil
 }
 

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {fingerprint} from './scoped-release.mjs';
 import {uid} from './fixtures/authority-catalog-synthetic.mjs';
 import {baselineFixture} from './fixtures/catalog-authority-baseline-synthetic.mjs';
-import {validateCatalogAuthorityBaseline,sameCatalogAuthorityBaseline} from './catalog-authority-baseline.mjs';
+import {validateCatalogAuthorityBaseline,sameCatalogAuthorityBaseline,catalogAuthorityBaselineIdentity} from './catalog-authority-baseline.mjs';
 
 test('routine baseline reads exact retired owner106 without old isolation or any write',t=>{
  const f=baselineFixture(t),proof=f.read();
@@ -12,7 +12,13 @@ test('routine baseline reads exact retired owner106 without old isolation or any
  assert.equal(f.calls.filter(call=>call.args.includes('exec')).length,4);
  assert.ok(f.calls.every(call=>!call.args.some(arg=>['create','patch','replace','delete'].includes(arg))));
  const fresh=f.read(proof);assert.ok(sameCatalogAuthorityBaseline(proof,fresh));
- f.owner.actualReadbackCount++;assert.ok(sameCatalogAuthorityBaseline(proof,f.read(proof)));
+ f.owner.actualReadbackCount++;
+ const moreReaders=f.read(proof);
+ assert.notEqual(proof.baselineSHA256,moreReaders.baselineSHA256);
+ assert.equal(catalogAuthorityBaselineIdentity(proof),catalogAuthorityBaselineIdentity(moreReaders));
+ for(const field of ['publisherUID','registryUID','rotationEvidenceSHA256','postgresBackend','scope']){
+  assert.notEqual(catalogAuthorityBaselineIdentity(proof),catalogAuthorityBaselineIdentity({...proof,[field]:null}));
+ }
 });
 
 test('baseline rejects unknown owner fields, wrong operation/snapshot, stale and incomplete required members',t=>{

@@ -490,3 +490,117 @@ SQL воспроизводится `python3 tools/release/generate-workspace-vol
 `make test-workspace-volume-predecessor-postgres`; ограниченный RAM-профиль
 описан в `GUIDE-MC-009`. Это не доказательство выполнения миграции на staging,
 готовности immutable-релиза или полного PDLC.
+
+
+## Возврат сервисов к подтверждённой ART 050
+
+Профиль `workflow-file-provenance-backup` связывает отказ с исходным планом
+и журналами миграции и backup. После создания плана команда `abort` с теми
+же `--context`, `--kubeconfig`, `--plan`, `--evidence` и `--confirm`
+проверяет полный каталог ART 050 и фактическое состояние обеих Job.
+У отсутствующей Job должны отсутствовать create intent и связанные Pods.
+Если CHECK завершился или DDL вернула штатный отказ, проверяются точные
+Job UID, spec, фактический образ и завершение процессов Pod. Running,
+потерянная Job после intent и неизвестное состояние оставляют возврат закрытым.
+
+Команда записывает запрет дальнейшего CREATE до запуска прежнего Control Plane.
+Затем подтверждает исходный образ, готовность его реплик и неизменный каталог
+ART 050. При потерянном ответе повтор использует readback того же плана. Если PATCH
+не дошёл до сервера, перед повтором нужен обычный записывающий `inspect`
+с той же версией подтверждённого ресурса.
+Статус `ABORTED_NOT_APPLIED` является условием для восстановления backup на
+050. Внешний API возвращается после проверки прежнего образа gateway за
+изолированным Service, восстановленного backup и свежей authority 110.
+Событие отказа и журнал сохраняются для аудита.
+
+После остановки backup, но до привязки журнала к миграции, оператор может
+выбрать `backup-controller-maintenance-cli.mjs plan --action resume
+--unbound-workflow-file-provenance true` с исходными `--stopped-plan` и
+`--stopped-evidence`. Резервное чтение возвращается после нового readback
+каталога ART 050 и проверки отсутствия DDL Job и её Pods. Под lock записывается
+`UNBOUND_NOT_APPLIED`. Старый stop journal после этого больше не допускает
+привязку миграции.
+
+Если stop ещё не создал `INTENT`, команда
+`backup-controller-maintenance-cli.mjs cancel-stop` с исходными `--plan`,
+`--evidence` и `--approved-plan-sha` проверяет исходный готовый backup,
+отсутствие DDL writer и точный каталог ART 050. Она записывает
+`UNBOUND_NOT_STARTED` под lock исходного журнала. Поздний `apply` по
+этому stop plan отклоняется. Команда не масштабирует Deployment.
+
+Для поставки 051 план закрытия API создаётся через
+`component-api-maintenance.mjs plan --action close --workflow-file-provenance true`.
+Он закрепляет UID и исходную конфигурацию API Service. Если шлюз уже закрыт,
+а Service ещё обслуживает исходный selector, восстановление создаётся через
+`plan --action cancel` с исходными `--closed-plan` и `--closed-evidence`.
+Перед `apply` проверяются каталог ART 050, отсутствие DDL Job и её Pods.
+Команда блокирует изоляцию Service по отменённому плану, затем возвращает
+исходный Deployment gateway. При потере ответа повтор сверяет UID и журнал.
+До возврата шлюза сохраняется проверка точного состояния исходного Service.
+
+Для возврата после изоляции Service создайте штатный backup stop plan
+до начала обслуживания. В план изоляции передайте
+`--workflow-file-backup-stop-plan` с его путём и
+`--workflow-file-isolation-evidence` с будущим путём журнала изоляции.
+Включите исходный Control Plane в адресный API target. План закрепит
+готовый Deployment Control Plane, точный stop plan и журнал изоляции.
+Миграция допускает только этот stop plan.
+
+Если миграция ещё не привязана, сначала отмените неначатую остановку
+backup либо выполните unbound resume уже остановленного backup. Затем
+за изолированным Service откройте исходный gateway штатным `open`.
+План возврата трафика создаётся через `component-api-traffic.mjs plan
+--action restore --migration-profile workflow-file-provenance-backup
+--workflow-file-unbound true` с SHA исходного исполнителя изоляции,
+журналами закрытия, изоляции, открытия и свежим baseline authority 110.
+`apply` повторяет readback и записывает запрет поздней миграции в исходный
+журнал изоляции до изменения Service. После привязки миграции применяется
+процедура `abort` выше.
+
+## Перенос закрытого Service с 049 на 051
+
+Этот маршрут продолжает `personal-integrations-backup`, завершённый на ART 050
+за закрытым Service. Сохраните исходные планы и журналы изоляции, внутреннего
+`OPEN`, миграции и ротации. `TERMINAL_ACCEPTED` исходного cohort и подтверждённая
+ART Job 050 должны присутствовать в исходной истории. Используйте новый план
+`stop` резервного контроллера с профилем `workflow-file-provenance-backup`.
+Дождитесь подтверждения остановки и отсутствия активных backup sessions.
+
+Создайте обычный новый `close` API Deployment с явным target, который включает
+тот же Service и API Deployment, а также прежний Control Plane. Выполните `close`
+и дождитесь положительного join. Селектор Service при этом остаётся прежним.
+Для переноса укажите путь к новому журналу изоляции и оба прежних журнала:
+
+```sh
+node tools/release/component-api-traffic.mjs plan \
+  --action isolate --migration-profile workflow-file-provenance-backup \
+  --adopt-personal-isolation true \
+  --context "$CONTEXT" --kubeconfig "$KUBECONFIG_FILE" --target "$API_TARGET" \
+  --plan "$NEXT_ISOLATION_PLAN" \
+  --closed-plan "$NEXT_CLOSE_PLAN" --closed-evidence "$NEXT_CLOSE_JOURNAL" \
+  --isolation-plan "$PERSONAL_ISOLATION_PLAN" --isolation-evidence "$PERSONAL_ISOLATION_JOURNAL" \
+  --api-open-plan "$PERSONAL_OPEN_PLAN" --api-open-evidence "$PERSONAL_OPEN_JOURNAL" \
+  --workflow-file-backup-stop-plan "$NEXT_BACKUP_STOP_PLAN" \
+  --workflow-file-isolation-evidence "$NEXT_ISOLATION_JOURNAL" \
+  --authority-plan "$ROTATION_PLAN" --authority-evidence "$ROTATION_JOURNAL"
+```
+
+При отдельном исходном исполнителе ротации действуют штатные проверки
+`--authority-executor-sha` и точного Git-дерева. `apply` принимает хеш плана,
+новый журнал, те же входы `--closed-*`, `--isolation-*`, `--api-open-*` и
+`--authority-*`, а также явные context и kubeconfig. Новый план закрепляет
+хеши старого плана изоляции, старого OPEN и миграции 049 и UID Job ART 050.
+Перед PATCH выполняются свежий readback RETIRED authority 110, полный каталог
+ART 050 и stop/join нового backup. Backup journal остаётся заблокирован для
+конкурирующего resume до завершения операции. PATCH меняет только аннотацию
+Service с CAS по UID/resourceVersion и проверкой прежнего spec. Селектор,
+порты и IP Service сохраняются.
+
+После подтверждённого `ISOLATED` используйте новый журнал для плана 051.
+Старый план открытия перестаёт совпадать с действующей изоляцией. Потерянный
+ответ разрешается `status` по новому плану и журналу. Публичный возврат
+трафика в этом маршруте требует успешного postcondition 051. При отказе
+миграции Service остаётся изолированным. Восстановление процессов за ним
+использует обычные подтверждённые журналы. Для обычной поставки, начавшейся
+с уже признанной обслуживающей ART 050, правила отката из предыдущего
+раздела продолжают действовать.

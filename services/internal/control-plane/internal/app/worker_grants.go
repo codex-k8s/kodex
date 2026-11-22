@@ -1,10 +1,10 @@
 package app
 
-// workerGrantTrustFilesFor builds the fixed workload-to-trust-file map and adds interaction/email
+// workerGrantTrustFilesFor builds the fixed workload-to-trust-file map and adds optional workload
 // entries only when configured, without loading keys or substituting one workload trust file for
 // another.
 // workerGrantTrustFilesFor строит фиксированную карту workload и trust file и добавляет
-// interaction и email лишь при настройке без загрузки ключей либо подмены trust file одной
+// опциональные нагрузки лишь при настройке без загрузки ключей либо подмены trust file одной
 // нагрузки другой.
 func workerGrantTrustFilesFor(config Config) map[string]string {
 	files := map[string]string{
@@ -20,6 +20,9 @@ func workerGrantTrustFilesFor(config Config) map[string]string {
 	}
 	if config.InteractionGrantTrustFile != "" {
 		files["interaction-gateway"] = config.InteractionGrantTrustFile
+	}
+	if config.ArtifactRetentionGrantTrustFile != "" {
+		files["artifact-retention"] = config.ArtifactRetentionGrantTrustFile
 	}
 	if config.EmailGrantTrustFile != "" {
 		files["email-bridge"] = config.EmailGrantTrustFile

@@ -81,7 +81,7 @@ def regular(path, maximum):
         return stream.read(maximum + 1)
 
 
-def resources(namespace, scope, image, binary_digest, template_fixtures):
+def resources(namespace, scope, image, binary_digest, template_fixtures, node_name=None):
     def metadata(name, namespaced=True):
         return {'name': name, **({'namespace': namespace} if namespaced else {}),
                 'labels': {'app.kubernetes.io/part-of': 'kodex', LABEL: scope}}
@@ -124,6 +124,14 @@ process.on('SIGTERM',()=>child.kill('SIGTERM'));child.on('error',()=>process.exi
              'env': [{'name': 'KODEX_TEST_NATIVE_POD', 'value': '1'}, {'name': 'LITELLM_LOCAL_MODEL_COST_MAP', 'value': 'True'},
                      {'name': 'LITELLM_LOG', 'value': 'INFO'}, {'name': 'PYTHONUNBUFFERED', 'value': '1'},
                      {'name': 'HOME', 'value': '/tmp'}]}]}}
+    if node_name:
+        # Планировщик сохраняет проверки ресурсов и taints. Имя закреплено
+        # в плане вместе с UID узла, где уже есть нужный образ runner.
+        pod['spec']['affinity'] = {'nodeAffinity': {
+            'requiredDuringSchedulingIgnoredDuringExecution': {'nodeSelectorTerms': [
+                {'matchFields': [{'key': 'metadata.name', 'operator': 'In', 'values': [node_name]}]}
+            ]}
+        }}
     return [
         {'apiVersion': 'v1', 'kind': 'Namespace', 'metadata': metadata(namespace, False)},
         {'apiVersion': 'networking.k8s.io/v1', 'kind': 'NetworkPolicy', 'metadata': metadata('isolation'),
@@ -154,6 +162,12 @@ def verify_target(client, plan):
     require(client.get('namespace', 'kube-system')['metadata']['uid'] == plan['clusterUID'])
     actual = json.loads(client.call(['get', 'nodes', '-o', 'json']))
     require(node_identities(actual['items']) == plan['nodes'])
+    require('nodeName' not in plan or plan['nodeName'] in plan['nodes'])
+
+
+def verify_pod_node(pod, plan):
+    if 'nodeName' in plan:
+        require(pod.get('spec', {}).get('nodeName') == plan['nodeName'])
 
 
 def verify_owned(client, plan, record):
@@ -205,6 +219,7 @@ def main():
     for key in ['context', 'cluster-uid']:
         parser.add_argument('--' + key, required=True)
     parser.add_argument('--runner-image')
+    parser.add_argument('--node')
     parser.add_argument('--plan-sha256')
     args = parser.parse_args()
     target_context(args.context)
@@ -219,6 +234,7 @@ def main():
         require(client.get('namespace', 'kube-system')['metadata']['uid'] == args.cluster_uid)
         nodes = json.loads(client.call(['get', 'nodes', '-o', 'json']))['items']
         identities = node_identities(nodes)
+        require(args.node is None or args.node in identities)
         state.mkdir(mode=0o700)
         binary_path = state / 'native.test'
         environment = build_environment(os.environ)
@@ -244,11 +260,14 @@ def main():
                 'nodes': identities, 'sourceSHA': source,
                 'scope': scope, 'namespace': namespace, 'binaryPath': str(binary_path), 'binarySHA256': sha(binary),
                 'templateFixturesSHA256': sha(template_fixtures),
-                'resources': resources(namespace, scope, args.runner_image, sha(binary), template_fixtures)}
+                'resources': resources(namespace, scope, args.runner_image, sha(binary), template_fixtures, args.node)}
+        if args.node is not None:
+            plan['nodeName'] = args.node
         raw = encoded(plan)
         (state / 'plan.json').write_bytes(raw)
         print(json.dumps({'status': 'PLAN_READY', 'sha256': sha(raw), 'namespace': namespace}))
         return
+    require(args.node is None)
     require(stat.S_IMODE(state.stat().st_mode) == 0o700 and state.stat().st_uid == os.getuid())
     raw = regular(state / 'plan.json', 1 << 20)
     require(sha(raw) == args.plan_sha256)
@@ -278,6 +297,7 @@ def main():
         else:
             capture(client, plan, state, journal)
             raise ValueError('NATIVE_CLUSTER_START_TIMEOUT')
+        verify_pod_node(pod, plan)
         upload = "const fs=require('fs'),c=require('crypto');let chunks=[],n=0;process.stdin.on('data',b=>{n+=b.length;if(n>67108864)process.exit(2);chunks.push(b)});process.stdin.on('end',()=>{let b=Buffer.concat(chunks);if(c.createHash('sha256').update(b).digest('hex')!==process.env.KODEX_TEST_BINARY_SHA256)process.exit(3);fs.writeFileSync('/tmp/native.next',b,{mode:320,flag:'wx'});fs.chmodSync('/tmp/native.next',365);fs.renameSync('/tmp/native.next','/tmp/native.test')});"
         client.call(['-n', plan['namespace'], 'exec', '-i', 'native', '-c', 'native', '--', 'node', '-e', upload], binary, timeout=60)
         journal['status'] = 'RUNNING'
@@ -296,6 +316,7 @@ def main():
         require({x['name']: x['image'] for x in pod['spec']['containers']} == exact)
         status = 'RUNNING' if terminal is None else 'FAIL'
         if terminal and terminal['exitCode'] == 0 and '\nPASS\n' in logs and '--- SKIP:' not in logs and len(statuses) == 3:
+            verify_pod_node(pod, plan)
             require(all(x.get('imageID', '').endswith('@' + exact[x['name']].split('@')[1]) for x in statuses))
             status = 'PASS'
         proof = {'status': status, 'sourceSHA': plan['sourceSHA'], 'binarySHA256': plan['binarySHA256'],

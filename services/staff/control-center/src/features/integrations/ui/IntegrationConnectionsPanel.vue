@@ -14,6 +14,7 @@ import {
 import { ref, useId } from "vue";
 import { useI18n } from "vue-i18n";
 
+import { sharedSSHSetupContext } from "../ssh-identity-setup-context";
 import { canConfigureCredential } from "@/features/integrations/connection-setup";
 import {
   connectionAllows,
@@ -27,6 +28,9 @@ import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 import EntityIcon from "@/shared/ui/EntityIcon.vue";
 import { useServerMessage } from "@/shared/ui/server-message";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import KubernetesResourceMaterialPanel from "./KubernetesResourceMaterialPanel.vue";
+import KubernetesIdentitySetupPanel from "./KubernetesIdentitySetupPanel.vue";
+import { readCredentialDelivery } from "../credential-delivery";
 import IntegrationCredentialPolicyControl from "./IntegrationCredentialPolicyControl.vue";
 
 const props = defineProps<{
@@ -72,6 +76,23 @@ function definition(
 }
 function needsBinding(connection: IntegrationConnection): boolean {
   return isUnboundOpenAPITemplate(connection, definition(connection));
+}
+function canPrepareKubernetesMaterial(
+  connection: IntegrationConnection,
+): boolean {
+  const delivery = readCredentialDelivery(
+    definition(connection)?.credentialDelivery,
+  );
+  const current = readCredentialDelivery(connection.credentialDelivery);
+  return (
+    definition(connection)?.available === true &&
+    current?.kind === "BROKER_IDENTITY" &&
+    current.brokerPurpose === "KUBERNETES_TARGET" &&
+    connection.credentialPolicy === "PROJECT_SHARED" &&
+    connectionAllows(connection, "UPDATE") &&
+    delivery?.kind === "BROKER_IDENTITY" &&
+    delivery.brokerPurpose === "KUBERNETES_TARGET"
+  );
 }
 function credentialLabel(connection: IntegrationConnection): string {
   if (needsBinding(connection))
@@ -197,6 +218,42 @@ function capabilityPreview(connection: IntegrationConnection): string {
                 :blocked="!!busyRef"
                 @changed="emit('policy-changed')"
               />
+              <details v-if="canPrepareKubernetesMaterial(connection)">
+                <summary>
+                  {{ t("kubernetesIdentitySetup.sharedTitle") }}
+                </summary>
+                <KubernetesIdentitySetupPanel
+                  :context="{
+                    connectionRef: connection.ref,
+                    connectionVersion: connection.version,
+                    expectedVersion: connection.version,
+                    policy: 'PROJECT_SHARED',
+                    requirements: connection.kubernetesSetupRequirements,
+                    available: true,
+                    enabled:
+                      connection.state !== 'DISABLED' &&
+                      connection.state !== 'DELETED',
+                  }"
+                  :disabled="!!busyRef || !!loading"
+                  @changed="emit('policy-changed')"
+                />
+              </details>
+              <details v-if="canPrepareKubernetesMaterial(connection)">
+                <summary>{{ t("kubernetesResourceMaterial.title") }}</summary>
+                <KubernetesResourceMaterialPanel
+                  :context="{
+                    connectionRef: connection.ref,
+                    connectionVersion: connection.version,
+                    expectedVersion: connection.version,
+                    policy: 'PROJECT_SHARED',
+                    available: true,
+                    enabled:
+                      connection.state !== 'DISABLED' &&
+                      connection.state !== 'DELETED',
+                  }"
+                  :disabled="!!busyRef || !!loading"
+                />
+              </details>
               <StatusBadge
                 :state="
                   connection.credentialsConfigured && !needsBinding(connection)
@@ -254,7 +311,12 @@ function capabilityPreview(connection: IntegrationConnection): string {
                 </button>
                 <button
                   v-if="
-                    canConfigureCredential(definition(connection), connection)
+                    canConfigureCredential(
+                      definition(connection),
+                      connection,
+                    ) ||
+                    (definition(connection)?.available === true &&
+                      !!sharedSSHSetupContext(connection))
                   "
                   class="icon-button"
                   type="button"

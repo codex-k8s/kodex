@@ -1,0 +1,2 @@
+-- name: kubernetes_operator__cancel_personal_tests :exec
+UPDATE control_plane.integration_personal_credential_tests test SET state='CANCELLED',outcome='CANCELLED',version=test.version+1,finished_at=clock_timestamp(),lease_ref=NULL,fence_digest=NULL,workload_instance=NULL,lease_expires_at=NULL FROM control_plane.integration_personal_credentials binding WHERE test.binding_id=binding.id AND test.organization_id=binding.organization_id AND binding.credential_kind='BROKER_IDENTITY' AND binding.broker_purpose='KUBERNETES_TARGET' AND test.state='DUE';

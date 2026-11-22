@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import KubernetesChildGatePanel from "@/features/workboard/components/KubernetesChildGatePanel.vue";
+import { validKubernetesChildGate } from "@/features/workboard/kubernetes-child-gate";
 import { useServerMessage } from "@/shared/ui/server-message";
 import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import {
@@ -446,6 +448,7 @@ function integrationRisk(gate: OwnerGate): string {
 }
 
 function decisionTitle(gate: OwnerGate): string {
+  if (gate.kubernetesChild) return t("kubernetesChildGate.title");
   if (!gate.integrationIntent) return serverMessage(gate.title);
   const risk = integrationRisk(gate);
   const key =
@@ -458,6 +461,7 @@ function decisionTitle(gate: OwnerGate): string {
 }
 
 function decisionQuestion(item: DecisionInboxItem): string {
+  if (item.gate.kubernetesChild) return t("kubernetesChildGate.question");
   if (!item.gate.integrationIntent)
     return item.hasQuestion
       ? serverMessage(item.gate.contextSummary)
@@ -570,6 +574,7 @@ async function decide(gate: OwnerGate): Promise<void> {
     decisionDrafts.value[gate.ref] ?? decisionActionLayout(gate).primary;
   if (
     !decision ||
+    !validKubernetesChildGate(gate) ||
     !gate.nextActions.includes("RESOLVE_GATE") ||
     !gate.allowedDecisions.includes(decision)
   )
@@ -583,7 +588,9 @@ async function decide(gate: OwnerGate): Promise<void> {
     )
   )
     return;
-  const selectedIntegrationConsent = integrationConsents.value[gate.ref];
+  const selectedIntegrationConsent = gate.kubernetesChild
+    ? undefined
+    : integrationConsents.value[gate.ref];
   const integrationApproval =
     decision === "APPROVE" && selectedIntegrationConsent
       ? { ...selectedIntegrationConsent }
@@ -1034,6 +1041,7 @@ const serverMessage = useServerMessage();
             :gate-version="selected.gate.version"
             @verified="setBundleVerified(selected.gate, $event)"
           />
+          <KubernetesChildGatePanel :gate="selected.gate" />
           <IntegrationIntentPreview
             v-if="selected.gate.integrationIntent"
             :intent="selected.gate.integrationIntent"

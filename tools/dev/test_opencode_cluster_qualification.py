@@ -41,7 +41,9 @@ class NativeQualificationSafetyTests(unittest.TestCase):
     def test_target_cluster_and_node_incarnations_are_both_required(self):
         plan = {'clusterUID': 'owned', 'nodes': {'worker-a': 'owned'}}
         native.verify_target(ClientFixture(), plan)
-        for changed in ({**plan, 'clusterUID': 'other'}, {**plan, 'nodes': {'worker-a': 'replacement'}}):
+        native.verify_target(ClientFixture(), {**plan, 'nodeName': 'worker-a'})
+        for changed in ({**plan, 'clusterUID': 'other'}, {**plan, 'nodes': {'worker-a': 'replacement'}},
+                        {**plan, 'nodeName': 'foreign'}):
             with self.assertRaises(ValueError):
                 native.verify_target(ClientFixture(), changed)
 
@@ -109,7 +111,8 @@ class NativeQualificationSafetyTests(unittest.TestCase):
             image = 'registry.example.invalid/team/runner@sha256:' + 'a' * 64
             argv = ['qualification', 'plan', '--kubectl', '/usr/bin/kubectl',
                     '--kubeconfig', '/tmp/fixture-kubeconfig', '--context', 'test-cluster',
-                    '--cluster-uid', 'owned', '--state', str(state), '--runner-image', image]
+                    '--cluster-uid', 'owned', '--state', str(state), '--runner-image', image,
+                    '--node', 'worker-a']
 
             def git(arguments, **kwargs):
                 value = 'a' * 40 + '\n' if arguments[1] == 'rev-parse' else ''
@@ -134,10 +137,25 @@ class NativeQualificationSafetyTests(unittest.TestCase):
             plan = json.loads((state / 'plan.json').read_text())
             self.assertEqual(plan['context'], 'test-cluster')
             self.assertEqual(plan['nodes'], {'worker-a': 'owned'})
+            self.assertEqual(plan['nodeName'], 'worker-a')
+            pod = plan['resources'][-1]
+            terms = pod['spec']['affinity']['nodeAffinity']['requiredDuringSchedulingIgnoredDuringExecution']['nodeSelectorTerms']
+            self.assertEqual(terms, [{'matchFields': [
+                {'key': 'metadata.name', 'operator': 'In', 'values': ['worker-a']}
+            ]}])
+            self.assertNotIn('nodeName', pod['spec'])
             self.assertEqual(plan['resources'][-1]['spec']['containers'][0]['image'], image)
             self.assertEqual([x['kind'] for x in plan['resources']],
                              ['Namespace', 'NetworkPolicy', 'ConfigMap', 'Pod'])
             self.assertFalse(plan['resources'][-1]['spec']['automountServiceAccountToken'])
+
+    def test_upload_and_successful_readback_require_assigned_node(self):
+        plan = {'nodeName': 'worker-a'}
+        native.verify_pod_node({'spec': {'nodeName': 'worker-a'}}, plan)
+        native.verify_pod_node({'spec': {'nodeName': 'worker-b'}}, {})
+        for pod in ({'spec': {}}, {'spec': {'nodeName': 'worker-b'}}):
+            with self.assertRaises(ValueError):
+                native.verify_pod_node(pod, plan)
 
     def test_unknown_namespaced_resource_blocks_namespace_deletion(self):
         objects = {'pods': 'owned native <none> <none>', 'serviceaccounts': 'auto default <none> <none>',

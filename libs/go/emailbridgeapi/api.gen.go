@@ -584,24 +584,27 @@ type Mailbox struct {
 	ConnectionId   string   `json:"connection_id"`
 
 	// CredentialGeneration Назначаемое producer поколение credential binding подключения; поколения отдельных descriptors независимы.
-	CredentialGeneration int64                  `json:"credential_generation"`
-	DraftsFolder         string                 `json:"drafts_folder,omitempty"`
-	Enabled              bool                   `json:"enabled"`
-	EnvelopeFrom         string                 `json:"envelope_from"`
-	Folder               string                 `json:"folder"`
-	HelloName            string                 `json:"hello_name"`
-	Id                   string                 `json:"id"`
-	Imap                 *Endpoint              `json:"imap,omitempty"`
-	Limits               Limits                 `json:"limits"`
-	Policies             []OperationPolicy      `json:"policies"`
-	Pop                  *Endpoint              `json:"pop,omitempty"`
-	ReceiveProtocol      MailboxReceiveProtocol `json:"receive_protocol"`
-	Recipients           []string               `json:"recipients"`
-	ReplyTo              string                 `json:"reply_to"`
-	Revision             int64                  `json:"revision"`
-	Sender               string                 `json:"sender"`
-	Smtp                 Endpoint               `json:"smtp"`
-	TenantId             string                 `json:"tenant_id"`
+	CredentialGeneration int64 `json:"credential_generation"`
+
+	// CredentialOwnerGeneration Назначаемое mailbox owner поколение владения credentials; отсутствие сохраняется только в исторической конфигурации и не разрешает новый effect.
+	CredentialOwnerGeneration int64                  `json:"credential_owner_generation,omitempty"`
+	DraftsFolder              string                 `json:"drafts_folder,omitempty"`
+	Enabled                   bool                   `json:"enabled"`
+	EnvelopeFrom              string                 `json:"envelope_from"`
+	Folder                    string                 `json:"folder"`
+	HelloName                 string                 `json:"hello_name"`
+	Id                        string                 `json:"id"`
+	Imap                      *Endpoint              `json:"imap,omitempty"`
+	Limits                    Limits                 `json:"limits"`
+	Policies                  []OperationPolicy      `json:"policies"`
+	Pop                       *Endpoint              `json:"pop,omitempty"`
+	ReceiveProtocol           MailboxReceiveProtocol `json:"receive_protocol"`
+	Recipients                []string               `json:"recipients"`
+	ReplyTo                   string                 `json:"reply_to"`
+	Revision                  int64                  `json:"revision"`
+	Sender                    string                 `json:"sender"`
+	Smtp                      Endpoint               `json:"smtp"`
+	TenantId                  string                 `json:"tenant_id"`
 }
 
 // MailboxReceiveProtocol defines model for Mailbox.ReceiveProtocol.

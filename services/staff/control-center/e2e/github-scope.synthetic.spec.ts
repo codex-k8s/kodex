@@ -18,6 +18,8 @@ test("собственный GitHub: две страницы discovery, точн
     version: 3,
     policy: "INITIATOR_REQUIRED",
     state: "READY",
+    credentialDelivery: { kind: "TOKEN" },
+    bindingGeneration: 1,
     credentialConfigured: true,
     verifiedCapabilityKeys: ["github.identity.read"],
     deniedCapabilityKeys: [],
@@ -30,6 +32,7 @@ test("собственный GitHub: две страницы discovery, точн
     policy: "INITIATOR_REQUIRED",
     enabled: true,
     available: true,
+    credentialDelivery: { kind: "TOKEN" },
     credential,
   };
   let pendingPage = 0;
@@ -207,6 +210,8 @@ test("исторический GitHub personal contract не показывае�
         version: 3,
         policy: "INITIATOR_REQUIRED",
         state: "READY",
+        credentialDelivery: { kind: "TOKEN" },
+        bindingGeneration: 1,
         credentialConfigured: true,
         verifiedCapabilityKeys: ["github.repository.metadata.read"],
         deniedCapabilityKeys: [],
@@ -219,6 +224,7 @@ test("исторический GitHub personal contract не показывае�
         policy: "INITIATOR_REQUIRED",
         enabled: true,
         available: true,
+        credentialDelivery: { kind: "TOKEN" },
         credential,
       };
       await route.fulfill({ json: { items: [connection] } });

@@ -14,6 +14,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/objectstorage"
 	"github.com/codex-k8s/kodex/libs/go/oidcverifier"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
 const (
@@ -59,6 +60,7 @@ type Config struct {
 	PostgresMaxConnections          int32         `env:"CONTROL_PLANE_POSTGRES_MAX_CONNECTIONS"`
 	ObjectStorageEndpoint           string        `env:"CONTROL_PLANE_OBJECT_STORAGE_ENDPOINT"`
 	ObjectStorageRegion             string        `env:"CONTROL_PLANE_OBJECT_STORAGE_REGION"`
+	KubernetesCaptureSpoolRoot      string        `env:"CONTROL_PLANE_KUBERNETES_CAPTURE_SPOOL_ROOT"`
 	ObjectStorageBucket             string        `env:"CONTROL_PLANE_OBJECT_STORAGE_BUCKET"`
 	SessionArchiveStorageBucket     string        `env:"CONTROL_PLANE_SESSION_ARCHIVE_STORAGE_BUCKET"`
 	ObjectStorageAccessKeyFile      string        `env:"CONTROL_PLANE_OBJECT_STORAGE_ACCESS_KEY_FILE"`
@@ -78,6 +80,8 @@ type Config struct {
 	DefaultRuntimeProvider          string        `env:"CONTROL_PLANE_DEFAULT_RUNTIME_PROVIDER"`
 	DefaultRuntimeModel             string        `env:"CONTROL_PLANE_DEFAULT_RUNTIME_MODEL"`
 	ModelProviderConfigurationFile  string        `env:"CONTROL_PLANE_MODEL_PROVIDER_CONFIGURATION_FILE"`
+	KubernetesOperatorRegistryFile  string        `env:"CONTROL_PLANE_KUBERNETES_OPERATOR_REGISTRY_FILE"`
+	KubernetesOperatorRegistryHash  string        `env:"CONTROL_PLANE_KUBERNETES_OPERATOR_REGISTRY_SHA256"`
 	ModelProviderDefaultModel       string        `env:"CONTROL_PLANE_MODEL_PROVIDER_DEFAULT_MODEL"`
 	DefaultProviderSecretName       string        `env:"CONTROL_PLANE_DEFAULT_PROVIDER_SECRET_NAME"`
 	DefaultProviderSecretUID        string        `env:"CONTROL_PLANE_DEFAULT_PROVIDER_SECRET_UID"`
@@ -85,6 +89,8 @@ type Config struct {
 	DefaultProviderCredentialSHA256 string        `env:"CONTROL_PLANE_DEFAULT_PROVIDER_CREDENTIAL_SHA256"`
 	IntegrationCredentialNamespace  string        `env:"CONTROL_PLANE_INTEGRATION_CREDENTIAL_NAMESPACE"`
 	IntegrationCredentialSecretName string        `env:"CONTROL_PLANE_INTEGRATION_CREDENTIAL_SECRET_NAME"`
+	SSHIdentityUploadOrigin         string        `env:"CONTROL_PLANE_SSH_IDENTITY_UPLOAD_ORIGIN"`
+	SSHIdentityUploadTLSServerName  string        `env:"CONTROL_PLANE_SSH_IDENTITY_UPLOAD_TLS_SERVER_NAME"`
 	RuntimeSecretNamespace          string        `env:"CONTROL_PLANE_RUNTIME_SECRET_NAMESPACE"`
 	RuntimeSecretStagingNamespace   string        `env:"CONTROL_PLANE_RUNTIME_SECRET_STAGING_NAMESPACE"`
 	KubernetesAPITimeout            time.Duration `env:"CONTROL_PLANE_KUBERNETES_API_TIMEOUT"`
@@ -104,6 +110,7 @@ type Config struct {
 	ProofSignerTrustFile            string        `env:"CONTROL_PLANE_AUTHORITY_PROOF_TRUST_FILE"`
 	AutomationGrantTrustFile        string        `env:"CONTROL_PLANE_AUTOMATION_GRANT_TRUST_FILE"`
 	SessionArchiveGrantTrustFile    string        `env:"CONTROL_PLANE_SESSION_ARCHIVE_GRANT_TRUST_FILE"`
+	ArtifactRetentionGrantTrustFile string        `env:"CONTROL_PLANE_ARTIFACT_RETENTION_GRANT_TRUST_FILE"`
 	IntegrationGrantTrustFile       string        `env:"CONTROL_PLANE_INTEGRATION_GRANT_TRUST_FILE"`
 	InteractionGrantTrustFile       string        `env:"CONTROL_PLANE_INTERACTION_GRANT_TRUST_FILE"`
 	EmailGrantTrustFile             string        `env:"CONTROL_PLANE_EMAIL_GRANT_TRUST_FILE"`
@@ -249,6 +256,13 @@ func loadConfig() (Config, error) {
 // validate проверяет фиксированные границы RPC и идентичности, синтаксис путей, настройки хранилища/OIDC и бюджеты сервиса.
 // В обычном профиле RPC также проверяется каталог сокета полномочий; остальные указанные файлы и удалённые узлы не опрашиваются.
 func (config Config) validate() error {
+	if config.KubernetesCaptureSpoolRoot != "" && (!filepath.IsAbs(config.KubernetesCaptureSpoolRoot) || filepath.Clean(config.KubernetesCaptureSpoolRoot) != config.KubernetesCaptureSpoolRoot) {
+		return errors.New("control-plane Kubernetes capture spool path is invalid")
+	}
+
+	if !validSSHIdentitySetupConfiguration(config) {
+		return value.ErrSSHIdentityUploadEndpointInvalid
+	}
 	mode, valid := oidcverifier.ParseAuthorityMode(config.OIDCAuthorityMode)
 	if !valid || mode == oidcverifier.PlatformManagedAuthorityMode &&
 		(!filepath.IsAbs(config.OIDCIdentityPolicyFile) || filepath.Clean(config.OIDCIdentityPolicyFile) != config.OIDCIdentityPolicyFile || strings.ContainsAny(config.OIDCIdentityPolicyFile, "\x00\r\n")) ||
@@ -280,6 +294,9 @@ func (config Config) validate() error {
 	if config.InteractionGrantTrustFile != "" && (!filepath.IsAbs(config.InteractionGrantTrustFile) || filepath.Clean(config.InteractionGrantTrustFile) != config.InteractionGrantTrustFile) {
 		return startupFailure(stageControlPlaneInteractionGrantTrustPathIsInvalid, nil)
 	}
+	if path := config.ArtifactRetentionGrantTrustFile; path != "" && (!filepath.IsAbs(path) || filepath.Clean(path) != path) {
+		return startupFailure(stageControlPlaneFilePathIsInvalid, nil)
+	}
 	if config.EmailGrantTrustFile != "" && (!filepath.IsAbs(config.EmailGrantTrustFile) || filepath.Clean(config.EmailGrantTrustFile) != config.EmailGrantTrustFile) {
 		return startupFailure(stageControlPlaneEmailGrantTrustPathIsInvalid, nil)
 	}
@@ -288,6 +305,9 @@ func (config Config) validate() error {
 	}
 	if !validModelProviderInput(config) {
 		return errors.New("model provider configuration input is invalid")
+	}
+	if !validKubernetesOperatorInput(config) {
+		return value.ErrKubernetesOperator
 	}
 	if config.PostgresTLSServerName == "" || net.ParseIP(config.PostgresTLSServerName) != nil ||
 		config.NATSTLSServerName == "" || net.ParseIP(config.NATSTLSServerName) != nil || config.NATSURL == "" ||

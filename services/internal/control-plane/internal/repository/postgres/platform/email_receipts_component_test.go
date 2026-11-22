@@ -2,7 +2,10 @@ package platform
 
 import (
 	"context"
+	"crypto/sha256"
 	_ "embed"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -14,13 +17,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// emailReceiptFixtureQuery seeds an UNKNOWN_OUTCOME email invocation and its receipt for the
-// selected project and run; it sends no mail.
-// emailReceiptFixtureQuery создаёт почтовый вызов UNKNOWN_OUTCOME и его квитанцию для выбранного
-// проекта и запуска; письма не отправляются.
+// emailReceiptFixtureQuery seeds a disabled synthetic grant and historical UNKNOWN_OUTCOME receipt for an official owner-created Connection, with capability/scope/digest derived by the normal Go validators and checked against the real pinned package. No live dispatch or mailbox effect is authorized.
+// emailReceiptFixtureQuery создаёт disabled synthetic grant и historical UNKNOWN_OUTCOME receipt для настоящего owner-created Connection; capability/scope/digest выводятся штатными Go validators и сверяются с настоящим pinned package. Live dispatch и mailbox effect не разрешаются.
 //
 //go:embed testdata/sql/email_receipt_fixture.sql
 var emailReceiptFixtureQuery string
@@ -29,7 +31,7 @@ var emailReceiptFixtureQuery string
 // immutable email receipts with durable observation history.
 // testEmailReceiptReconciliation проверяет выбранное владельцем согласование, актуальность
 // полномочий и неизменяемые почтовые квитанции с сохранённой историей наблюдений.
-func testEmailReceiptReconciliation(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
+func testEmailReceiptReconciliation(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool, deadline ...*emailReceiptDeadlineTrace) {
 	// Адресный запуск не наследует наблюдение каталога от соседних сценариев.
 	seedObservedCatalogFixture(t, ctx, repository)
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
@@ -72,8 +74,38 @@ func testEmailReceiptReconciliation(t *testing.T, ctx context.Context, repositor
 			t.Errorf("cancel synthetic email receipt run for cleanup: %v", err)
 		}
 	}()
-	if _, err := pool.Exec(ctx, emailReceiptFixtureQuery, project.Project.Ref, run.Run.Ref, agent.Ref); err != nil {
-		t.Fatal(err)
+	creator := owner
+	creator.Permission = "platform.email-mailboxes.mine.create"
+	connection, err := service.Execute(ctx, command.Command{Kind: command.CreatePersonalEmailMailboxConnection, Principal: creator,
+		Mutation: value.Mutation{IdempotencyKey: "email-receipt-connection"}, Payload: command.PersonalEmailMailboxConnectionInput{Name: "Email receipt fixture", Sender: "receipt@example.test"}})
+	if err != nil || connection.Connection == nil {
+		t.Fatal("create official personal email receipt connection", err)
+	}
+	definition, exists := repository.integrationDefinitions["email"]
+	capability, known := definition.Capability("email.message.send")
+	if !exists || !known || definition.Metadata.Version != connection.Connection.DefinitionVersion || definition.Digest != connection.Connection.DefinitionDigest {
+		t.Fatal("receipt fixture does not match exact pinned email package")
+	}
+	configuration, valid := integrationStringConfiguration(connection.Connection.PublicConfiguration)
+	if !valid || definition.ValidateConfiguration(configuration) != nil {
+		t.Fatal("historical email grant has invalid official configuration")
+	}
+	resourceScope, err := capability.ResourceScopeValues(configuration)
+	if err != nil {
+		t.Fatal("resolve historical email grant resource scope", err)
+	}
+	encodedScope, err := json.Marshal(resourceScope)
+	if err != nil {
+		t.Fatal("encode historical email grant resource scope", err)
+	}
+	scopeDigest := sha256.Sum256(encodedScope)
+	if tag, err := pool.Exec(ctx, emailReceiptFixtureQuery, pgx.StrictNamedArgs{
+		"project_ref": project.Project.Ref, "run_ref": run.Run.Ref, "agent_ref": agent.Ref, "connection_ref": connection.Connection.Ref,
+		"capability_key": capability.Key, "operation": capability.Operation, "risk": capability.Risk, "approval_policy": string(capability.ApprovalPolicy),
+		"resource_kind": capability.ResourceScope.Kind, "resource_scope": encodedScope, "resource_scope_digest": hex.EncodeToString(scopeDigest[:]),
+		"definition_version": connection.Connection.DefinitionVersion, "definition_digest": connection.Connection.DefinitionDigest,
+	}); err != nil || tag.RowsAffected() != 1 {
+		t.Fatal("seed one historical receipt through exact disabled grant", err)
 	}
 	view, err := service.GetEmailEffectReceipt(ctx, owner, "email_receipt_invocation")
 	if err != nil || view.Receipt.Ref != "emrc_email_fixture" || view.Receipt.ProjectRef != project.Project.Ref || view.Decision != nil {
@@ -207,6 +239,9 @@ func testEmailReceiptReconciliation(t *testing.T, ctx context.Context, repositor
 	}
 	if err := resolve(worker, "", latest.Receipt.ExternalReceiptRef, latest.Receipt.ExternalReceiptDigest); err != nil {
 		t.Fatalf("resolve owner-selected email decision: %v", err)
+	}
+	if len(deadline) == 1 {
+		binding.AccessBinding = personalEmailReceiptDeadlineFixture(t, ctx, service, owner, candidate, worker, binding.AccessBinding, latest, deadline[0])
 	}
 	for _, kind := range []string{"worker", "decision", "external-ref", "digest"} {
 		p, decision, externalRef, digest := worker, latest.Decision.Ref, latest.Receipt.ExternalReceiptRef, latest.Receipt.ExternalReceiptDigest

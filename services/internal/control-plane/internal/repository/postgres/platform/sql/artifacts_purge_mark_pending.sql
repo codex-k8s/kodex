@@ -1,7 +1,4 @@
 -- name: artifacts_purge_mark_pending :exec
-UPDATE control_plane.artifact_heads
-SET lifecycle_state = 'PURGE_PENDING',
-    version = version + 1
-WHERE id = @artifact_id::uuid
-  AND version = @expected_version
-  AND lifecycle_state = 'DELETED';
+SELECT artifact_id FROM control_plane.artifact_manual_purge_issue(
+ @artifact_id::uuid,@expected_version,@claim_owner,@claim_generation,@claim_until::timestamptz,
+ @actor_id::uuid,@idempotency_key);

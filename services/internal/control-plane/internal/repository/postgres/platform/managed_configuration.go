@@ -371,7 +371,9 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 				if err := repository.cancelConfigurationWriteBacks(ctx, tx, current, "", consumer.Ref); err != nil {
 					return commandOutcome{}, err
 				}
-				if err := repository.cancelRepositoryBundleDependency(ctx, tx, current, "CONNECTION", consumer.Ref); err != nil { return commandOutcome{}, err }
+				if err := repository.cancelRepositoryBundleDependency(ctx, tx, current, "CONNECTION", consumer.Ref); err != nil {
+					return commandOutcome{}, err
+				}
 			}
 			var allowed bool
 			if err := tx.QueryRow(ctx, queryManagedConfigurationValidateConsumer, pgx.StrictNamedArgs{
@@ -1070,6 +1072,9 @@ func (repository *Repository) requireManagedSetAccess(ctx context.Context, tx pg
 		var connectionRef, mailboxRef string
 		if err := tx.QueryRow(ctx, queryEmailMailboxConfigurationOwner, current.organizationID, set.Ref).Scan(&connectionRef, &mailboxRef); err != nil {
 			return errs.ErrNotFound
+		}
+		if _, err := requireEmailMailboxManagerTx(ctx, tx, current, connectionRef); err != nil {
+			return err
 		}
 		return repository.requireAccess(ctx, tx, current, "integration.manage", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "INTEGRATION", ResourceRef: connectionRef})
 	}

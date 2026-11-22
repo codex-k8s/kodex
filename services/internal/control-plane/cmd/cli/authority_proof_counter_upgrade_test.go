@@ -185,7 +185,7 @@ func testAuthorityProofCounterMigration(t *testing.T, existing bool) {
 	}
 	assertAuthorityProofCounterBackupRestore(t, ctx, observer, string(query), first+2+workers)
 	var privileges bool
-	if observer.QueryRow(ctx, "SELECT has_table_privilege('control_plane_runtime','control_plane.authority_proof_revision_counter','SELECT,UPDATE') AND NOT has_table_privilege('control_plane_runtime','control_plane.authority_proof_revision_counter','INSERT') AND NOT has_table_privilege('control_plane_runtime','control_plane.authority_proof_revision_counter','DELETE') AND NOT has_table_privilege('control_plane_runtime','control_plane.authority_proof_revision_counter','TRUNCATE')").Scan(&privileges) != nil || !privileges {
+	if observer.QueryRow(ctx, "SELECT has_table_privilege('control_plane_runtime','control_plane.authority_proof_revision_counter','SELECT') AND has_table_privilege('control_plane_runtime','control_plane.authority_proof_revision_counter','UPDATE') AND NOT has_table_privilege('control_plane_runtime','control_plane.authority_proof_revision_counter','INSERT') AND NOT has_table_privilege('control_plane_runtime','control_plane.authority_proof_revision_counter','DELETE') AND NOT has_table_privilege('control_plane_runtime','control_plane.authority_proof_revision_counter','TRUNCATE')").Scan(&privileges) != nil || !privileges {
 		t.Fatal("proof counter runtime ACL differs")
 	}
 	if _, err := observer.Exec(ctx, "UPDATE control_plane.authority_proof_revision_counter SET revision=9007199254740991 WHERE singleton"); err != nil {

@@ -6,6 +6,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {fingerprint} from './scoped-release.mjs';
+import {workflowFileCancelledCloseAnnotation} from './workflow-file-provenance-migration-contract.mjs';
 
 function setup(t){
   const directory=mkdtempSync(join(tmpdir(),'kodex-api-maintenance-'));t.after(()=>rmSync(directory,{recursive:true,force:true}));
@@ -36,20 +37,32 @@ const inventory=()=>{
  return [rs,...pods];
 };
 const g=a.indexOf('get'),p=a.indexOf('patch');
-if(g>=0){
+if(a.includes('exec')){
+ const sql=fs.readFileSync(0,'utf8');if(!a.includes('--host=/var/run/postgresql')||!a.includes('--no-password'))process.exit(6);
+ if(sql.includes('pg_catalog.pg_control_system()'))out({database:'control_plane',databaseOID:'16384',systemIdentifier:'9007199254740993',port:'5432',serverAddress:null,serverPort:null});
+ else if(sql.includes('WORKFLOW_FILE_PROVENANCE_BACKUP_051'))out({profile:'WORKFLOW_FILE_PROVENANCE_BACKUP_051',database:'control_plane',readOnly:'on',
+  gooseVersion:s.ownerChanged?20261121000200:20261121000100,serverVersionNum:180003,backupQualification:'CANONICAL_BACKUP',
+  publicSequenceSafe:true,schemaMatches:true,historyMatches:true,artifactPredecessorApplied:true,
+  schemaCatalog:{catalogDigest:'58532c2f03d49c8499e9113ce9e6d5a687c92d41581641885bf98396d4ec6ab2'}});
+ else process.exit(6);
+}else if(g>=0){
  const kind=a[g+1],name=a[g+2];
  if(kind==='namespace')out({metadata:{uid:s.foreign?'foreign':name==='kube-system'?s.target.clusterUID:s.target.namespaceUID}});
  else if(kind==='configmap')out(s.installation);else if(kind==='deployment')out(s.deployment);else if(kind==='service')out(s.service);
  else if(kind==='replicasets,pods,jobs'){save();process.stdout.write(inventory().map(r=>[r.kind,r.metadata.name,r.metadata.uid,r.metadata.labels?.['app.kubernetes.io/name']??'',r.metadata.namespace,JSON.stringify(r.metadata.ownerReferences)].join('\\t')).join('\\n')+'\\n');}
+ else if(kind==='pod'&&name==='kodex-postgresql-0'){save();process.stdout.write(s.target.clusterUID+'|StatefulSet|kodex-postgresql|'+s.target.namespaceUID+'|kodex-postgresql|Running|');}
  else if(kind==='pod')out(inventory().find(r=>r.metadata.name===name));
- else if(kind==='endpointslices')out(s.slices);else if(kind==='pods')out(s.pods);else process.exit(6);
+ else if(kind==='job'&&name==='control-plane-migrate-20261121000200'){if(s.writerFound)out({kind:'Job'});else save();}
+ else if(kind==='endpointslices')out(s.slices);
+ else if(kind==='pods'&&a.at(-1).startsWith('jsonpath='))save();
+ else if(kind==='pods')out(s.pods);else process.exit(6);
 }else if(p>=0){
  const resource=s[a[p+1]],patchPath=a[a.indexOf('--patch-file')+1];
  if(!resource||!patchPath||((fs.statSync(patchPath).mode&0o777)!==0o600)||((fs.statSync(path.dirname(patchPath)).mode&0o777)!==0o700))process.exit(7);
  const operations=JSON.parse(fs.readFileSync(patchPath));s.patchPaths.push(patchPath);
  for(const op of operations.filter(o=>o.op==='test')){let v=resource;for(const k of op.path.slice(1).split('/'))v=v[k];if(JSON.stringify(v)!==JSON.stringify(op.value)){save();process.exit(8);}}
  if(a.includes('--dry-run=server')){save();console.log('dry run');process.exit(0);}
- s.effects.push(a[p+1]);resource.metadata.annotations=operations[3].value;resource.spec=operations[4].value;
+ s.effects.push(a[p+1]);resource.metadata.annotations=operations[3].value;if(operations[4])resource.spec=operations[4].value;
  resource.metadata.resourceVersion=String(Number(resource.metadata.resourceVersion)+1);
  if(a[p+1]==='deployment'){resource.metadata.generation++;resource.status={observedGeneration:resource.metadata.generation,
    ...Object.fromEntries(['replicas','updatedReplicas','readyReplicas','availableReplicas'].map(k=>[k,resource.spec.replicas]))};}
@@ -130,4 +143,32 @@ test('successor readback закрыт для неверного SHA, non-ancesto
   assert.notEqual(f.run('traffic','status','isolate',['--predecessor-executor-sha','']).status,0);
   assert.notEqual(f.run('traffic','plan','other',['--action','restore','--predecessor-executor-sha','a'.repeat(40)]).status,0);
   assert.deepEqual(f.state().effects,['deployment','service']);
+});
+
+
+test('051 CLI cancel после close возвращает шлюз за исходным Service и закрывает позднюю изоляцию',t=>{
+ const f=setup(t),original=f.state();
+ f.pass('maintenance','plan','close',['--action','close','--workflow-file-provenance','true']);
+ f.edit(s=>{s.ownerChanged=true;});
+ assert.match(f.run('maintenance','apply','close').stderr,/RECOVERY_OWNER_CHANGED/);
+ assert.deepEqual(f.state().effects,[]);
+ f.edit(s=>{s.ownerChanged=false;});
+ assert.equal(f.pass('maintenance','apply','close').state,'CLOSED');
+ f.pass('traffic','plan','isolate',['--action','isolate']);
+ f.pass('maintenance','plan','cancel',['--action','cancel',...f.closed]);
+ f.edit(s=>{s.ownerChanged=true;});
+ const rejected=f.run('maintenance','apply','cancel',f.closed);
+ assert.notEqual(rejected.status,0);assert.match(rejected.stderr,/RECOVERY_OWNER_CHANGED/);
+ assert.deepEqual(f.state().effects,['deployment']);
+ f.edit(s=>{s.ownerChanged=false;s.lost='service';});
+ assert.notEqual(f.run('maintenance','apply','cancel',f.closed).status,0);
+ assert.equal(f.state().service.metadata.annotations[workflowFileCancelledCloseAnnotation],f.read('close.json').maintenanceID);
+ assert.notEqual(f.run('traffic','apply','isolate').status,0);
+ f.edit(s=>{s.lost='';});
+ assert.equal(f.pass('maintenance','apply','cancel',f.closed).state,'OPEN');
+ assert.equal(f.pass('maintenance','apply','cancel',f.closed).state,'OPEN');
+ assert.notEqual(f.run('maintenance','apply','close').status,0);
+ assert.deepEqual(f.state().effects,['deployment','service','deployment']);
+ assert.deepEqual(f.state().deployment.spec,original.deployment.spec);
+ assert.deepEqual(f.state().service.spec,original.service.spec);
 });

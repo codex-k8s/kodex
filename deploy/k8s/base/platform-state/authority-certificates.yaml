@@ -105,6 +105,16 @@ spec:
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
+  name: internal-rpc-authority-artifact-retention-workload
+spec:
+  secretName: internal-rpc-authority-artifact-retention-workload-tls
+  dnsNames: [artifact-retention, artifact-retention.kodex-system.svc, artifact-retention.kodex-system.svc.cluster.local]
+  uris: [spiffe://kodex.local/ns/kodex-system/sa/artifact-retention]
+  usages: [server auth, client auth]
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
   name: internal-rpc-authority-secret-broker-workload
 spec:
   secretName: internal-rpc-authority-secret-broker-workload-tls

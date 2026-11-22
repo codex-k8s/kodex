@@ -1,0 +1,44 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: secret-broker-ssh-identities
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [get, create, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: secret-broker-ssh-identities
+subjects:
+  - kind: ServiceAccount
+    name: secret-broker
+    namespace: kodex-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: secret-broker-ssh-identities
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: secret-broker-ssh-namespace-readiness
+rules:
+  - apiGroups: [""]
+    resources: [namespaces]
+    resourceNames: [kodex-ssh-identities]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: secret-broker-ssh-namespace-readiness
+subjects:
+  - kind: ServiceAccount
+    name: secret-broker
+    namespace: kodex-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: secret-broker-ssh-namespace-readiness

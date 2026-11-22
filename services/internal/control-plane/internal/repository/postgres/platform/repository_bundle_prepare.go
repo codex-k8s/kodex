@@ -153,7 +153,7 @@ func (repository *Repository) prepareRepositoryBundleTx(ctx context.Context, pri
 			return entity.RepositoryBundlePublication{}, repositoryBundlePrepareFailure("ARTIFACT_ELIGIBILITY", err, serializableTransactionError(err, errs.ErrUnavailable))
 		}
 	}
-	connection, err := readConnection(ctx, tx, initiator, origin.connectionRef)
+	connection, err := repository.readConnection(ctx, tx, initiator, origin.connectionRef)
 	if err != nil {
 		return entity.RepositoryBundlePublication{}, repositoryBundlePrepareFailure("CONNECTION", err, errs.ErrForbidden)
 	}

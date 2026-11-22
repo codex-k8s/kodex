@@ -10,7 +10,7 @@ import (
 // CreateEmailMailboxDraft требует согласованное наличие configuration-ref и If-Match, декодирует ровно одно поддерживаемое представление content, затем создаёт owner draft с идемпотентностью. Проверенный no-store ответ закрепляет connection и необязательный configuration; почту не подключает и настройки не публикует.
 func (s *Server) CreateEmailMailboxDraft(w http.ResponseWriter, r *http.Request, ref generated.ConnectionRef, p generated.CreateEmailMailboxDraftParams) {
 	setRuntimeSecretHeaders(w)
-	body, ok := decodeJSON[generated.EmailMailboxDraftInput](w, r)
+	body, ok := decodeMailboxJSON[generated.EmailMailboxDraftInput](w, r)
 	if !ok {
 		return
 	}
@@ -43,7 +43,7 @@ func (s *Server) SaveEmailMailboxDraft(w http.ResponseWriter, r *http.Request, r
 	if !ok {
 		return
 	}
-	body, ok := decodeJSON[generated.EmailMailboxDraftContent](w, r)
+	body, ok := decodeMailboxJSON[generated.EmailMailboxDraftContent](w, r)
 	if !ok {
 		return
 	}
@@ -116,7 +116,7 @@ func (s *Server) BindEmailMailboxConfiguration(w http.ResponseWriter, r *http.Re
 	if !ok {
 		return
 	}
-	body, ok := decodeJSON[generated.EmailMailboxBindingInput](w, r)
+	body, ok := decodeMailboxJSON[generated.EmailMailboxBindingInput](w, r)
 	if !ok {
 		return
 	}

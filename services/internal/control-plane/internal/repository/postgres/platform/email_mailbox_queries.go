@@ -100,12 +100,16 @@ func (repository *Repository) PreviewEmailMailboxConfiguration(ctx context.Conte
 		return entity.EmailMailboxPreview{}, errs.ErrUnavailable
 	}
 	result := entity.EmailMailboxPreview{Specification: &specification, CanonicalYAML: canonical}
+	owner, err := requireEmailMailboxManagerTx(ctx, tx, current, connectionRef)
+	if err != nil {
+		return entity.EmailMailboxPreview{}, err
+	}
 	mailboxRef, err := newMailboxRef()
 	if err != nil {
 		return entity.EmailMailboxPreview{}, errs.ErrUnavailable
 	}
 	mailbox, err := emailpolicy.MaterializeMailbox(specification, emailpolicy.MailboxBinding{Ref: mailboxRef,
-		OrganizationRef: current.organizationRef, ConnectionRef: connectionRef, Revision: 1, CredentialGeneration: version})
+		OrganizationRef: current.organizationRef, ConnectionRef: connectionRef, Revision: 1, CredentialGeneration: version, CredentialOwnerGeneration: owner.owner.Generation})
 	if err != nil {
 		result.Diagnostics = []entity.EmailMailboxDiagnostic{emailpolicy.Diagnostic(emailpolicy.DiagnosticConfiguration)}
 		return result, nil
@@ -189,6 +193,9 @@ func (repository *Repository) requireEmailMailboxConnection(ctx context.Context,
 			return 0, errs.ErrNotFound
 		}
 		return 0, errs.ErrUnavailable
+	}
+	if _, err := requireEmailMailboxManagerTx(ctx, tx, current, ref); err != nil {
+		return 0, err
 	}
 	return version, nil
 }
@@ -353,6 +360,24 @@ func (repository *Repository) GetEmailMailboxCredentialReceipt(ctx context.Conte
 	credential := receipt.EmailCredential
 	if credential.ConnectionRef != connectionRef {
 		return entity.EmailMailboxCredential{}, errs.ErrNotFound
+	}
+	owner, err := requireEmailMailboxManagerTx(ctx, tx, current, connectionRef)
+	if err != nil {
+		return entity.EmailMailboxCredential{}, err
+	}
+	if owner.state != "ACTIVE" || !owner.owner.SubjectActive {
+		return entity.EmailMailboxCredential{}, errs.ErrConflict
+	}
+	var matches bool
+	if err := tx.QueryRow(ctx, queryEmailCredentialReceiptCurrent, pgx.StrictNamedArgs{
+		"organization_id": current.organizationID, "connection_ref": connectionRef,
+		"owner_generation": owner.owner.Generation, "name": credential.Name,
+		"generation": credential.Generation, "kind": credential.Kind,
+	}).Scan(&matches); err != nil {
+		return entity.EmailMailboxCredential{}, serializableTransactionError(err, errs.ErrUnavailable)
+	}
+	if !matches {
+		return entity.EmailMailboxCredential{}, errs.ErrConflict
 	}
 	return entity.EmailMailboxCredential{Name: credential.Name, Generation: credential.Generation, Kind: credential.Kind,
 		ConnectionRef: connectionRef, ConnectionVersion: credential.ConnectionVersion}, nil

@@ -147,13 +147,13 @@ func catalogInputs() map[string]string {
 		"email.message.delete":      `{"uid":"uid-1"}`,
 		"email.thread.read":         `{"thread_id":"source@example.test"}`,
 		"email.attachment.list":     `{"uid":"1","uid_validity":1}`,
-		"email.message.mark_read":   `{"uid":"1","uid_validity":1}`,
-		"email.message.mark_unread": `{"uid":"1","uid_validity":1}`,
-		"email.message.move":        `{"uid":"1","uid_validity":1,"destination_folder":"Archive"}`,
-		"email.message.archive":     `{"uid":"1","uid_validity":1}`,
-		"email.draft.create":        `{"to":"recipient@example.test","subject":"Title","body_text":"Text"}`,
-		"email.draft.update":        `{"uid":"1","uid_validity":1,"expected_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","to":"recipient@example.test","subject":"Title","body_text":"Text"}`,
-		"email.draft.delete":        `{"uid":"1","uid_validity":1}`,
+		"email.message.mark_read":   `{"uid":"1","uid_validity":1,"folder":"INBOX"}`,
+		"email.message.mark_unread": `{"uid":"1","uid_validity":1,"folder":"INBOX"}`,
+		"email.message.move":        `{"uid":"1","uid_validity":1,"destination_folder":"Archive","folder":"INBOX"}`,
+		"email.message.archive":     `{"uid":"1","uid_validity":1,"folder":"INBOX","destination_folder":"Archive"}`,
+		"email.draft.create":        `{"to":"recipient@example.test","subject":"Title","body_text":"Text","folder":"Drafts","cc":"[]","bcc":"[]"}`,
+		"email.draft.update":        `{"uid":"1","uid_validity":1,"expected_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","to":"recipient@example.test","subject":"Title","body_text":"Text","folder":"Drafts","cc":"[]","bcc":"[]"}`,
+		"email.draft.delete":        `{"uid":"1","uid_validity":1,"folder":"Drafts"}`,
 		"synthetic.journal.read":    `{}`, "synthetic.journal.write": `{"value":"Text"}`,
 		"context7.library.resolve": `{"library_name":"sdk","query":"usage"}`,
 		"context7.docs.query":      `{"library_id":"/modelcontextprotocol/go-sdk","query":"usage"}`,
@@ -170,6 +170,10 @@ func TestEveryAdvertisedOperation(t *testing.T) {
 	inputs := catalogInputs()
 	for key, definition := range definitions {
 		if !definition.ExecutableBy(integrationpackage.OwnerIntegrationGateway, integrationpackage.RouteManagedMCP) {
+			continue
+		}
+		if definition.Spec.Adapter == string(integrationpackage.AdapterKubernetes) {
+			t.Run(key, TestKubernetesEveryTypedOperation)
 			continue
 		}
 		if definition.Spec.Adapter == "OBSERVABILITY" {
@@ -194,6 +198,10 @@ func TestEveryAdvertisedOperation(t *testing.T) {
 		}
 		for _, capability := range definition.Spec.Capabilities {
 			t.Run(capability.Operation, func(t *testing.T) {
+				if definition.Spec.Adapter == string(integrationpackage.AdapterSSHTarget) {
+					testSSHBrokerCatalogOperation(t, definition, capability)
+					return
+				}
 				if definition.Spec.Adapter == "SSH_COMPOSE" {
 					testSSHComposeCatalogOperation(t, definition, capability)
 					return

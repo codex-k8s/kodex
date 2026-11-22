@@ -78,6 +78,8 @@ interface State {
   candidate: Ref<SystemAssistantIntegrationGrantCandidate | undefined>;
   policy: Ref<string | undefined>;
   paths: Ref<string[]>;
+  kubernetesNamespace: Ref<string>;
+  enabled: Ref<boolean>;
   canSave: ComputedRef<boolean>;
   busy: Ref<boolean>;
   loadConnections(
@@ -184,6 +186,96 @@ describe("SYSTEM grant controls", () => {
     );
     expect(state.candidate.value).toBeUndefined();
     expect(state.connection.value?.version).toBe(6);
+  });
+
+  it("Kubernetes ждёт явную namespace и передаёт exact grant ref только выбранной области", async () => {
+    const kubernetesConnection: IntegrationConnection = {
+      ...connection,
+      definitionKey: "kubernetes-managed",
+      credentialDelivery: {
+        kind: "BROKER_IDENTITY",
+        brokerPurpose: "KUBERNETES_TARGET",
+      },
+      publicConfiguration: { target_ref: "target_example" },
+      grants: [
+        {
+          ref: "grant_namespace",
+          version: 1,
+          capabilityKey: candidate.capability.key,
+          agentRef: "assistant_test",
+          targetName: "Помощник",
+          enabled: true,
+          risk: "READ",
+          approvalPolicy: "NONE",
+          resourceScope: {
+            kind: "KUBERNETES_TARGET",
+            values: { target_ref: "target_example", namespace: "example" },
+            digest: "a".repeat(64),
+          },
+        },
+      ],
+    };
+    api.connections.mockResolvedValue({
+      items: [kubernetesConnection],
+      nextPageToken: "",
+    });
+    api.candidates.mockResolvedValue({
+      items: [
+        {
+          ...candidate,
+          capability: {
+            ...candidate.capability,
+            operation: "kubernetes.get",
+            resourceKind: "KUBERNETES_TARGET",
+            risk: "READ",
+            approvalPolicy: "NONE",
+            allowedApprovalPolicies: ["NONE"],
+          },
+        },
+      ],
+      total: 1,
+      nextPageToken: "",
+    });
+    const state = await setup();
+    await select(state);
+    expect(state.canSave.value).toBe(false);
+    state.kubernetesNamespace.value = "example";
+    expect(state.canSave.value).toBe(true);
+    api.save.mockResolvedValue({ ...kubernetesConnection, version: 6 });
+    await state.save();
+    expect(api.save).toHaveBeenCalledWith(
+      kubernetesConnection,
+      expect.objectContaining({
+        kubernetesNamespace: "example",
+        kubernetesGrantRef: "grant_namespace",
+      }),
+      expect.any(AbortSignal),
+    );
+    expect(state.kubernetesNamespace.value).toBe("");
+  });
+
+  it("отзыв SCOPED grant не отправляет paths как новое согласование", async () => {
+    api.candidates.mockResolvedValue({
+      items: [
+        {
+          ...candidate,
+          currentGrantRef: "grant_existing",
+          currentGrantEnabled: true,
+          currentApprovalPolicy: "HUMAN_SCOPED",
+          currentApprovalScopePaths: ["/repository"],
+        },
+      ],
+      total: 1,
+      nextPageToken: "",
+    });
+    const state = await setup();
+    await select(state);
+    state.enabled.value = false;
+    api.save.mockResolvedValue({ ...connection, version: 6 });
+    await state.save();
+    const input: unknown = api.save.mock.calls[0]?.[1];
+    expect(input).toEqual(expect.objectContaining({ enabled: false }));
+    expect(input).not.toHaveProperty("approvalScopePaths");
   });
   it("блокирует неизвестную policy, требует bounded scope и presentation EDIT", async () => {
     const state = await setup();

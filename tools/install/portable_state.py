@@ -275,7 +275,13 @@ def verify_resource(expected, actual):
         if field in expected:
             require(subset(expected[field], actual.get(field)), 'LIVE_RESOURCE_DRIFT')
     kind = expected['kind']
-    if kind in ('NetworkPolicy', 'Ingress', 'Middleware', 'ServersTransport', 'ValidatingAdmissionPolicy', 'ValidatingAdmissionPolicyBinding', 'ImageAdmissionPolicyParameters'):
+    ssh_upload_route = False
+    if kind == 'IngressRouteTCP':
+        import ssh_identity_profile
+        ssh_upload_route = (expected['metadata'].get('namespace') == ssh_identity_profile.NAMESPACE and
+                            expected['metadata']['name'] == ssh_identity_profile.NAME and
+                            expected['metadata'].get('labels', {}).get(ssh_identity_profile.LABEL) == 'v1')
+    if ssh_upload_route or kind in ('NetworkPolicy', 'Ingress', 'Middleware', 'ServersTransport', 'ValidatingAdmissionPolicy', 'ValidatingAdmissionPolicyBinding', 'ImageAdmissionPolicyParameters'):
         require(policy_spec(actual) == policy_spec(expected), 'LIVE_SECURITY_SPEC_DRIFT')
         annotations = {k: v for k, v in actual['metadata'].get('annotations', {}).items()
                        if k != 'kubectl.kubernetes.io/last-applied-configuration'}
@@ -544,23 +550,56 @@ def verify_schemas(state, resources, schema_heads=None):
 
 def verify_readback(state, resources, completion=None):
     import provider_sandbox_profile
+    import ssh_identity_profile
+    import ssh_qualification_profile
     import image_policy_inputs
     provider_sandbox_profile.validate_render(resources)
+    ssh_identity_profile.validate_render(resources)
+    ssh_qualification_profile.validate_render(resources)
     image_policy_inputs.validate_render(resources)
     verify_resource_set(state, resources, completion)
 
 
-def verify_resource_set(state, resources, completion=None, schema_heads=None):
+def verify_workload_ready(resource):
+    """Проверяет наблюдённое поколение и полный состав Pod штатных workload controllers."""
+    kind = resource['kind']
+    if kind not in ('Deployment', 'StatefulSet', 'DaemonSet'):
+        return
+    status = resource.get('status', {})
+    generation = resource['metadata'].get('generation')
+    if kind == 'DaemonSet':
+        replicas = status.get('desiredNumberScheduled')
+        counts = ('currentNumberScheduled', 'updatedNumberScheduled', 'numberReady', 'numberAvailable')
+        require(status.get('numberUnavailable', 0) == 0 and status.get('numberMisscheduled', 0) == 0,
+                'LIVE_WORKLOAD_NOT_READY')
+    else:
+        replicas = resource['spec'].get('replicas', 1)
+        counts = ('replicas', 'updatedReplicas', 'readyReplicas', 'availableReplicas')
+        require(status.get('unavailableReplicas', 0) == 0, 'LIVE_WORKLOAD_NOT_READY')
+        if kind == 'StatefulSet' and replicas:
+            require(isinstance(status.get('currentRevision'), str) and status['currentRevision'] and
+                    status['currentRevision'] == status.get('updateRevision'), 'LIVE_WORKLOAD_NOT_READY')
+    require(type(generation) is int and generation > 0 and status.get('observedGeneration') == generation and
+            type(replicas) is int and replicas >= 0 and
+            all(status.get(name, 0) == replicas for name in counts), 'LIVE_WORKLOAD_NOT_READY')
+
+
+def verify_resource_set(state, resources, completion=None, schema_heads=None, *, deferred_installation=False,
+                        require_workload_readiness=False):
     """Читает заданный набор объектов; coherence полного render проверяет вызывающий."""
     import bootstrap_completion
     if completion is not None:bootstrap_completion.verify(state, resources, completion)
     for expected in resources:
         if expected['kind'] == 'Secret':continue
+        if deferred_installation and key(expected) == 'v1|ConfigMap|kodex-system|kodex-installation-profile':
+            continue
         actual = state.get(expected)
         if actual is None and completion is not None and expected['kind'] == 'Job' and expected['metadata']['name'] in bootstrap_completion.JOBS:
             continue
         require(actual is not None, 'LIVE_RESOURCE_MISSING')
         verify_resource(expected, actual)
+        if require_workload_readiness:
+            verify_workload_ready(actual)
     if completion is None or schema_heads is not None:verify_schemas(state, resources,schema_heads)
 
 

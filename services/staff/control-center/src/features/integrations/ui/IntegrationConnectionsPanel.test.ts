@@ -1,3 +1,5 @@
+import { kubernetesIdentitySetupMessages } from "../kubernetes-identity-setup-messages";
+import { kubernetesResourceMaterialMessages } from "../kubernetes-resource-material-messages";
 import { renderToString } from "@vue/server-renderer";
 import { createI18n } from "vue-i18n";
 import { createSSRApp, h } from "vue";
@@ -54,6 +56,7 @@ const definition: IntegrationDefinition = {
 };
 
 const connection: IntegrationConnection = {
+  credentialDelivery: { kind: "TOKEN" },
   ref: "connection_synthetic",
   version: 3,
   definitionKey: definition.key,
@@ -77,6 +80,8 @@ const connection: IntegrationConnection = {
 
 const messages = {
   ru: {
+    kubernetesResourceMaterial: kubernetesResourceMaterialMessages.ru,
+    kubernetesIdentitySetup: kubernetesIdentitySetupMessages.ru,
     serverMessages: {
       INTEGRATION_CREDENTIAL_PERSONAL_REQUIRED:
         "Каждый пользователь добавляет личный ключ в разделе «Мои подключения»",
@@ -132,12 +137,13 @@ async function renderPanel(
   coreReady: boolean,
   hasMore = false,
   search = "",
+  currentDefinition = definition,
 ): Promise<string> {
   const app = createSSRApp({
     render: () =>
       h(IntegrationConnectionsPanel, {
         connections: values,
-        definitions: { synthetic: definition },
+        definitions: { synthetic: currentDefinition },
         coreReady,
         busyRef: "",
         hasMore,
@@ -233,4 +239,60 @@ describe("IntegrationConnectionsPanel", () => {
     expect(html).toContain("Возможностей: 4");
     expect(html).toContain('class="connection-row"');
   });
+});
+
+it("защищённый материал доступен manager только explicit shared KUBE и server UPDATE", async () => {
+  const delivery = {
+    kind: "BROKER_IDENTITY",
+    brokerPurpose: "KUBERNETES_TARGET",
+  } as const;
+  const kubeDefinition = { ...definition, credentialDelivery: delivery };
+  const kubeConnection = {
+    ...connection,
+    credentialDelivery: delivery,
+    kubernetesSetupRequirements: {
+      targetRef: "ktg_fixture01",
+      targetRevision: 2,
+      canonicalContext: "operator-context",
+      connectionVersion: connection.version,
+      credentialPolicy: "PROJECT_SHARED" as const,
+    },
+  };
+  expect(
+    await renderPanel([kubeConnection], true, false, "", kubeDefinition),
+  ).toContain('class="kubernetes-resource-material"');
+  expect(
+    await renderPanel([kubeConnection], true, false, "", kubeDefinition),
+  ).toContain('class="kubernetes-identity-setup"');
+  expect(
+    await renderPanel([kubeConnection], true, false, "", kubeDefinition),
+  ).toContain("operator-context");
+  for (const change of [
+    { credentialPolicy: "INITIATOR_REQUIRED" as const },
+    { nextActions: ["TEST"] as IntegrationConnection["nextActions"] },
+    { credentialDelivery: { kind: "TOKEN" } as const },
+    {
+      credentialDelivery: {
+        kind: "BROKER_IDENTITY",
+        brokerPurpose: "SSH_TARGET",
+      } as const,
+    },
+    { credentialDelivery: undefined },
+  ]) {
+    const html = await renderPanel(
+      [{ ...kubeConnection, ...change }],
+      true,
+      false,
+      "",
+      kubeDefinition,
+    );
+    expect(html).not.toContain('class="kubernetes-resource-material"');
+    expect(html).not.toContain('class="kubernetes-identity-setup"');
+  }
+  expect(
+    await renderPanel([kubeConnection], true, false, "", {
+      ...kubeDefinition,
+      available: false,
+    }),
+  ).not.toContain('class="kubernetes-resource-material"');
 });

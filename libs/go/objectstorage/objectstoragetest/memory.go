@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"strings"
 	"sync"
 
 	"github.com/codex-k8s/kodex/libs/go/objectstorage"
@@ -39,6 +40,10 @@ func (store *Store) Check(context.Context) error {
 	}
 	return nil
 }
+
+// CheckVersioning identifies the fixture's immutable version map, not a remote S3 configuration.
+// CheckVersioning подтверждает immutable version map fixture, не remote S3 configuration.
+func (store *Store) CheckVersioning(ctx context.Context) error { return store.Check(ctx) }
 
 // Put validates metadata and exact body length, then atomically replaces the object under its key with a private byte copy.
 // Put проверяет метаданные и точную длину тела, затем атомарно заменяет объект по ключу собственной копией байтов.
@@ -110,4 +115,27 @@ func (store *Store) Delete(_ context.Context, key, versionID string) error {
 	}
 	delete(store.objects, key)
 	return nil
+}
+
+// CheckDeleteOnce accepts the in-memory one-attempt implementation without external IO.
+// CheckDeleteOnce подтверждает in-memory one-attempt implementation без external IO.
+func (store *Store) CheckDeleteOnce(ctx context.Context) error {
+	if ctx.Err() != nil {
+		return objectstorage.ErrUnavailable
+	}
+	return nil
+}
+
+// DeleteOnce models one exact-version attempt without retries or selecting latest. The test
+// adapter checks cancellation before the existing locked deletion; uncertainty belongs to callers.
+// DeleteOnce моделирует один exact-version attempt без retries либо выбора latest. Test adapter
+// проверяет отмену перед прежним locked deletion; unknown outcome принадлежит callers.
+func (store *Store) DeleteOnce(ctx context.Context, key, version string) error {
+	if version == "" || len(version) > 1024 || strings.EqualFold(version, "null") || strings.ContainsAny(version, "\r\n\x00") {
+		return objectstorage.ErrInvalid
+	}
+	if ctx.Err() != nil {
+		return objectstorage.ErrUnavailable
+	}
+	return store.Delete(ctx, key, version)
 }

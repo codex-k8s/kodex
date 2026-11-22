@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 
+	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/policydeclaration"
 )
@@ -33,6 +34,14 @@ const (
 	sttAudience          = "urn:kodex:internal-rpc:stt-tts-service"
 	sttTranscribeMethod  = "/stt.v1.SpeechToTextService/Transcribe"
 )
+
+// publishedPolicyRevision preserves the already signed policy bytes for schema 049–051 deployments.
+// publishedPolicyRevision сохраняет байты уже подписанной политики для установок со схемой 049–051.
+const publishedPolicyRevision uint64 = 110
+
+// fileCleanupRepairPolicyRevision identifies the candidate policy that adds the bounded FILE cleanup command.
+// fileCleanupRepairPolicyRevision задаёт ревизию проверяемой политики с ограниченной командой очистки FILE.
+const fileCleanupRepairPolicyRevision uint64 = 111
 
 // document is the versioned policy envelope written as JSON.
 // document задаёт версионированную оболочку политики в JSON.
@@ -113,15 +122,23 @@ func main() {
 	output := flag.String("output", "", "path to the resulting authority-policy.json")
 	oidcIssuer := flag.String("oidc-issuer", "", "exact OIDC issuer for this installation")
 	oidcAudience := flag.String("oidc-audience", "kodex-control-api", "exact Control Center OIDC audience")
+	policyRevision := flag.Uint64("policy-revision", publishedPolicyRevision, "version of the authority policy to generate")
 	flag.Parse()
 	if *output == "" || *oidcIssuer == "" || *oidcAudience == "" {
 		fatal("output path, OIDC issuer and audience are required")
+	}
+	if *policyRevision != publishedPolicyRevision && *policyRevision != fileCleanupRepairPolicyRevision {
+		fatal("unsupported authority policy revision")
+	}
+	gatewayOperations := controlplaneclient.ControlAPIGatewayOperations()
+	if *policyRevision == fileCleanupRepairPolicyRevision {
+		gatewayOperations[controlplaneclient.KubernetesFileCleanupRepairOperation] = controlplanev1.ManagedKubernetesFileService_RepairManagedKubernetesFileCleanup_FullMethodName
 	}
 	profiles := []profile{
 		{
 			ProducerID: "control-plane.oidc", WorkloadID: "control-api-gateway", Credential: "OIDC_BEARER",
 			CredentialIssuer: *oidcIssuer, CredentialAudience: *oidcAudience,
-			CredentialTrust: "kodex-oidc-signers-g1", Operations: controlplaneclient.ControlAPIGatewayOperations(),
+			CredentialTrust: "kodex-oidc-signers-g1", Operations: gatewayOperations,
 			ProjectRequired: controlplaneclient.ControlAPIGatewayProjectRequiredOperations(), AuthoritySources: []string{"OIDC_SESSION", "DOMAIN_STATE"},
 		},
 		{
@@ -134,6 +151,7 @@ func main() {
 		worker("runtime-controller", "control-plane.runtime-controller", controlplaneclient.RuntimeOperations()),
 		worker("automation-scheduler", "control-plane.automation", controlplaneclient.AutomationSchedulerOperations()),
 		worker("session-archive", "control-plane.session-archive", controlplaneclient.SessionArchiveOperations()),
+		worker("artifact-retention", "control-plane.artifact-retention", controlplaneclient.ArtifactRetentionCaptureOperations()),
 		worker("integration-gateway", "control-plane.integration-gateway", controlplaneclient.IntegrationGatewayOperations()),
 		worker("interaction-gateway", "control-plane.interaction-gateway", controlplaneclient.InteractionGatewayOperations()),
 		worker("email-bridge", "control-plane.email-bridge", controlplaneclient.EmailBridgeOperations()),
@@ -143,6 +161,8 @@ func main() {
 		// signed producer без protected identity/key delivery не выдаёт права.
 		worker("image-promotion", "control-plane.image-promotion", controlplaneclient.ImagePromotionOperations()),
 		worker("secret-broker", "control-plane.secret-broker", controlplaneclient.SecretBrokerOperations()),
+		managedKubernetesBrokerProfile(),
+		targetedWorker("integration-gateway", "secret-broker.managed-ssh", controlplaneclient.SSHIdentityBrokerOperations(), secretBrokerID, secretBrokerPeer, secretBrokerAudience, secretBrokerTLS),
 		targetedWorker("integration-gateway", "secret-broker.ssh-compose-projection", controlplaneclient.SSHComposeCredentialProjectionOperations(), secretBrokerID, secretBrokerPeer, secretBrokerAudience, secretBrokerTLS),
 		targetedWorker(
 			controlPlaneID,
@@ -171,7 +191,7 @@ func main() {
 		Operations: controlplaneclient.SecretDraftGatewayOperations(), AuthoritySources: []string{"OIDC_SESSION", "DOMAIN_STATE"},
 		TargetWorkloadID: secretBrokerID, TargetSPIFFEID: secretBrokerPeer, TargetAudience: secretBrokerAudience, TargetTLSServerName: secretBrokerTLS,
 	})
-	value := document{Version: 1, PolicyRevision: 107, Policy: policy{
+	value := document{Version: 1, PolicyRevision: *policyRevision, Policy: policy{
 		AuthorityABIVersion: 2,
 		TrustDomain:         "kodex.local", DefaultDecision: "DENY", TokenTTLSeconds: 30,
 		AllowedClockSkewSeconds: 5, MaxCompactJWSBytes: 8192,
@@ -274,7 +294,30 @@ func requiredProjects(operations map[string]string) map[string]struct{} {
 // operationRequestProfile selects exact pin requirements before generic fallback rules.
 // operationRequestProfile выбирает точные требования привязки перед общими правилами.
 func operationRequestProfile(operationID, fullMethod string) requestProfile {
+	if result, ok := managedKubernetesRequestProfile(operationID); ok {
+		return result
+	}
 	switch operationID {
+	case "platform.integrations.ssh.setup.begin", "platform.integrations.ssh.setup.get", "platform.integrations.ssh.setup.cancel",
+		"platform.runtime.ssh.setup.resolve", "platform.runtime.ssh.setup.claim", "platform.runtime.ssh.setup.complete",
+		"platform.runtime.ssh.health.begin", "platform.runtime.ssh.health.complete",
+		"platform.runtime.ssh.execution.begin", "platform.runtime.ssh.execution.complete", "platform.runtime.ssh.execution.get",
+		"platform.runtime.ssh.invocation.read", "ssh.health.probe", "ssh.execute", "ssh.reconcile":
+		// The complete request digest binds nested OCC, idempotency and claim fields.
+		// Хеш полного запроса закрепляет вложенные OCC, ключ идемпотентности и claim.
+		return requestProfile{Mode: "UNARY_PROTO_SHA256", Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "FORBIDDEN"}
+	case "platform.email-mailboxes.mine.list", "platform.email-mailboxes.receipts.read":
+		// Receipt selectors are read-only and remain inside the canonical request digest; they cannot create or retry an effect.
+		// Read-only selectors квитанции остаются внутри canonical digest запроса; они не создают и не повторяют эффект.
+		return requestProfile{Mode: "UNARY_PROTO_SHA256", Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "FORBIDDEN"}
+	case "platform.email-mailboxes.mine.create":
+		// The owner assigns a fresh Connection; no caller-provided existing resource or version is accepted.
+		// Владелец назначает новый Connection; caller не задаёт существующий ресурс либо его версию.
+		return requestProfile{Mode: "UNARY_PROTO_SHA256", Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "REQUIRED"}
+	case "platform.email-mailboxes.ownership.read":
+		return requestProfile{Mode: "UNARY_PROTO_SHA256", Resource: "REQUIRED", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "FORBIDDEN"}
+	case "platform.email-mailboxes.ownership.configure", "platform.email-mailboxes.ownership.revoke":
+		return requestProfile{Mode: "UNARY_PROTO_SHA256", Resource: "REQUIRED", Version: "REQUIRED", Attempt: "FORBIDDEN", Idempotency: "REQUIRED"}
 	case "platform.query.telegram-subscription.get", "platform.query.interaction-deliveries.list", "platform.interactions.deliveries.begin":
 		return requestProfile{Mode: "UNARY_PROTO_SHA256", Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "FORBIDDEN"}
 	case "platform.command.telegram-subscription.configure":

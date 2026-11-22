@@ -1,5 +1,19 @@
 # Авторизация внутренних RPC
 
+`DecodeExactJSON` добавляет к прежнему duplicate-free decoder проверку точных
+явных `json` tags обычных DTO. Сопоставление имён без учёта регистра запрещено.
+Проверка AST не заменяет стандартный scalar decoder, обязательные поля,
+семантику или authority. `omitempty` означает возможность пропуска, не null;
+nullable paths caller перечисляет явно. Корневые maps/interfaces, embedded
+promotion и custom JSON/text unmarshaling не поддержаны, включая пропуск/null
+таких полей: весь Go shape проверяется до документа. Для email scalar HTTP
+create используется обычный string с отдельной проверкой адреса. Размер
+ограничивает caller. При ошибке target очищается, диагностика не содержит
+ключей и значений документа. Старый `DecodeStrictJSON` не изменён.
+Два production-потребителя — почтовые HTTP DTO gateway и редактор mailbox
+спецификации control-plane; canonical incomplete draft сохраняет только
+прежние nullable arrays `allowed_folders`, `recipients`, `policies`.
+
 `opaqueref.Valid(reference, prefix)` — чистая проверка синтаксиса непрозрачных
 ссылок ресурсов, общая для контекста gRPC-клиента и команд образов. Пакет
 зависит только от стандартной библиотеки: не читает env, не делает I/O,
@@ -124,3 +138,20 @@ NetworkPolicy ограничивает точные пары workload, а при
 пользовательскую сессию и владение ресурсом. Заголовок trusted profile не включает
 этот режим на защищённом сервере. Legacy authorization metadata, неизвестные
 методы и неоднозначные caller/profile отклоняются закрыто.
+
+## Точные неподписанные JSON DTO
+
+`DecodeExactJSON` переиспользует duplicate/depth/trailing checks стандартного
+strict decoder, но требует valid UTF-8 до любых semantics и точные явные
+struct JSON tags. Case aliases, unknown fields и explicit null отклоняются;
+nullable paths задаёт только caller. Omission/omitempty не разрешают null.
+Проверка полного Go shape до decode запрещает maps, interfaces, embedded
+promotion и custom JSON/text unmarshaling даже для omitted/null полей.
+Допустимая struct очищается при отказе. Это не новый signed-claims decoder:
+JWS/JCS и их canonical boundary сохраняют прежний путь.
+
+Caller ограничивает полное тело по bytes, проверяет обязательность полей,
+включая явно заданный boolean, и не использует частично разобранные значения.
+Parser не назначает actor, tenant, ownership, version либо authority. Два grant
+HTTP commands используют этот primitive до первого owner RPC; другие HTTP
+consumers не переводятся на него неявным общим рефакторингом.

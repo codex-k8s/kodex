@@ -25,6 +25,7 @@ import (
 // Provider response и plaintext credential не попадают в строку либо command receipt.
 type personalCredentialWorkJob struct {
 	id, ref, connectionRef, subjectID, bindingID, state, leaseRef, fenceDigest string
+	workloadInstance                                                           string
 	version, generation                                                        int64
 	expiresAt                                                                  *time.Time
 	leaseUntil                                                                 time.Time
@@ -123,10 +124,24 @@ func (repository *Repository) queuePersonalCredentialTest(ctx context.Context, t
 	}
 	probeKeys := personalCredentialReadProbeKeys(definition)
 	profiles, writeKeys := integrationpackage.CredentialObservationRequests(definition)
-	started, snapshot, err := platformservice.BeginPersonalIntegrationCredentialVerification(binding,
-		entity.IntegrationCredentialInitiator{OrganizationID: current.organizationID, SubjectID: current.actorID, SubjectKind: "USER"}, *input.Mutation.ExpectedVersion,
-		entity.PersonalIntegrationCredentialTestSpec{Ref: ref, ConnectionVersion: connection.Version, DefinitionDigest: definition.Digest, GitHubDiscoveryPage: payload.GitHubDiscoveryPage,
-			ConfigurationDigest: hex.EncodeToString(sum[:]), HealthCapabilityKey: health.Key, AllowedReadCapabilityKeys: probeKeys, AllowedObservationProfiles: profiles, AllowedDeniedWriteCapabilityKeys: writeKeys})
+	spec := entity.PersonalIntegrationCredentialTestSpec{Ref: ref, ConnectionVersion: connection.Version, DefinitionDigest: definition.Digest, GitHubDiscoveryPage: payload.GitHubDiscoveryPage,
+		ConfigurationDigest: hex.EncodeToString(sum[:]), HealthCapabilityKey: health.Key, AllowedReadCapabilityKeys: probeKeys, AllowedObservationProfiles: profiles, AllowedDeniedWriteCapabilityKeys: writeKeys}
+	begin := platformservice.BeginPersonalIntegrationCredentialVerification
+	delivery, deliveryKnown := definition.ConnectionCredentialDelivery()
+	if !deliveryKnown {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	if delivery.Kind == integrationpackage.CredentialDeliveryBrokerIdentity {
+		if (delivery.BrokerPurpose != string(entity.IntegrationBrokerIdentityKubernetes) && delivery.BrokerPurpose != string(entity.IntegrationBrokerIdentitySSH)) || binding.Kind != entity.IntegrationCredentialBrokerIdentity || binding.BrokerPurpose != entity.IntegrationBrokerIdentityPurpose(delivery.BrokerPurpose) || configuration["target_ref"] == "" || configuration["service_subject_ref"] != "" {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		spec.BrokerPurpose, spec.BrokerTargetRef = entity.IntegrationBrokerIdentityPurpose(delivery.BrokerPurpose), configuration["target_ref"]
+		begin = platformservice.BeginPersonalIntegrationBrokerIdentityVerification
+	} else if delivery.Kind != integrationpackage.CredentialDeliveryToken || binding.Kind != entity.IntegrationCredentialToken {
+		return commandOutcome{}, errs.ErrConflict
+	}
+	started, snapshot, err := begin(binding,
+		entity.IntegrationCredentialInitiator{OrganizationID: current.organizationID, SubjectID: current.actorID, SubjectKind: "USER"}, *input.Mutation.ExpectedVersion, spec)
 	if err != nil {
 		return commandOutcome{}, err
 	}
@@ -175,7 +190,7 @@ func (repository *Repository) lockPersonalCredentialTest(ctx context.Context, tx
 	var raw []byte
 	beforeLeaseRead := time.Now()
 	var observed time.Time
-	if err := tx.QueryRow(ctx, queryPersonalCredentialTestLock, args).Scan(&job.id, &raw, &job.state, &job.version, &job.generation, &job.leaseRef, &job.fenceDigest, &job.expiresAt, &observed); err != nil {
+	if err := tx.QueryRow(ctx, queryPersonalCredentialTestLock, args).Scan(&job.id, &raw, &job.state, &job.version, &job.generation, &job.leaseRef, &job.fenceDigest, &job.expiresAt, &job.workloadInstance, &observed); err != nil {
 		return job, errs.ErrUnavailable
 	}
 	if job.expiresAt != nil {
@@ -239,9 +254,12 @@ func (repository *Repository) currentPersonalCredentialTestInput(ctx context.Con
 	if err := platformservice.ValidatePersonalIntegrationCredentialVerificationSnapshot(binding, job.snapshot, definition.Digest, hex.EncodeToString(sum[:])); err != nil {
 		return result, err
 	}
-	until, err := repository.personalCredentialProbeAccessUntil(ctx, tx, organizationID, job)
-	if err != nil {
-		return result, err
+	var until time.Time
+	if job.snapshot.Kind == entity.IntegrationCredentialToken {
+		until, err = repository.personalCredentialProbeAccessUntil(ctx, tx, organizationID, job)
+		if err != nil {
+			return result, err
+		}
 	}
 	return personalCredentialTestInput{binding: binding, definition: definition, configuration: connection.PublicConfiguration, accessUntil: until}, nil
 }

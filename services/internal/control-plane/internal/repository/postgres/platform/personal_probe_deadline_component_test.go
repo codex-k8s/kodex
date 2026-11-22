@@ -102,7 +102,7 @@ func assertPersonalProbeFiniteAllowance(t *testing.T, ctx context.Context, repos
 		} else if scenario == "shortened-before-begin" {
 			setUntil(until)
 		}
-		trace := &personalAdmissionACKTrace{admissionSQL: queryPersonalCredentialTestBegin}
+		trace := &personalAdmissionACKTrace{admissionSQL: queryPersonalCredentialTokenProbeBegin}
 		if scenario == "late-ack" {
 			trace.until = until
 		}

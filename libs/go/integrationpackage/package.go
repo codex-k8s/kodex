@@ -19,6 +19,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/codex-k8s/kodex/libs/go/managedkubernetes"
+	"github.com/codex-k8s/kodex/libs/go/managedssh"
 	"go.yaml.in/yaml/v3"
 )
 
@@ -93,11 +95,14 @@ type Spec struct {
 	Capabilities        []Capability         `yaml:"capabilities" json:"capabilities"`
 }
 
-// Credential describes a required secret key and kind, never the credential value itself.
-// Credential описывает требуемые ключ и вид секрета, но не значение реквизита.
+// Credential describes exactly one generic secret key or private broker purpose, never values.
+// A broker identity has no generic Secret key and cannot be delivered through a token reader.
+// Credential описывает ровно один generic secret key либо private broker purpose без values.
+// У broker identity нет generic Secret key; token reader не может её доставлять.
 type Credential struct {
-	SecretKey string `yaml:"secretKey" json:"secretKey"`
-	Kind      string `yaml:"kind" json:"kind"`
+	SecretKey     string `yaml:"secretKey,omitempty" json:"secretKey,omitempty"`
+	Kind          string `yaml:"kind" json:"kind"`
+	BrokerPurpose string `yaml:"brokerPurpose,omitempty" json:"brokerPurpose,omitempty"`
 }
 
 // Field constrains one named scalar configuration, input or output value before adapter use.
@@ -345,6 +350,19 @@ func (definition Package) validateConfiguration(configuration map[string]string,
 			return err
 		}
 	}
+	if definition.Spec.Adapter == string(AdapterSSHTarget) {
+		if err := validateSSHDefinition(definition); err != nil {
+			return err
+		}
+		if err := validateSSHConfiguration(configuration); err != nil {
+			return err
+		}
+	}
+	if definition.Spec.Adapter == string(AdapterKubernetes) {
+		if validateKubernetesDefinition(definition) != nil || !validKubernetesConfiguration(configuration) {
+			return errKubernetesDefinition
+		}
+	}
 	if definition.Metadata.Key == "jira-server-dc" {
 		if _, err := ParseJiraCreateFields(configuration["issue_create_fields"]); err != nil {
 			return err
@@ -402,7 +420,12 @@ func (capability Capability) ResourceScopeValues(configuration map[string]string
 		}
 		result[key] = value
 	}
-	if capability.ResourceScope.Kind == "SSH_TARGET" {
+	if capability.ResourceScope.Kind == "SSH_TARGET" && sshTypedOperation(capability.Operation) {
+		if len(capability.ResourceScope.ConnectionFields) != 1 || capability.ResourceScope.ConnectionFields[0] != "target_ref" || !managedssh.OwnerReference(result["target_ref"]) {
+			return nil, errors.New("integration resource scope is incomplete")
+		}
+	}
+	if capability.ResourceScope.Kind == "SSH_TARGET" && !sshTypedOperation(capability.Operation) {
 		raw, err := json.Marshal(result)
 		if err != nil {
 			return nil, err
@@ -419,12 +442,23 @@ func (capability Capability) ResourceScopeValues(configuration map[string]string
 // либо по объявленным скалярным полям ввода пакета.
 // ValidateInput принимает только одно JSON object с закрытым набором primitive fields.
 func (capability Capability) ValidateInput(raw []byte) ([]byte, error) {
+	if kubernetesInputCapability(capability) {
+		_, canonical, err := managedkubernetes.DecodeOperationInput(capability.Operation, raw)
+		return canonical, err
+	}
 	if capability.OpenAPI != nil {
 		_, compiled, err := validateOpenAPIInputSchema(capability.OpenAPI.InputSchema)
 		if err != nil {
 			return nil, err
 		}
 		return validateOpenAPIInput(raw, compiled)
+	}
+	if capability.ResourceScope.Kind == "SSH_TARGET" {
+		input, err := managedssh.DecodeOperationInput(capability.Operation, raw)
+		if err != nil {
+			return nil, errSSHDefinition
+		}
+		input.Clear()
 	}
 	canonical, err := validateObject(raw, capability.InputFields, "input")
 	if err == nil && capability.Operation == "jira.issue.create" {
@@ -455,6 +489,9 @@ func (capability Capability) ValidateOutput(raw []byte) ([]byte, error) {
 // InputSchema возвращает закрытую JSON Schema; её отдельный дайджест позволяет
 // закрепить точную форму ввода при вызове инструмента.
 func (capability Capability) InputSchema() ([]byte, error) {
+	if kubernetesInputCapability(capability) {
+		return managedkubernetes.OperationInputSchema(capability.Operation)
+	}
 	if capability.OpenAPI != nil {
 		encoded, _, err := validateOpenAPIInputSchema(capability.OpenAPI.InputSchema)
 		return encoded, err
@@ -748,7 +785,7 @@ func validate(result *Package) error {
 		len(result.Spec.Capabilities) == 0 || len(result.Spec.Capabilities) > 64 {
 		return errors.New("integration package metadata or bounds are invalid")
 	}
-	if result.Spec.Credential != nil && (!validKey(result.Spec.Credential.SecretKey) || !oneOf(result.Spec.Credential.Kind, "TOKEN", "PASSWORD")) {
+	if !validConnectionCredential(result.Spec.Adapter, result.Spec.Credential) {
 		return errors.New("integration package credential is invalid")
 	}
 	configurationKeys, err := validateFields(result.Spec.ConfigurationFields)
@@ -784,7 +821,8 @@ func validate(result *Package) error {
 				return errors.New("integration package configured network destination is invalid")
 			}
 		}
-		if (destination.TLS == "REQUIRED" && destination.Port != 443) ||
+		kubernetesRPC := result.Spec.Adapter == string(AdapterKubernetes) && result.Metadata.Key == KubernetesDefinitionKey && destination == kubernetesBrokerDestination()
+		if (destination.TLS == "REQUIRED" && destination.Port != 443 && !kubernetesRPC && !sshBrokerNetworkDestination(*result, destination)) ||
 			(destination.TLS == "NONE" && destination.Port == 443) ||
 			(destination.TLS == "SSH_PINNED" && (result.Spec.Adapter != string(AdapterSSHCompose) || destination.Port != 22 || destination.Source != "CONFIGURATION" || configurationByKey[destination.ConfigurationField].Format != "PUBLIC_IP")) {
 			return errors.New("integration package network TLS policy is invalid")
@@ -841,7 +879,7 @@ func validate(result *Package) error {
 				return errors.New("OpenAPI operationId is duplicated")
 			}
 			openAPIOperationIDs[capability.OpenAPI.OperationID] = struct{}{}
-		} else if capability.OpenAPI != nil || capability.Execution.Idempotency == string(IdempotencyOneAttempt) {
+		} else if capability.OpenAPI != nil || capability.Execution.Idempotency == string(IdempotencyOneAttempt) && result.Spec.Adapter != string(AdapterKubernetes) && !(result.Spec.Adapter == string(AdapterSSHTarget) && result.Metadata.Key == SSHExecuteDefinitionKey && capability.Operation == "ssh.execute") {
 			return errors.New("integration capability exceeds adapter contract")
 		}
 		if _, exists := capabilityOperations[capability.Operation]; exists {
@@ -851,6 +889,16 @@ func validate(result *Package) error {
 	}
 	if result.Spec.Adapter == string(AdapterTelegram) {
 		if err := validateTelegramDefinition(*result); err != nil {
+			return err
+		}
+	}
+	if result.Spec.Adapter == string(AdapterSSHTarget) {
+		if err := validateSSHDefinition(*result); err != nil {
+			return err
+		}
+	}
+	if result.Spec.Adapter == string(AdapterKubernetes) {
+		if err := validateKubernetesDefinition(*result); err != nil {
 			return err
 		}
 	}

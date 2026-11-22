@@ -1,0 +1,112 @@
+syntax = "proto3";
+
+package controlplane.v1;
+
+import "controlplane/v1/control_plane.proto";
+import "controlplane/v1/managed_kubernetes_capture.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1;controlplanev1";
+
+// Чтение original-root history и отдельное восстановление artifact task. Ни один
+// метод не возобновляет native execution, не выдаёт task fence или private locator.
+service ManagedKubernetesCaptureService {
+  rpc ListManagedKubernetesCaptures(ListManagedKubernetesCapturesRequest) returns (ListManagedKubernetesCapturesResponse);
+  rpc GetManagedKubernetesCaptureStatus(GetManagedKubernetesCaptureStatusRequest) returns (GetManagedKubernetesCaptureStatusResponse);
+  rpc RepairManagedKubernetesStagingCleanup(RepairManagedKubernetesStagingCleanupRequest) returns (RepairManagedKubernetesStagingCleanupResponse);
+  rpc RepairManagedKubernetesCapture(RepairManagedKubernetesCaptureRequest) returns (RepairManagedKubernetesCaptureResponse);
+}
+
+// History discovery использует тот же original-root/run.view rule, что exact Get.
+// Отказ Tool либо утрата integration.view не требуют угадывать capture ref.
+message ListManagedKubernetesCapturesRequest {
+  string run_ref = 1;
+  string node_ref = 2;
+  PageRequest page = 3;
+}
+message ListManagedKubernetesCapturesResponse {
+  repeated ManagedKubernetesCaptureStatus items = 1;
+  PageInfo page = 2;
+}
+
+// Компактная доступная владельцу discovery-проекция до первой ArtifactRevision.
+message ManagedKubernetesCaptureSummary {
+  string capture_ref = 1;
+  string stream_ref = 2;
+  int64 capture_generation = 3;
+  int64 version = 4;
+  ManagedKubernetesCaptureState state = 5;
+  string reason_code = 6;
+}
+
+message ManagedKubernetesCaptureStatus {
+  ManagedKubernetesCaptureSummary summary = 1;
+  string invocation_ref = 2;
+  string run_ref = 3;
+  string node_ref = 4;
+  string operation = 5;
+  ManagedKubernetesCaptureKind kind = 6;
+  int64 attempt_count = 7;
+  int64 repair_generation = 8;
+  google.protobuf.Timestamp sealed_at = 9;
+  google.protobuf.Timestamp retain_until = 10;
+  repeated ManagedKubernetesCapturedArtifact artifacts = 11;
+  ManagedKubernetesStagingCleanupStatus cleanup = 12;
+}
+
+// Новая bounded task attempt следует immutable intent, не обнуляет общий счётчик.
+message ManagedKubernetesCaptureRepairReceipt {
+  string capture_ref = 1;
+  int64 repair_generation = 2;
+  int64 version = 3;
+  int64 attempt_count = 4;
+  google.protobuf.Timestamp accepted_at = 5;
+}
+
+message GetManagedKubernetesCaptureStatusRequest {
+  string capture_ref = 1;
+  // Только readback исходного actor/key; новые credits или bytes не выдаются.
+  string repair_idempotency_key = 2;
+  string cleanup_idempotency_key = 3;
+}
+message GetManagedKubernetesCaptureStatusResponse {
+  ManagedKubernetesCaptureStatus view = 1;
+  ManagedKubernetesCaptureRepairReceipt repair_receipt = 2;
+  ManagedKubernetesStagingCleanupRepairReceipt cleanup_receipt = 3;
+}
+message RepairManagedKubernetesCaptureRequest {
+  string capture_ref = 1;
+  MutationContext mutation = 2;
+}
+message RepairManagedKubernetesCaptureResponse {
+  ManagedKubernetesCaptureStatus view = 1;
+  ManagedKubernetesCaptureRepairReceipt repair_receipt = 2;
+}
+
+// Version относится только к explicit cleanup repair. Pending reservations продолжают
+// учитывать payload до положительного exact deletion receipt; native не возобновляется.
+message ManagedKubernetesStagingCleanupStatus {
+  int64 version = 1;
+  int64 repair_generation = 2;
+  int64 outstanding_count = 3;
+  int64 outstanding_bytes = 4;
+  int64 exhausted_count = 5;
+  int64 eligible_exhausted_count = 6;
+}
+message ManagedKubernetesStagingCleanupRepairReceipt {
+  string capture_ref = 1;
+  int64 version = 2;
+  int64 repair_generation = 3;
+  int64 repaired_count = 4;
+  int64 remaining_exhausted_count = 5;
+  google.protobuf.Timestamp accepted_at = 6;
+}
+message RepairManagedKubernetesStagingCleanupRequest {
+  string capture_ref = 1;
+  MutationContext mutation = 2;
+}
+
+message RepairManagedKubernetesStagingCleanupResponse {
+  ManagedKubernetesCaptureStatus view = 1;
+  ManagedKubernetesStagingCleanupRepairReceipt cleanup_receipt = 2;
+}

@@ -10,6 +10,7 @@ import bootstrap_completion as completion
 import portable_state
 from deployment_profile import Rejected
 import test_authority_registry
+import test_ssh_identity_profile
 
 
 def uuid(index):return '10000000-0000-4000-8000-'+str(index).zfill(12)
@@ -119,13 +120,25 @@ class Tests(unittest.TestCase):
                 with patch.object(completion,'verify_schemas'),self.assertRaises(Rejected):completion.reconcile(state,resources,'1'*64,inventory,('a'*64,previous),namespaces,report,evidence)
 
     def test_readback_keeps_unknown_job_and_other_resource_presence_mandatory(self):
-        resources,state=fixture();receipt=self.capture(state,resources);state.current={}
-        with patch.object(completion,'verify_schemas'):
-            portable_state.verify_readback(state,resources,receipt)
-            extra={'apiVersion':'batch/v1','kind':'Job','metadata':{'name':'unknown-job','namespace':'kodex-system'},'spec':{}}
-            with self.assertRaises(Rejected):portable_state.verify_readback(state,resources+[extra],receipt)
-            extra={'apiVersion':'v1','kind':'ConfigMap','metadata':{'name':'unrelated','namespace':'kodex-system'}}
-            with self.assertRaises(Rejected):portable_state.verify_readback(state,resources+[extra],receipt)
+        resources, _ = fixture()
+        resources.append(test_ssh_identity_profile.broker_fixture())
+        state = State(resources)
+        receipt = self.capture(state, resources)
+        for name in completion.JOBS:
+            state.current.pop(name)
+        with patch.object(completion, 'verify_schemas'):
+            portable_state.verify_readback(state, resources, receipt)
+            extra = {'apiVersion': 'batch/v1', 'kind': 'Job',
+                     'metadata': {'name': 'unknown-job', 'namespace': 'kodex-system'}, 'spec': {}}
+            with self.assertRaisesRegex(Rejected, 'LIVE_RESOURCE_MISSING'):
+                portable_state.verify_readback(state, resources + [extra], receipt)
+            extra = {'apiVersion': 'v1', 'kind': 'ConfigMap',
+                     'metadata': {'name': 'unrelated', 'namespace': 'kodex-system'}}
+            with self.assertRaisesRegex(Rejected, 'LIVE_RESOURCE_MISSING'):
+                portable_state.verify_readback(state, resources + [extra], receipt)
+            state.current.pop('secret-broker')
+            with self.assertRaisesRegex(Rejected, 'LIVE_RESOURCE_MISSING'):
+                portable_state.verify_readback(state, resources, receipt)
 
 
 if __name__=='__main__':unittest.main()

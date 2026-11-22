@@ -86,6 +86,25 @@ func (repository *Repository) ConfigureEmail(ctx context.Context, raw []byte) er
 		return errs.ErrUnavailable
 	}
 	defer tx.Rollback(ctx)
+	var previous []byte
+	var previousDigest string
+	previousErr := tx.QueryRow(ctx, queryEmailConfigurationDocumentRead).Scan(&previous, &previousDigest)
+	if previousErr == nil {
+		var acceptedConfiguration api.Configuration
+		if api.Decode(previous, &acceptedConfiguration) != nil || api.Digest(acceptedConfiguration) != previousDigest {
+			return errs.ErrUnavailable
+		}
+		// Exact accepted replay must not stamp a new owner onto historical metadata or prevent startup needed for explicit owner repair.
+		// Точный принятый replay не назначает нового owner историческим metadata и не блокирует startup, необходимый для явного исправления владельца.
+		if previousDigest == projection.Digest && acceptedConfiguration.Revision == projection.Revision {
+			return nil
+		}
+	} else if !errors.Is(previousErr, pgx.ErrNoRows) {
+		return errs.ErrUnavailable
+	}
+	if err := validateEmailConfigurationOwnershipTx(ctx, tx, configuration); err != nil {
+		return err
+	}
 	var accepted bool
 	if err := tx.QueryRow(ctx, queryEmailConfigurationAccept, projection.Revision, projection.Digest, encoded).Scan(&accepted); err != nil {
 		return errs.ErrUnavailable

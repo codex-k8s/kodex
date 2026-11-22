@@ -27,7 +27,7 @@ FROM admission
 JOIN control_plane.integration_connections connection
   ON connection.id = admission.connection_id
 LEFT JOIN control_plane.integration_grants grant_row
-  ON grant_row.organization_id = $1::uuid
+  ON connection.definition_key<>'kubernetes-managed' AND grant_row.organization_id = $1::uuid
  AND grant_row.connection_id = admission.connection_id
  AND grant_row.capability_key = admission.capability_key
  AND grant_row.target_kind = admission.recipient_kind

@@ -28,13 +28,20 @@ import {
   changeGitLabScopeField,
 } from "@/features/integrations/gitlab-scope-form";
 import IntegrationPublicConfigurationFields from "@/features/integrations/ui/IntegrationPublicConfigurationFields.vue";
+import {
+  sharedSSHSetupContext,
+  isSSHBrokerDefinition,
+} from "@/features/integrations/ssh-identity-setup-context";
+import SSHIdentitySetupPanel from "@/features/integrations/ui/SSHIdentitySetupPanel.vue";
 import IntegrationCredentialField from "@/features/integrations/ui/IntegrationCredentialField.vue";
+import { usesMultilineSSHCredential } from "@/features/integrations/credential-input";
 import PersonalApprovalConsentsPanel from "@/features/integrations/ui/PersonalApprovalConsentsPanel.vue";
 import {
   githubScopeForm,
   isPersonalGitHubScope,
 } from "@/features/integrations/github-scope-form";
 import PersonalConnectionsPanel from "@/features/integrations/ui/PersonalConnectionsPanel.vue";
+import PersonalEmailConnectionsPanel from "@/features/integrations/ui/PersonalEmailConnectionsPanel.vue";
 import IntegrationConnectionsPanel from "@/features/integrations/ui/IntegrationConnectionsPanel.vue";
 import IntegrationGrantsPanel from "@/features/integrations/ui/IntegrationGrantsPanel.vue";
 import type { IntegrationGrantSelection } from "@/features/integrations/grant-candidates";
@@ -60,6 +67,7 @@ import type {
   IntegrationConnection,
   IntegrationConfigurationField,
   IntegrationDefinition,
+  EmailMailboxOwnership,
 } from "@/shared/api/generated/openapi/types.gen";
 import { idempotencyKey } from "@/shared/api/mutation";
 import AsyncState from "@/shared/ui/AsyncState.vue";
@@ -68,6 +76,7 @@ import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import InteractionIdentitiesPanel from "@/features/integrations/ui/InteractionIdentitiesPanel.vue";
 import EmailEffectPanel from "@/features/integrations/ui/EmailEffectPanel.vue";
 import EmailMailboxCredentialPanel from "@/features/integrations/ui/EmailMailboxCredentialPanel.vue";
+import EmailMailboxOwnershipPanel from "@/features/integrations/ui/EmailMailboxOwnershipPanel.vue";
 import EmailMailboxConfigurationPanel from "@/features/integrations/ui/EmailMailboxConfigurationPanel.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
@@ -342,7 +351,26 @@ const dialog = ref(false);
 const dialogMode = ref<"CREATE" | "CREDENTIAL" | "EDIT">("CREATE");
 const editingConnection = ref<IntegrationConnection>();
 const credentialConnection = ref<IntegrationConnection>();
+const sharedSSHMode = computed(
+  () =>
+    dialogMode.value === "CREDENTIAL" &&
+    !!credentialConnection.value &&
+    isSSHBrokerDefinition(credentialConnection.value.definitionKey),
+);
+const sharedSSHContext = computed(() =>
+  dialogMode.value === "CREDENTIAL" && credentialConnection.value
+    ? sharedSSHSetupContext(credentialConnection.value)
+    : undefined,
+);
 const detailsConnection = ref<IntegrationConnection>();
+const mailboxOwnership = ref<EmailMailboxOwnership>();
+watch(
+  () => [detailsConnection.value?.ref, detailsConnection.value?.version],
+  () => {
+    mailboxOwnership.value = undefined;
+  },
+  { flush: "sync" },
+);
 const detailsCapabilitiesExpanded = ref(false);
 const visibleDetailsCapabilities = computed(() => {
   const capabilities = detailsConnection.value?.capabilities ?? [];
@@ -848,7 +876,11 @@ async function openCredential(
 ): Promise<void> {
   const definition =
     definitionOverride ?? platform.definitions[connection.definitionKey];
-  if (!canConfigureCredential(definition, connection)) return;
+  if (
+    !canConfigureCredential(definition, connection) &&
+    !(definition?.available === true && sharedSSHSetupContext(connection))
+  )
+    return;
   commandRef.value = connection.ref;
   problem.value = undefined;
   try {
@@ -856,7 +888,8 @@ async function openCredential(
     if (
       current.ref !== connection.ref ||
       current.definitionKey !== definition?.key ||
-      !canConfigureCredential(definition, current)
+      (!canConfigureCredential(definition, current) &&
+        !(definition.available && sharedSSHSetupContext(current)))
     )
       return;
     assistantCredentialDefinition.value = definition;
@@ -938,6 +971,7 @@ const configurationErrorMessages = computed(() =>
 );
 
 async function submit(): Promise<void> {
+  if (sharedSSHMode.value) return;
   const definition = selectedDefinition.value;
   if (
     !definition ||
@@ -1148,6 +1182,12 @@ async function saveGrant(selection: IntegrationGrantSelection): Promise<void> {
         ? { agentRef: grant.targetRef }
         : { workflowRef: grant.targetRef }),
       enabled: true,
+      ...(selection.kubernetesNamespace
+        ? { kubernetesNamespace: selection.kubernetesNamespace }
+        : {}),
+      ...(selection.kubernetesGrantRef
+        ? { kubernetesGrantRef: selection.kubernetesGrantRef }
+        : {}),
       ...(selection.approvalScopePaths
         ? { approvalScopePaths: selection.approvalScopePaths }
         : {}),
@@ -1172,8 +1212,11 @@ async function revokeGrant(item: IntegrationGrantPresentation): Promise<void> {
         ? { agentRef: item.grant.agentRef }
         : { workflowRef: item.grant.workflowRef }),
       enabled: false,
-      ...(item.grant.approvalPolicy === "HUMAN_SCOPED"
-        ? { approvalScopePaths: item.grant.approvalScopePaths }
+      ...(item.resourceKind === "KUBERNETES_TARGET"
+        ? {
+            kubernetesNamespace: item.grant.resourceScope.values.namespace,
+            kubernetesGrantRef: item.grant.ref,
+          }
         : {}),
     });
   } catch (error) {
@@ -1344,7 +1387,7 @@ onBeforeUnmount(() => {
         </AsyncState>
 
         <div v-else-if="activeSection === 'PERSONAL'" class="stack">
-          <PersonalConnectionsPanel /><PersonalApprovalConsentsPanel />
+          <PersonalConnectionsPanel /><PersonalEmailConnectionsPanel /><PersonalApprovalConsentsPanel />
         </div>
         <IntegrationApprovalPanel v-else />
       </div>
@@ -1525,16 +1568,27 @@ onBeforeUnmount(() => {
           :key="detailsConnection.ref"
           :connection="detailsConnection"
         />
-        <EmailMailboxCredentialPanel
+        <EmailMailboxOwnershipPanel
           v-if="detailsConnection.definitionKey === 'email'"
           :key="detailsConnection.ref"
           :connection="detailsConnection"
+          @saved="refreshConnectionDetails"
+          @ownership="mailboxOwnership = $event"
+        />
+        <EmailMailboxCredentialPanel
+          v-if="detailsConnection.definitionKey === 'email' && mailboxOwnership"
+          :key="detailsConnection.ref"
+          :connection="detailsConnection"
+          :ownership="mailboxOwnership"
           :disabled="mailboxConfigurationBusy"
           @saved="refreshConnectionDetails"
           @busy="mailboxCredentialBusy = $event"
         />
         <EmailMailboxConfigurationPanel
-          v-if="detailsConnection.definitionKey === 'email'"
+          v-if="
+            detailsConnection.definitionKey === 'email' &&
+            mailboxOwnership?.ownerEligible
+          "
           :key="
             JSON.stringify([
               detailsConnection.ref,
@@ -1577,7 +1631,20 @@ onBeforeUnmount(() => {
         size="lg"
         @close="closeConnectionDialog"
       >
+        <SSHIdentitySetupPanel
+          v-if="sharedSSHContext"
+          :context="sharedSSHContext"
+          :disabled="busy"
+          @changed="
+            closeConnectionDialog();
+            reloadIntegrationWorkspace();
+          "
+        />
+        <p v-else-if="sharedSSHMode" role="status">
+          {{ $t("personalConnections.metadataUnknown") }}
+        </p>
         <form
+          v-else
           id="integration-form"
           class="form-grid"
           :inert="busy"
@@ -1704,6 +1771,7 @@ onBeforeUnmount(() => {
             v-if="showsCredentialInput"
             :model-value="credentialValue"
             :credential-secret-key="selectedDefinition.credentialSecretKey"
+            :multiline="usesMultilineSSHCredential(selectedDefinition.key)"
             :invalid="credentialRequired"
             :disabled="busy"
             @update:model-value="
@@ -1754,6 +1822,7 @@ onBeforeUnmount(() => {
             {{ $t("common.cancel") }}
           </button>
           <button
+            v-if="!sharedSSHMode"
             class="button button--primary"
             form="integration-form"
             type="submit"

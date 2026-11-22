@@ -30,6 +30,9 @@ func TestTrustedBrokerExactCallerMethods(t *testing.T) {
 		{"control-api-gateway", sb.SecretBrokerService_SaveSecretDraft_FullMethodName, true},
 		{"control-plane", cp.ProviderCredentialMaterializerService_MaterializeAPIKey_FullMethodName, true},
 		{"control-api-gateway", cp.ProviderCredentialMaterializerService_MaterializeAPIKey_FullMethodName, false},
+		{"integration-gateway", sb.ManagedKubernetesService_ExecuteManagedKubernetesOperation_FullMethodName, true},
+		{"control-api-gateway", sb.ManagedKubernetesService_ExecuteManagedKubernetesOperation_FullMethodName, false},
+		{"control-plane", sb.ManagedKubernetesService_ExchangeManagedKubernetesStream_FullMethodName, false},
 		{"unknown", sb.SecretBrokerService_CheckReadiness_FullMethodName, false},
 		{"control-plane", "/unknown.Service/Command", false},
 	} {

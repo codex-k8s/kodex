@@ -272,7 +272,24 @@ for (const width of [390, 2900]) {
     await panel
       .getByRole("button", { name: "Применить к подключению", exact: true })
       .click();
+    await expect(
+      panel.getByText("Ожидает проверки", { exact: true }),
+    ).toBeVisible();
+    const updateDelivery = panel.getByRole("button", {
+      name: "Обновить",
+      exact: true,
+    });
+    await updateDelivery.click();
+    await expect.poll(() => deliveryReads).toBe(1);
+    await expect(
+      panel.getByText("Ожидает проверки", { exact: true }),
+    ).toBeVisible();
+    await updateDelivery.click();
     await expect.poll(() => current?.publication?.state).toBe("READY");
+    await expect(
+      panel.getByText("Ожидает проверки", { exact: true }),
+    ).toHaveCount(0);
+    expect(deliveryReads).toBe(2);
     expect(bindCalls).toBe(1);
     await expect(
       panel.getByText("publication_synthetic", { exact: true }),

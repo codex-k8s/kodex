@@ -4,12 +4,85 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"os"
 	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
 )
+
+// workflowFileProvenanceFixtureVersion selects the installed schema with an exact release catalog proof.
+// workflowFileProvenanceFixtureVersion выбирает установленную схему с точным доказательством каталога поставки.
+const workflowFileProvenanceFixtureVersion int64 = 20261121000200
+
+// readComponentSchemaProof reads one bounded JSON row from trusted schema-proof SQL on a disposable database.
+// readComponentSchemaProof читает одну ограниченную строку JSON доверенной SQL-проверки схемы в одноразовой БД.
+func readComponentSchemaProof(ctx context.Context, conn *pgx.Conn, source string) (map[string]any, error) {
+	results, err := conn.PgConn().Exec(ctx, source).ReadAll()
+	if err != nil {
+		return nil, err
+	}
+	var proof map[string]any
+	for _, result := range results {
+		if result.Err != nil {
+			return nil, result.Err
+		}
+		if len(result.Rows) == 0 {
+			continue
+		}
+		if proof != nil || len(result.Rows) != 1 || len(result.Rows[0]) != 1 || len(result.Rows[0][0]) > 1<<20 ||
+			json.Unmarshal(result.Rows[0][0], &proof) != nil || proof == nil {
+			return nil, errors.New("component schema proof has an invalid shape")
+		}
+	}
+	if proof == nil {
+		return nil, errors.New("component schema proof omitted its result")
+	}
+	return proof, nil
+}
+
+// assertWorkflowFileProvenanceCatalog uses the release proof for 051 to distinguish the canonical catalog from an intentional schema mutation.
+// assertWorkflowFileProvenanceCatalog отличает канонический каталог 051 от намеренного изменения схемы штатной проверкой поставки.
+func assertWorkflowFileProvenanceCatalog(t *testing.T, ctx context.Context, conn *pgx.Conn, matches bool) {
+	t.Helper()
+	source, err := os.ReadFile("../../../../../../../tools/release/workflow-file-provenance-migration-postcondition.sql")
+	if err != nil {
+		t.Fatal("read exact 051 catalog proof", err)
+	}
+	proof, err := readComponentSchemaProof(ctx, conn, string(source))
+	if err != nil || proof["profile"] != "WORKFLOW_FILE_PROVENANCE_051" ||
+		proof["gooseVersion"] != float64(workflowFileProvenanceFixtureVersion) ||
+		proof["database"] != conn.Config().Database || proof["readOnly"] != "on" ||
+		proof["serverVersionNum"] != float64(180003) || proof["backupQualification"] != "NONE" ||
+		proof["historyMatches"] != true || proof["publicSequenceSafe"] != true {
+		t.Fatal("exact 051 catalog proof identity mismatch", err)
+	}
+	if proof["schemaMatches"] != matches {
+		t.Fatalf("051 catalog match: got %v; want %t", proof["schemaMatches"], matches)
+	}
+	if !matches {
+		return
+	}
+	// The catalog fingerprint does not cover reachable role attributes or any purge context rows.
+	// Отпечаток каталога не охватывает атрибуты достижимых ролей и строки контекста удаления проекта.
+	authoritySQL, err := os.ReadFile("../../../../../../../tools/release/project-purge-authority-migration-postcondition.sql")
+	if err != nil {
+		t.Fatal("read project purge authority proof", err)
+	}
+	authority, err := readComponentSchemaProof(ctx, conn, string(authoritySQL))
+	if err != nil || authority["database"] != conn.Config().Database || authority["readOnly"] != "on" ||
+		authority["gooseVersion"] != float64(workflowFileProvenanceFixtureVersion) {
+		t.Fatal("project purge authority proof identity mismatch", err)
+	}
+	for _, field := range []string{"tableOwners", "runtimeRolesUnprivileged", "runtimeRead", "runtimeMutationDenied",
+		"runtimeColumnMutationDenied", "runtimeGrantOptionDenied", "publicPrivilegesRevoked", "ownerWrite",
+		"authorizationFunction", "contextsEmpty"} {
+		if authority[field] != true {
+			t.Errorf("051 project purge authority rejected: %s", field)
+		}
+	}
+}
 
 // readWorkspaceVolumeSchemaProof separates the exact actual volume or restore envelope from its versioned inverse014 projection.
 // It executes only shipped read-only metadata SQL against an exact disposable loopback clone, never business fixtures or live credentials.
@@ -59,22 +132,9 @@ func readWorkspaceVolumeSchemaProof(t *testing.T, ctx context.Context, conn *pgx
 	if err != nil {
 		t.Fatal("read shipped current workspace schema proof")
 	}
-	results, err := conn.PgConn().Exec(ctx, string(source)).ReadAll()
+	actual, err := readComponentSchemaProof(ctx, conn, string(source))
 	if err != nil {
-		t.Fatal("execute read-only current workspace schema proof")
-	}
-	var actual map[string]any
-	for _, result := range results {
-		if result.Err != nil {
-			t.Fatal("current workspace schema proof statement failed", result.Err)
-		}
-		if len(result.Rows) == 0 {
-			continue
-		}
-		if actual != nil || len(result.Rows) != 1 || len(result.Rows[0]) != 1 || len(result.Rows[0][0]) > 1<<20 ||
-			json.Unmarshal(result.Rows[0][0], &actual) != nil {
-			t.Fatal("current workspace schema proof shape is invalid")
-		}
+		t.Fatal("execute read-only current workspace schema proof", err)
 	}
 	projection, ok := actual["predecessorProjection"].(map[string]any)
 	if !ok || actual["profile"] != profile || actual["readOnly"] != "on" ||
@@ -102,7 +162,8 @@ func workspaceComponentSchemaVersion(t *testing.T, ctx context.Context, conn *pg
 	}
 	switch version {
 	case 20261027000100, 20261028000100, 20261029000100, 20261029000200, 20261029000300, 20261030000100,
-		20261105000100, 20261106000100, 20261107000100, 20261108000100, 20261109000100, 20261110000100, 20261110000200, 20261111000100, 20261111000200, 20261112000100, 20261113000100:
+		20261105000100, 20261106000100, 20261107000100, 20261108000100, 20261109000100, 20261110000100, 20261110000200, 20261111000100, 20261111000200, 20261112000100, 20261113000100,
+		workflowFileProvenanceFixtureVersion:
 	default:
 		t.Fatal("unregistered disposable workspace schema")
 	}

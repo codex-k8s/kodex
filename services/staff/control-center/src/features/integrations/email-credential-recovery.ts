@@ -10,6 +10,7 @@ export const mailboxCredentialRecoveryKey = "kodex.email.credential-attempts";
 export interface MailboxCredentialAttempt {
   connectionRef: string;
   connectionVersion: number;
+  ownerGeneration: number;
   kind: EmailMailboxCredentialKind;
   key: string;
 }
@@ -26,12 +27,17 @@ function read(storage: RecoveryStorage): MailboxCredentialAttempt[] {
       if (!entry || typeof entry !== "object") return true;
       const value = entry as Partial<MailboxCredentialAttempt>;
       return (
-        Object.keys(value).sort().join(",") !==
-          "connectionRef,connectionVersion,key,kind" ||
+        ![
+          "connectionRef,connectionVersion,key,kind",
+          "connectionRef,connectionVersion,key,kind,ownerGeneration",
+        ].includes(Object.keys(value).sort().join(",")) ||
         typeof value.connectionRef !== "string" ||
         !/^[A-Za-z0-9_-]{1,128}$/.test(value.connectionRef) ||
         !Number.isSafeInteger(value.connectionVersion) ||
         (value.connectionVersion ?? 0) < 1 ||
+        (value.ownerGeneration !== undefined &&
+          (!Number.isSafeInteger(value.ownerGeneration) ||
+            value.ownerGeneration < 0)) ||
         !["CA_CERTIFICATE", "USERNAME", "AUTH_SECRET"].includes(
           value.kind ?? "",
         ) ||
@@ -41,7 +47,10 @@ function read(storage: RecoveryStorage): MailboxCredentialAttempt[] {
     })
   )
     throw new Error(invalidMailboxCredentialStorage);
-  const result = entries as MailboxCredentialAttempt[];
+  const result = (entries as MailboxCredentialAttempt[]).map((value) => ({
+    ...value,
+    ownerGeneration: value.ownerGeneration ?? 0,
+  }));
   if (
     new Set(result.map((entry) => entry.connectionRef)).size !== result.length
   )
@@ -58,6 +67,11 @@ export function rememberMailboxCredential(
   attempt: MailboxCredentialAttempt,
   storage: RecoveryStorage,
 ): void {
+  if (
+    !Number.isSafeInteger(attempt.ownerGeneration) ||
+    attempt.ownerGeneration < 1
+  )
+    throw new Error(invalidMailboxCredentialStorage);
   const entries = read(storage);
   const previous = entries.find(
     (entry) => entry.connectionRef === attempt.connectionRef,
@@ -66,6 +80,7 @@ export function rememberMailboxCredential(
     previous &&
     (previous.key !== attempt.key ||
       previous.kind !== attempt.kind ||
+      previous.ownerGeneration !== attempt.ownerGeneration ||
       previous.connectionVersion !== attempt.connectionVersion)
   )
     throw new Error("Mailbox credential recovery attempt changed");
@@ -75,6 +90,7 @@ export function rememberMailboxCredential(
     entries.push({
       connectionRef: attempt.connectionRef,
       connectionVersion: attempt.connectionVersion,
+      ownerGeneration: attempt.ownerGeneration,
       kind: attempt.kind,
       key: attempt.key,
     });

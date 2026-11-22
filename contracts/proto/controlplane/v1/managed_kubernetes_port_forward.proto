@@ -1,0 +1,116 @@
+syntax = "proto3";
+
+package controlplane.v1;
+
+import "controlplane/v1/control_plane.proto";
+import "controlplane/v1/managed_kubernetes_input.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1;controlplanev1";
+
+// Transport actor и исходный owner run/node определяют доступ. Locators и slot
+// не создают полномочий: target/identity/ports/connection generation назначает owner.
+service ManagedKubernetesPortForwardConnectionService {
+  rpc OpenManagedKubernetesPortForwardConnection(OpenManagedKubernetesPortForwardConnectionRequest) returns (OpenManagedKubernetesPortForwardConnectionResponse);
+  rpc GetManagedKubernetesPortForwardConnection(GetManagedKubernetesPortForwardConnectionRequest) returns (GetManagedKubernetesPortForwardConnectionResponse);
+  rpc ListManagedKubernetesPortForwardConnections(ListManagedKubernetesPortForwardConnectionsRequest) returns (ListManagedKubernetesPortForwardConnectionsResponse);
+  rpc CloseManagedKubernetesPortForwardConnection(CloseManagedKubernetesPortForwardConnectionRequest) returns (CloseManagedKubernetesPortForwardConnectionResponse);
+}
+
+// CLOSED/CANCELLED/EXPIRED — owner closure. NativeJoined отдельно фиксирует
+// положительный local pair join; ни одно значение не утверждает remote success.
+enum ManagedKubernetesPortForwardConnectionState {
+  MANAGED_KUBERNETES_PORT_FORWARD_CONNECTION_STATE_UNSPECIFIED = 0;
+  MANAGED_KUBERNETES_PORT_FORWARD_CONNECTION_STATE_PREPARED = 1;
+  MANAGED_KUBERNETES_PORT_FORWARD_CONNECTION_STATE_OPENING = 2;
+  MANAGED_KUBERNETES_PORT_FORWARD_CONNECTION_STATE_OPEN = 3;
+  MANAGED_KUBERNETES_PORT_FORWARD_CONNECTION_STATE_CLOSED = 4;
+  MANAGED_KUBERNETES_PORT_FORWARD_CONNECTION_STATE_UNKNOWN = 5;
+  MANAGED_KUBERNETES_PORT_FORWARD_CONNECTION_STATE_CANCELLED = 6;
+  MANAGED_KUBERNETES_PORT_FORWARD_CONNECTION_STATE_EXPIRED = 7;
+}
+
+message ManagedKubernetesPortForwardConnectionView {
+  string connection_ref = 1;
+  string invocation_ref = 2;
+  string stream_ref = 3;
+  int64 stream_generation = 4;
+  int64 generation = 5;
+  uint32 slot = 6;
+  ManagedKubernetesPortForwardConnectionState state = 7;
+  // Version исходного stream.input_version; используется в Mutation.expected_version.
+  int64 input_version = 8;
+  bool local_write_closed = 9;
+  // Наблюдаемый read-end не различает remote FIN/RST и не доказывает remote success.
+  bool read_end_observed = 10;
+  bool native_joined = 11;
+  google.protobuf.Timestamp hard_deadline = 12;
+  string reason_code = 13;
+}
+
+// Числовые approved mappings из immutable owner input, без caller target override.
+message ManagedKubernetesPortForwardMapping {
+  uint32 port = 1;
+  uint32 target_port = 2;
+}
+
+message ManagedKubernetesPortForwardConnectionProfile {
+  // Только исходный operator protocol; нет автоматического fallback или caller override.
+  string protocol = 1;
+  uint32 maximum_active_connections = 2;
+  uint32 active_connections = 3;
+  // Пустая причина не означает READY target, успешный TCP connect либо remote effect.
+  string admission_reason_code = 4;
+  repeated ManagedKubernetesPortForwardMapping ports = 5;
+  uint32 timeout_seconds = 6;
+}
+
+message OpenManagedKubernetesPortForwardConnectionRequest {
+  string invocation_ref = 1;
+  string stream_ref = 2;
+  optional uint32 slot = 3;
+  MutationContext mutation = 4;
+}
+message OpenManagedKubernetesPortForwardConnectionResponse {
+  ManagedKubernetesPortForwardConnectionView connection = 1;
+  ManagedKubernetesStreamInputView input = 2;
+  // Уже поставленный owner OPEN envelope; public payload/locator generation не принимаются.
+  ManagedKubernetesStreamInputSubmission submission = 3;
+}
+
+message GetManagedKubernetesPortForwardConnectionRequest {
+  string invocation_ref = 1;
+  string stream_ref = 2;
+  oneof selector {
+    string connection_ref = 3;
+    string open_idempotency_key = 4;
+  }
+}
+message GetManagedKubernetesPortForwardConnectionResponse {
+  ManagedKubernetesPortForwardConnectionView connection = 1;
+  ManagedKubernetesStreamInputSubmission submission = 2;
+}
+
+message ListManagedKubernetesPortForwardConnectionsRequest {
+  string invocation_ref = 1;
+  string stream_ref = 2;
+  PageRequest page = 3;
+}
+message ListManagedKubernetesPortForwardConnectionsResponse {
+  repeated ManagedKubernetesPortForwardConnectionView items = 1;
+  PageInfo page = 2;
+  ManagedKubernetesPortForwardConnectionProfile profile = 3;
+}
+
+message CloseManagedKubernetesPortForwardConnectionRequest {
+  string invocation_ref = 1;
+  string stream_ref = 2;
+  string connection_ref = 3;
+  MutationContext mutation = 4;
+}
+message CloseManagedKubernetesPortForwardConnectionResponse {
+  ManagedKubernetesPortForwardConnectionView connection = 1;
+  ManagedKubernetesStreamInputView input = 2;
+  // Может отсутствовать при closure-only owner transition после потери grant.
+  ManagedKubernetesStreamInputSubmission submission = 3;
+}

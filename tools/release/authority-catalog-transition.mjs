@@ -1,6 +1,8 @@
+import {verifyPersonalIntegrationsAuthorityAPI} from './personal-integrations-authority-api.mjs';
 import {authorityReadbackContract} from './authority-readback-targets.mjs';
 import {requireAuthorityAPIScope} from './authority-api-scope.mjs';
 import {telegramPolicyTransition,telegramPolicyTargets,telegramPolicySource,validateTelegramPolicy,telegramAuthorityReadbackContract,telegramRegistrySource} from './authority-telegram-transition.mjs';
+import {personalIntegrationsAuthorityTransition,personalIntegrationsAuthorityReadbackContract,verifyPersonalIntegrationsAuthorityPolicy,validatePersonalIntegrationsAuthorityPolicy} from './authority-personal-integrations-source.mjs';
 import { constants, openSync, closeSync, fstatSync, readFileSync, writeFileSync, fsyncSync, realpathSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { resolve, dirname } from 'node:path';
@@ -35,24 +37,31 @@ export function validateCatalogPolicy(raw, role, transition) {
   return { revision:source.revision, sha256:rendered.renderedSHA256, sourceSHA256:source.sourceSHA256 };
 }
 
-// Закрытый registry различает две конкретные поставки. Required membership
+// Закрытый registry различает конкретные поставки. Required membership
 // выводится из выбранного профиля; payload не задаёт число readers либо revision.
 export function authorityPolicyTransitionConfiguration(profile){
  if(profile===catalogPolicyTransition)return {profile,predecessorRevision:105,desiredRevision:106,registeredReadbackCount:16};
  if(profile===telegramPolicyTransition)return {profile,predecessorRevision:106,desiredRevision:107,registeredReadbackCount:telegramPolicyTargets};
+ if(profile===personalIntegrationsAuthorityTransition)return {profile,predecessorRevision:107,desiredRevision:110,registeredReadbackCount:18};
  throw Error('CATALOG_POLICY_TRANSITION_REQUIRED');
 }
 export function authorityPolicyReadbackContract(profile){
  authorityPolicyTransitionConfiguration(profile);
+ if(profile===personalIntegrationsAuthorityTransition)return personalIntegrationsAuthorityReadbackContract();
  return profile===catalogPolicyTransition?authorityReadbackContract(telegramRegistrySource('predecessor').raw):telegramAuthorityReadbackContract();
 }
 export function isPortableAuthorityTransition(profile){return profile===catalogPolicyTransition||profile===telegramPolicyTransition;}
 export function authorityPolicySource(role,profile){
  authorityPolicyTransitionConfiguration(profile);
+ if(profile===personalIntegrationsAuthorityTransition){
+  requireValue(role==='predecessor'||role==='desired','PERSONAL_INTEGRATIONS_POLICY_ROLE_REJECTED');
+  return verifyPersonalIntegrationsAuthorityPolicy()[role];
+ }
  return profile===catalogPolicyTransition?catalogPolicySource(role):telegramPolicySource(role);
 }
 export function validateAuthorityPolicy(raw,role,transition){
  authorityPolicyTransitionConfiguration(transition?.profile);
+ if(transition.profile===personalIntegrationsAuthorityTransition)return validatePersonalIntegrationsAuthorityPolicy(raw,role,transition.environment);
  return transition.profile===catalogPolicyTransition?validateCatalogPolicy(raw,role,transition):validateTelegramPolicy(raw,role,transition);
 }
 
@@ -88,7 +97,7 @@ export function parseAuthorityPrivateJSON(raw) {
 }
 
 export function readAuthorityPrivateText(path) {
-  const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+  const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   try {
     const stat = fstatSync(fd);
     requireValue(stat.isFile() && stat.nlink === 1 && stat.uid === process.getuid() &&
@@ -142,12 +151,14 @@ export async function readCatalogMaintenance(planPath,evidencePath,kube,{traffic
 export function verifyCatalogAdmission(maintenance,transition) {
   const configuration=authorityPolicyTransitionConfiguration(transition?.profile);
   if(configuration.profile===telegramPolicyTransition)requireValue(maintenance.proof?.authorityTransition===telegramPolicyTransition,'TELEGRAM_POLICY_ADMISSION_PROFILE_REQUIRED');
+  if(configuration.profile===personalIntegrationsAuthorityTransition)return verifyPersonalIntegrationsAuthorityAPI(maintenance,transition);
   const resources=transition.targetProfile.resources;
   const api=resources.find(resource=>resource.apiVersion==='apps/v1'&&resource.kind==='Deployment'&&resource.name==='control-api-gateway');
   const service=resources.find(resource=>resource.apiVersion==='v1'&&resource.kind==='Service'&&resource.name==='control-api-gateway');
-  if(maintenance.proof?.targetSHA256!==transition.targetSHA256){
+  if(configuration.profile!==personalIntegrationsAuthorityTransition&&maintenance.proof?.targetSHA256!==transition.targetSHA256){
     // Frozen close bytes не расширяются и не получают новый target hash.
-    // Альтернативный узкий scope разрешён только новому107, не историческому106.
+    // Исторический 106 сохраняет полный target. Более поздние переходы
+    // повторно проверяют точный, отдельно изолированный API scope.
     requireValue(configuration.profile===telegramPolicyTransition,'CATALOG_API_ADMISSION_PROOF_REQUIRED');
     const closed=readAuthorityPrivateJSON(maintenance.planPath);
     requireValue(fingerprint(closed)===maintenance.proof?.planSHA256&&

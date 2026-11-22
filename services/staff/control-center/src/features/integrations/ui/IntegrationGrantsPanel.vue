@@ -29,6 +29,8 @@ import type {
   IntegrationCapability,
 } from "@/shared/api/generated/openapi/types.gen";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import KubernetesGrantScopeField from "./KubernetesGrantScopeField.vue";
+import { kubernetesGrantScopeFields } from "../kubernetes-grant-scope";
 import SafeStructuredData from "@/shared/ui/SafeStructuredData.vue";
 import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
 import {
@@ -78,6 +80,16 @@ const projectCandidate = ref<IntegrationGrantProjectCandidate>();
 const recipientCandidate = ref<IntegrationGrantRecipientCandidate>();
 const capabilityCandidate = ref<IntegrationGrantCapabilityCandidate>();
 const approvalScopePaths = ref<string[]>([]);
+const kubernetesNamespace = ref("");
+const kubernetesScope = computed(() =>
+  kubernetesGrantScopeFields(
+    props.selectedConnection,
+    capabilityCandidate.value?.capability,
+    kubernetesNamespace.value,
+    props.targetKind,
+    props.targetRef,
+  ),
+);
 const selectedApprovalPolicy = ref<IntegrationCapability["approvalPolicy"]>();
 const availableApprovalPolicies = computed(() =>
   allowedIntegrationApprovalPolicies(capabilityCandidate.value?.capability),
@@ -98,6 +110,10 @@ const requiredApprovalScopePaths = computed(
 );
 const currentGrant = computed(() => {
   const candidate = capabilityCandidate.value;
+  if (candidate?.capability.resourceKind === "KUBERNETES_TARGET")
+    return props.selectedConnection?.grants.find(
+      (grant) => grant.ref === kubernetesScope.value?.kubernetesGrantRef,
+    );
   return props.selectedConnection?.grants.find(
     (grant) =>
       grant.ref === candidate?.currentGrantRef &&
@@ -242,6 +258,7 @@ const selection = computed<IntegrationGrantSelection | undefined>(() => {
     )
   )
     return undefined;
+  if (!kubernetesScope.value) return undefined;
   return {
     connectionRef: connection.ref,
     connectionVersion: connection.version,
@@ -250,6 +267,7 @@ const selection = computed<IntegrationGrantSelection | undefined>(() => {
     recipientRef: recipient.recipientRef,
     capabilityKey: capability.capability.key,
     approvalPolicy: selectedApprovalPolicy.value,
+    ...kubernetesScope.value,
     ...(selectedApprovalPolicy.value === "HUMAN_SCOPED"
       ? { approvalScopePaths: [...approvalScopePaths.value].sort() }
       : {}),
@@ -275,6 +293,7 @@ function submit(): void {
   if (selection.value && !props.busy) emit("save", selection.value);
 }
 function clearCapability(): void {
+  kubernetesNamespace.value = "";
   approvalScopePaths.value = [];
   selectedApprovalPolicy.value = undefined;
   capabilityGeneration += 1;
@@ -324,6 +343,7 @@ function chooseCapability(option: AsyncEntityOption): void {
   const candidate = capabilityRows.get(option.ref);
   if (!candidate?.grantable) return;
   approvalScopePaths.value = [];
+  kubernetesNamespace.value = "";
   capabilityCandidate.value = candidate;
   const existing = props.selectedConnection?.grants.find(
     (grant) =>
@@ -845,6 +865,12 @@ const canManageSelected = computed(
               <code>{{ selectedCapability.operation }}</code>
             </details>
           </section>
+
+          <KubernetesGrantScopeField
+            v-if="selectedCapability?.resourceKind === 'KUBERNETES_TARGET'"
+            v-model="kubernetesNamespace"
+            :disabled="busy || !canManageSelected"
+          />
 
           <label v-if="selectedCapability" class="field">
             <span>{{ t("integrations.approvalPolicy") }}</span>

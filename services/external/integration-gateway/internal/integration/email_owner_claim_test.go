@@ -51,7 +51,10 @@ func TestCPProducedEmailClaim(t *testing.T) {
 		}
 		body := `{"status":"ready"}`
 		if kind == "invocation" {
-			body = `{"status":"accepted","message_id":"fixture-effect"}`
+			body = `{"status":"ok","headers":[]}`
+			if request.Risk != "READ" {
+				body = `{"status":"accepted","message_id":"fixture-effect"}`
+			}
 		}
 		_, _ = io.WriteString(w, body)
 	})

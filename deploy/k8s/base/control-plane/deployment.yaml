@@ -106,6 +106,8 @@ spec:
               value: /var/run/config/kodex/control-plane/application-grants/email-bridge.platform-worker.public.jwk
             - name: CONTROL_PLANE_KUBERNETES_API_TIMEOUT
               value: 3s
+            - name: CONTROL_PLANE_KUBERNETES_CAPTURE_SPOOL_ROOT
+              value: /work/kubernetes-capture-spool
             - name: CONTROL_PLANE_OIDC_ISSUER
               valueFrom: {configMapKeyRef: {name: kodex-platform-endpoints, key: oidcIssuer}}
             - name: CONTROL_PLANE_OIDC_AUDIENCE
@@ -164,6 +166,8 @@ spec:
               value: /var/run/config/kodex/control-plane/application-grants/role-image-builder.platform-worker.public.jwk
             - name: CONTROL_PLANE_SESSION_ARCHIVE_GRANT_TRUST_FILE
               value: /var/run/config/kodex/control-plane/application-grants/session-archive.platform-worker.public.jwk
+            - name: CONTROL_PLANE_ARTIFACT_RETENTION_GRANT_TRUST_FILE
+              value: /var/run/config/kodex/control-plane/application-grants/artifact-retention.platform-worker.public.jwk
             - name: CONTROL_PLANE_IMAGE_ADMISSION_GRANT_TRUST_FILE
               value: /var/run/config/kodex/control-plane/application-grants/image-admission.platform-worker.public.jwk
             - name: CONTROL_PLANE_IMAGE_PROMOTION_GRANT_TRUST_FILE
@@ -278,6 +282,8 @@ spec:
               readOnly: true
             - name: tmp
               mountPath: /tmp
+            - name: kubernetes-capture-spool
+              mountPath: /work/kubernetes-capture-spool
         - name: skill-scanner
           image: docker.io/clamav/clamav@sha256:0e31ce089574268aefa0b543767d66b70240ab51ed49eec53e07f18d5629d817
           imagePullPolicy: IfNotPresent
@@ -464,3 +470,6 @@ spec:
         - name: tmp
           emptyDir:
             sizeLimit: 16Mi
+        - name: kubernetes-capture-spool
+          emptyDir:
+            sizeLimit: 512Mi

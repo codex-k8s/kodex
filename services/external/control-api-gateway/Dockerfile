@@ -26,6 +26,8 @@ COPY libs/go/serviceruntime/ libs/go/serviceruntime/
 COPY libs/go/securefile/ libs/go/securefile/
 COPY libs/go/sttapi/ libs/go/sttapi/
 COPY libs/go/sshcompose/ libs/go/sshcompose/
+COPY libs/go/managedkubernetes/ libs/go/managedkubernetes/
+COPY libs/go/managedssh/ libs/go/managedssh/
 COPY services/external/control-api-gateway/ services/external/control-api-gateway/
 
 WORKDIR /workspace/services/external/control-api-gateway

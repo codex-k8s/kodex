@@ -28,6 +28,15 @@ var queryArtifactVisibleBindingRefs string
 // backend/iteration failure оставляет slice нефильтрованным и должна блокировать выдачу result. Не
 // выполняет commit и не меняет actual bindings.
 func projectArtifactBindingRefs(ctx context.Context, runner queryRunner, current scope, artifact *entity.Artifact) error {
+	if artifact.LifecycleState == "PURGED" {
+		artifact.CaptureOrigin = nil
+	} else {
+		origin, err := readKubernetesCaptureOrigin(ctx, runner, current, artifact.Ref, artifact.CurrentRevisionRef)
+		if err != nil {
+			return err
+		}
+		artifact.CaptureOrigin = origin
+	}
 	if len(artifact.Bindings) == 0 {
 		return nil
 	}

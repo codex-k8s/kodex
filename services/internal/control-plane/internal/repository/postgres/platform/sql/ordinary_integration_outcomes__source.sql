@@ -1,6 +1,6 @@
 -- name: ordinary_integration_outcomes__source :one
 SELECT invocation.ref,invocation.state,COALESCE(invocation.result_summary,''),COALESCE(invocation.safe_error_code,''),
-       COALESCE(receipt.ref,''),gate.ref,gate.version,COALESCE(gate.decision,''),gate.decision_comment,revision.safe_snapshot->>'task'
+       CASE WHEN invocation.state='SUCCEEDED' THEN COALESCE(receipt.ref,'') ELSE '' END,gate.ref,gate.version,COALESCE(gate.decision,''),gate.decision_comment,revision.safe_snapshot->>'task'
 FROM control_plane.runtime_leases lease
 JOIN control_plane.runtime_revisions revision ON revision.id=lease.runtime_revision_id AND revision.organization_id=lease.organization_id
 JOIN control_plane.run_nodes node ON node.id=lease.node_id AND node.organization_id=lease.organization_id AND node.run_id=lease.run_id
@@ -17,7 +17,7 @@ JOIN control_plane.run_nodes source ON source.id=edge.source_node_id AND source.
 JOIN control_plane.integration_invocations invocation ON invocation.organization_id=lease.organization_id
  AND invocation.node_id=source.id AND invocation.run_id=run.id
 JOIN control_plane.owner_gates gate ON gate.integration_invocation_id=invocation.id AND gate.organization_id=lease.organization_id
- AND gate.root_run_id=root.id AND gate.project_id=project.id AND gate.scope_kind='PROJECT'
+ AND gate.root_run_id=root.id AND gate.project_id=project.id AND gate.scope_kind='PROJECT' AND gate.ref=@decision_gate_ref
 LEFT JOIN control_plane.integration_effect_receipts receipt ON receipt.id=invocation.effect_receipt_id
  AND receipt.organization_id=invocation.organization_id AND receipt.invocation_id=invocation.id
  AND receipt.effect_key=invocation.effect_key AND receipt.input_digest=invocation.input_digest
@@ -47,7 +47,7 @@ WHERE lease.organization_id=@organization_id::uuid AND lease.ref=@lease_ref
      AND source_revision.project_id=project.id AND source_revision.turn_id=source.turn_id
      AND source_revision.attempt=source.attempt AND source_revision.generation=source_lease.generation)
  AND invocation.ref=@source_invocation_ref
- AND ((gate.state='APPROVED' AND gate.decision='APPROVE' AND invocation.state IN ('SUCCEEDED','FAILED'))
+ AND ((gate.state='APPROVED' AND gate.decision='APPROVE' AND invocation.state IN ('SUCCEEDED','FAILED','CANCELLED'))
    OR (gate.state='REJECTED' AND gate.decision='REJECT' AND invocation.state='REJECTED')
    OR (gate.state='CANCELLED' AND gate.decision='CANCEL' AND invocation.state='CANCELLED'))
  AND (invocation.state<>'SUCCEEDED' OR receipt.id IS NOT NULL)

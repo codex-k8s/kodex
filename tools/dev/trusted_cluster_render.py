@@ -13,7 +13,7 @@ AUTHORITY_PREFIX = "internal-rpc-authority"
 RPC_WORKLOADS = {
     "control-plane", "control-api-gateway", "secret-broker", "stt-tts-service",
     "email-bridge", "runtime-controller", "integration-gateway", "interaction-gateway",
-    "automation-scheduler", "session-archive", "role-image-builder", "image-admission-controller",
+    "automation-scheduler", "artifact-retention", "session-archive", "role-image-builder", "image-admission-controller",
 }
 # Публичный TLS gateway не относится к удаляемому внутреннему RPC TLS.
 RPC_VOLUMES = {
@@ -21,6 +21,7 @@ RPC_VOLUMES = {
     "secret-broker": {"server-tls", "client-ca", "workload-tls", "control-plane-ca"},
     "stt-tts-service": {"workload-tls", "internal-ca", "authority-sockets"},
     "automation-scheduler": {"workload-tls", "control-plane-ca", "application-grant"},
+    "artifact-retention": {"workload-tls", "control-plane-ca", "application-grant"},
     "session-archive": {"workload-tls", "control-plane-ca", "application-grant"},
     "integration-gateway": {"workload-tls", "control-plane-ca", "application-grant"},
     "email-bridge": {"application-grant"},
@@ -35,6 +36,7 @@ CORE_EDGES = {
     ("secret-broker", "control-plane"),
     ("control-plane", "secret-broker"),
     ("automation-scheduler", "control-plane"),
+    ("artifact-retention", "control-plane"),
     ("session-archive", "control-plane"),
     ("integration-gateway", "control-plane"),
     ("email-bridge", "control-plane"),
@@ -238,6 +240,9 @@ def materialize(resources, profile):
                                     entry["name"] != "KODEX_RPC_PROFILE"]
                 if name in RPC_WORKLOADS and container["name"] == name:
                     container["env"].append({"name": "KODEX_RPC_PROFILE", "value": PROFILE})
+                if name == "control-plane" and container["name"] == name:
+                    container["env"] = [entry for entry in container["env"]
+                                        if entry["name"] != "CONTROL_PLANE_ARTIFACT_RETENTION_GRANT_TRUST_FILE"]
                 if name == "kodex-postgresql-runtime-credentials" and container["name"] == "reconcile":
                     container["env"].append({"name": "KODEX_RPC_PROFILE", "value": PROFILE})
         used = {mount["name"] for group in ("containers", "initContainers")

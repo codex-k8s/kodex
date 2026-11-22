@@ -1,0 +1,6 @@
+-- name: kubernetes_operator__active :one
+SELECT EXISTS(SELECT 1 FROM control_plane.integration_invocations WHERE left(operation,11)='kubernetes.' AND state NOT IN('SUCCEEDED','FAILED','CANCELLED'))
+ OR EXISTS(SELECT 1 FROM control_plane.integration_personal_credential_tests test JOIN control_plane.integration_personal_credentials binding ON binding.id=test.binding_id AND binding.organization_id=test.organization_id WHERE binding.credential_kind='BROKER_IDENTITY' AND binding.broker_purpose='KUBERNETES_TARGET' AND test.state IN('CLAIMED','PROBING'))
+ OR EXISTS(SELECT 1 FROM control_plane.integration_connection_tests test JOIN control_plane.integration_connections connection ON connection.id=test.connection_id AND connection.organization_id=test.organization_id JOIN control_plane.integration_broker_identity_revisions identity ON identity.id=connection.broker_identity_revision_id AND identity.organization_id=connection.organization_id WHERE identity.purpose='KUBERNETES_TARGET' AND test.state='CLAIMED')
+ OR EXISTS(SELECT 1 FROM control_plane.kubernetes_identity_setups WHERE state IN('PREPARED','ATTEMPTING','UNKNOWN'))
+ OR EXISTS(SELECT 1 FROM control_plane.kubernetes_identity_upload_attempts WHERE state='ACTIVE');

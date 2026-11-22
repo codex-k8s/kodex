@@ -3,7 +3,6 @@ package platform
 import (
 	"context"
 	_ "embed"
-	"encoding/json"
 	"errors"
 	"os"
 	"strings"
@@ -28,6 +27,33 @@ var queryIntegrationGitHubBackupFixture string
 //go:embed testdata/sql/integration_github_old_write_constraint_fixture.sql
 var queryIntegrationGitHubOldWriteConstraint string
 
+// applyCanonicalBackupFixtureACL provisions the production grant set on the verified disposable clone.
+// applyCanonicalBackupFixtureACL применяет production-набор прав к проверенной одноразовой копии БД.
+func applyCanonicalBackupFixtureACL(t *testing.T, ctx context.Context, admin *pgx.Conn) {
+	t.Helper()
+	source, err := os.ReadFile("../../../../../../../deploy/k8s/base/platform-state/postgresql/reconcile-runtime-credentials.sh")
+	if err != nil {
+		t.Fatal("read canonical backup ACL source", err)
+	}
+	const begin = "-- BEGIN CANONICAL CONTROL PLANE BACKUP ACL\n"
+	const end = "-- END CANONICAL CONTROL PLANE BACKUP ACL"
+	content := string(source)
+	if strings.Count(content, begin) != 1 || strings.Count(content, end) != 1 {
+		t.Fatal("canonical backup ACL markers changed")
+	}
+	_, block, _ := strings.Cut(content, begin)
+	block, _, found := strings.Cut(block, end)
+	const connect = "GRANT CONNECT ON DATABASE control_plane TO kodex_backup_reader;"
+	if !found || strings.Count(block, connect) != 1 {
+		t.Fatal("canonical backup ACL database grant changed")
+	}
+	block = strings.Replace(block, connect, "GRANT CONNECT ON DATABASE "+
+		pgx.Identifier{admin.Config().Database}.Sanitize()+" TO kodex_backup_reader;", 1)
+	if _, err := admin.Exec(ctx, block); err != nil {
+		t.Fatal("apply canonical backup ACL to disposable clone", err)
+	}
+}
+
 // TestIntegrationGitHubBackupSchemaProofComponent proves the native successor with intact backup SELECT, then rejects a public function grant and a missing table grant without weakening the historical validators.
 // TestIntegrationGitHubBackupSchemaProofComponent подтверждает native successor с сохранёнными backup SELECT, затем отклоняет публичное разрешение функции и отсутствие табличного grant, не ослабляя исторические проверки.
 func TestIntegrationGitHubBackupSchemaProofComponent(t *testing.T) {
@@ -38,10 +64,10 @@ func TestIntegrationGitHubBackupSchemaProofComponent(t *testing.T) {
 		t.Fatal("parse isolated GitHub backup fixture")
 	}
 	admin := evidenceRetentionAdministrator(t, ctx, runtime)
+	version := workspaceComponentSchemaVersion(t, ctx, admin)
 	if _, err := admin.Exec(ctx, queryIntegrationGitHubBackupFixture); err != nil {
 		t.Fatal("prepare isolated backup SELECT fixture")
 	}
-	version := workspaceComponentSchemaVersion(t, ctx, admin)
 	filename, profile, catalogField := "github-autonomous-backup-migration-postcondition.sql", "GITHUB_AUTONOMOUS_PDLC_BACKUP_V1", "githubHistoricalCatalog"
 	if version == 20261029000200 {
 		filename, profile, catalogField = "github-pr-backup-migration-postcondition.sql", "GITHUB_PR_COLLABORATION_BACKUP_V1", "githubPRCatalog"
@@ -63,38 +89,31 @@ func TestIntegrationGitHubBackupSchemaProofComponent(t *testing.T) {
 		filename, profile, catalogField = "integration-resource-policies-backup-migration-postcondition.sql", "INTEGRATION_RESOURCE_POLICIES_BACKUP_V2", "integrationPolicyFunctions"
 	case 20261108000100:
 		filename, profile, catalogField = "authority-proof-counter-backup-migration-postcondition.sql", "AUTHORITY_PROOF_COUNTER_BACKUP_V1", "githubPRCatalog"
+	case workflowFileProvenanceFixtureVersion:
+		applyCanonicalBackupFixtureACL(t, ctx, admin)
+		filename, profile, catalogField = "workflow-file-provenance-backup-migration.sql", "WORKFLOW_FILE_PROVENANCE_BACKUP_051", "schemaMatches"
 	}
 	source, err := os.ReadFile("../../../../../../../tools/release/" + filename)
 	if err != nil {
 		t.Fatal("read shipped GitHub backup schema proof")
 	}
-	read := func(statement []byte) (map[string]any, error) {
-		results, err := admin.PgConn().Exec(ctx, string(statement)).ReadAll()
-		if err != nil {
-			return nil, err
-		}
-		var proof map[string]any
-		for _, result := range results {
-			if result.Err != nil {
-				return nil, result.Err
-			}
-			if len(result.Rows) == 0 {
-				continue
-			}
-			if proof != nil || len(result.Rows) != 1 || len(result.Rows[0]) != 1 || json.Unmarshal(result.Rows[0][0], &proof) != nil {
-				t.Fatal("GitHub backup schema proof shape is invalid")
-			}
-		}
-		return proof, nil
-	}
 	backupField := "backupReaderCatalog"
-	currentResourcePolicies := version >= 20261109000100
-	if currentResourcePolicies {
+	releaseCatalog := version == workflowFileProvenanceFixtureVersion
+	currentResourcePolicies := version >= 20261109000100 && !releaseCatalog
+	if releaseCatalog {
+		backupField = "schemaMatches"
+	} else if currentResourcePolicies {
 		backupField = "backupReaderReady"
 	}
-	proof, err := read(source)
+	proof, err := readComponentSchemaProof(ctx, admin, string(source))
 	if err != nil || proof["profile"] != profile || proof["gooseVersion"] != float64(version) || proof[catalogField] != true || proof[backupField] != true {
 		t.Fatal("native GitHub successor did not preserve the full backup schema", err)
+	}
+	_, artifactPredecessorObserved := proof["artifactPredecessorApplied"].(bool)
+	if releaseCatalog && (proof["database"] != runtime.Database || proof["readOnly"] != "on" ||
+		proof["serverVersionNum"] != float64(180003) || proof["backupQualification"] != "CANONICAL_BACKUP" ||
+		proof["historyMatches"] != true || proof["publicSequenceSafe"] != true || !artifactPredecessorObserved) {
+		t.Fatal("exact 051 backup catalog proof identity mismatch")
 	}
 	if currentResourcePolicies {
 		for _, field := range []string{"migrationTablesReady", "integrationPolicyColumns", "integrationPolicyConstraints", "integrationPolicyFunctions", "integrationPolicyGuards", "integrationPolicyPrivileges", "workspaceGuards", "backupReaderConfigured", "backupReaderSafe"} {
@@ -103,22 +122,24 @@ func TestIntegrationGitHubBackupSchemaProofComponent(t *testing.T) {
 			}
 		}
 	}
-	if !currentResourcePolicies && version >= 20261029000200 && proof["githubAutonomousWrites"] != true {
+	if !releaseCatalog && !currentResourcePolicies && version >= 20261029000200 && proof["githubAutonomousWrites"] != true {
 		t.Fatal("native GitHub write guards are unconfirmed")
 	}
-	if !currentResourcePolicies && version >= 20261029000300 && (proof["workflowPDLCCatalog"] != true || proof["workflowPDLCFunctions"] != float64(14)) {
+	if !releaseCatalog && !currentResourcePolicies && version >= 20261029000300 && (proof["workflowPDLCCatalog"] != true || proof["workflowPDLCFunctions"] != float64(14)) {
 		t.Fatal("native PDLC owner catalog is unconfirmed")
 	}
-	if !currentResourcePolicies && version >= 20261030000100 && proof["workflowContentPageCatalog"] != true {
+	if !releaseCatalog && !currentResourcePolicies && version >= 20261030000100 && proof["workflowContentPageCatalog"] != true {
 		t.Fatal("native content page catalog is unconfirmed")
 	}
 	// Каждая мутация живёт в собственной rollback transaction, чтобы старый CHECK не
-	// маскировал следующие ACL/trigger counterfactuals. Полный каталог читается повторно.
+	// маскировал следующие ACL/trigger counterfactuals.
 	probes := []struct{ statement, rejectedField string }{
 		{"GRANT EXECUTE ON FUNCTION control_plane.integration_github_legacy_capabilities(text,text,text,text) TO PUBLIC", catalogField},
 		{"REVOKE SELECT ON control_plane.session_workspace_storage FROM kodex_backup_reader", backupField},
 	}
-	if currentResourcePolicies {
+	if releaseCatalog {
+		probes = append(probes, struct{ statement, rejectedField string }{"ALTER TABLE control_plane.integration_invocations DISABLE TRIGGER email_mailbox_gate_valid", catalogField}, struct{ statement, rejectedField string }{queryIntegrationGitHubOldWriteConstraint, catalogField})
+	} else if currentResourcePolicies {
 		probes = append(probes, struct{ statement, rejectedField string }{"ALTER TABLE control_plane.integration_invocations DISABLE TRIGGER email_mailbox_gate_valid", "integrationPolicyGuards"}, struct{ statement, rejectedField string }{queryIntegrationGitHubOldWriteConstraint, "integrationPolicyConstraints"})
 	} else if version >= 20261029000200 {
 		probes = append(probes,
@@ -127,6 +148,14 @@ func TestIntegrationGitHubBackupSchemaProofComponent(t *testing.T) {
 	}
 	statement := strings.ReplaceAll(string(source), "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;", "")
 	statement = strings.TrimSuffix(strings.TrimSpace(statement), "ROLLBACK;")
+	verifyRestoredCatalog := func() {
+		t.Helper()
+		restored, err := readComponentSchemaProof(ctx, admin, string(source))
+		if err != nil || restored["profile"] != profile || restored["gooseVersion"] != float64(version) ||
+			restored[catalogField] != true || restored[backupField] != true {
+			t.Fatal("backup counterfactual changed the canonical schema", err)
+		}
+	}
 	for _, probe := range probes {
 		tx, err := admin.Begin(ctx)
 		if err != nil {
@@ -136,16 +165,20 @@ func TestIntegrationGitHubBackupSchemaProofComponent(t *testing.T) {
 			_ = tx.Rollback(ctx)
 			t.Fatal("prepare isolated backup schema counterfactual")
 		}
-		proof, proofErr := read([]byte(statement))
+		proof, proofErr := readComponentSchemaProof(ctx, admin, statement)
 		rollbackErr := tx.Rollback(ctx)
 		var rejected *pgconn.PgError
-		if rollbackErr != nil || proofErr == nil && proof[probe.rejectedField] != false ||
-			proofErr != nil && (!errors.As(proofErr, &rejected) || rejected.Code != "P0001") {
+		if rollbackErr != nil || admin.PgConn().TxStatus() != 'I' || proofErr == nil && proof[probe.rejectedField] != false ||
+			proofErr != nil && (releaseCatalog || !errors.As(proofErr, &rejected) || rejected.Code != "P0001") {
 			t.Fatalf("backup schema accepted drift or did not roll back: predicate=%s SQLSTATE=%v rollback=%v", probe.rejectedField, proofErr, rollbackErr)
 		}
-		proof, err = read(source)
-		if err != nil || proof[catalogField] != true || proof[backupField] != true {
-			t.Fatal("backup counterfactual changed the canonical schema")
+		if !releaseCatalog {
+			verifyRestoredCatalog()
 		}
+	}
+	// On 051 each rollback has an idle-session readback. Recheck the full fingerprint once after all probes.
+	// На 051 каждый откат подтверждается состоянием idle. Полный отпечаток перепроверяется после всех сценариев.
+	if releaseCatalog {
+		verifyRestoredCatalog()
 	}
 }

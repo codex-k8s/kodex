@@ -13,6 +13,7 @@ resources:
 - ../../overlays/production/runtime-controller
 - ../../base/runtime-workloads
 - ../../base/runtime-secret-drafts
+- ../../base/ssh-identities
 - ../../overlays/production/integration-gateway
 - ../../overlays/production/interaction-gateway
 - ../../overlays/production/automation-scheduler

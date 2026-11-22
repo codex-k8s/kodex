@@ -1,6 +1,7 @@
 -- name: artifacts_purge_finalize :exec
 UPDATE control_plane.artifact_heads
 SET lifecycle_state = 'PURGED',
+    retention_claim_owner=NULL,retention_claim_expires_at=NULL,
     current_revision_id = NULL,
     purged_at = clock_timestamp(),
     version = version + 1

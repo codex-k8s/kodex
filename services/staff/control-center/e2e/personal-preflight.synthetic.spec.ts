@@ -98,7 +98,9 @@ test("launch preflight показывает все подключения без
     }),
   ).toBeVisible();
   await expect(
-    page.getByText("Ключ отозван; добавьте новый", { exact: false }),
+    page.getByText("Доступ отозван; настройте подключение заново", {
+      exact: false,
+    }),
   ).toBeVisible();
   await expect(
     page.getByText("Jira для проверки", { exact: true }),

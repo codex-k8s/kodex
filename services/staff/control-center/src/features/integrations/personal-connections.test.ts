@@ -12,6 +12,7 @@ import {
 } from "./personal-connections";
 
 const connection: PersonalIntegrationConnection = {
+  credentialDelivery: { kind: "TOKEN" },
   connectionRef: "int_fixture01",
   connectionVersion: 7,
   name: "Личный GitLab",
@@ -21,6 +22,8 @@ const connection: PersonalIntegrationConnection = {
   enabled: true,
 };
 const credential: PersonalIntegrationCredential = {
+  credentialDelivery: { kind: "TOKEN" },
+  bindingGeneration: 2,
   connectionRef: connection.connectionRef,
   connectionVersion: 7,
   bindingRef: "ipc_fixture01",
@@ -79,6 +82,74 @@ afterEach(() => {
 });
 
 describe("личные подключения: жизненный цикл UI", () => {
+  it("сохраняет UNKNOWN у старого receipt и требует readback до следующего setup/test", async () => {
+    const retained = { ...credential, version: 4 };
+    delete retained.credentialDelivery;
+    delete retained.bindingGeneration;
+    const before = JSON.stringify(retained);
+    const { port, model } = fixture([{ ...connection, credential }]);
+    port.savePersonalConnection.mockResolvedValueOnce(retained);
+    await model.load();
+    model.edit(required(model.items.value[0]));
+    model.credentialValue.value = "synthetic-private-key";
+    await model.execute(connection.connectionRef, "SAVE");
+    expect(port.savePersonalConnection).toHaveBeenCalledOnce();
+    expect(model.requiresRefresh.value).toBe(true);
+    expect(model.success.value).toBeUndefined();
+    expect(model.credentialValue.value).toBe("");
+    const current = required(model.items.value[0]);
+    expect(current.credential?.credentialDelivery).toBeUndefined();
+    expect(personalConnectionAllows(current, "SAVE")).toBe(false);
+    expect(personalConnectionAllows(current, "TEST")).toBe(false);
+    expect(personalConnectionAllows(current, "REVOKE")).toBe(true);
+    await model.execute(connection.connectionRef, "SAVE");
+    expect(port.savePersonalConnection).toHaveBeenCalledOnce();
+    expect(JSON.stringify(retained)).toBe(before);
+  });
+
+  it("не отправляет plaintext после Create receipt с неизвестным kind", async () => {
+    const unknown = {
+      ...credential,
+      version: 1,
+      state: "NOT_CONFIGURED" as const,
+      credentialConfigured: false,
+    };
+    delete unknown.credentialDelivery;
+    delete unknown.bindingGeneration;
+    const { port, model } = fixture();
+    port.createPersonalConnection.mockResolvedValueOnce(unknown);
+    await model.load();
+    model.edit(required(model.items.value[0]));
+    model.credentialValue.value = "synthetic-private-key";
+    await model.execute(connection.connectionRef, "SAVE");
+    expect(port.createPersonalConnection).toHaveBeenCalledOnce();
+    expect(port.savePersonalConnection).not.toHaveBeenCalled();
+    expect(model.requiresRefresh.value).toBe(true);
+    expect(model.credentialValue.value).toBe("");
+  });
+
+  it("не выбирает generic TOKEN setup для broker identity или отсутствующих metadata", () => {
+    const missing = { ...connection };
+    delete missing.credentialDelivery;
+    expect(personalConnectionAllows(missing, "SAVE")).toBe(false);
+    const delivery = {
+      kind: "BROKER_IDENTITY",
+      brokerPurpose: "KUBERNETES_TARGET",
+    } as const;
+    const broker = {
+      ...connection,
+      credentialDelivery: delivery,
+      credential: {
+        ...credential,
+        credentialDelivery: delivery,
+        brokerIdentity: { ref: "bir_fixture01", revision: 1 },
+      },
+    };
+    expect(personalConnectionAllows(broker, "SAVE")).toBe(false);
+    expect(personalConnectionAllows(broker, "TEST")).toBe(true);
+    expect(personalConnectionAllows(broker, "REVOKE")).toBe(true);
+  });
+
   it("создаёт собственную metadata, сохраняет ключ один раз и очищает поле до ответа", async () => {
     const { port, model } = fixture();
     await model.load();

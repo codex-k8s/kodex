@@ -275,6 +275,12 @@ func verifiedProjectionAuthority(ctx context.Context, callerID, callerSPIFFEID, 
 // validProjectionProject требует отсутствия project для catalog/system-assistant routes, допускает absent
 // либо valid project для STT и требует valid identity для остальных methods.
 func validProjectionProject(method string, project *internalrpcauthorityv1.AuthorityIdentity) bool {
+	if method == secretbrokerv1.ManagedKubernetesService_ExecuteManagedKubernetesOperation_FullMethodName ||
+		method == secretbrokerv1.ManagedKubernetesService_ExchangeManagedKubernetesStream_FullMethodName ||
+		method == secretbrokerv1.ManagedKubernetesService_CancelManagedKubernetesOperation_FullMethodName ||
+		method == secretbrokerv1.ManagedKubernetesService_CheckManagedKubernetesReadiness_FullMethodName {
+		return project == nil || validProjectionIdentity(project)
+	}
 	if method == secretbrokerv1.RuntimeCredentialProjectionService_ProjectSSHComposeCredential_FullMethodName && project == nil {
 		return true
 	}

@@ -58,13 +58,13 @@ GitHub `content.update.content_base64` имеет maximumLength 349528 для ф
 до 256 KiB; остальные поставленные field bounds сохранены. Управляемое
 сужение поля остаётся обязательным для owner и consumer.
 
-| Сценарий #1046 / #1028 | Проверка owner | Проверка consumer |
-| --- | --- | --- |
-| UI save/publish | tenant ACL, OCC/idempotency, server UI origin, canonical validation | exact key/version/digest и compiled adapter contract |
-| Git accept/publish | source claim, commit ancestry, content digest, server GIT origin | тот же validator, без изменения глобального registry |
-| Test/invocation | разрешённая connection/credential revision и immutable package | request-local package до credential read и внешнего действия |
-| Git source read | file-read READ с approval NONE | усиленный READ gate без отдельной owner цепочки закрыто отклоняется |
-| Неизвестный outcome | owner receipt/task readback | библиотека не создаёт событий или повторов |
+| Сценарий #1046 / #1028 | Проверка owner                                                      | Проверка consumer                                                   |
+| ---------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| UI save/publish        | tenant ACL, OCC/idempotency, server UI origin, canonical validation | exact key/version/digest и compiled adapter contract                |
+| Git accept/publish     | source claim, commit ancestry, content digest, server GIT origin    | тот же validator, без изменения глобального registry                |
+| Test/invocation        | разрешённая connection/credential revision и immutable package      | request-local package до credential read и внешнего действия        |
+| Git source read        | file-read READ с approval NONE                                      | усиленный READ gate без отдельной owner цепочки закрыто отклоняется |
+| Неизвестный outcome    | owner receipt/task readback                                         | библиотека не создаёт событий или повторов                          |
 
 Этот общий checkpoint предоставляет валидатор. Исполняемые owner RPC и worker
 циклы проверяются в полных unit #1046 и #1028; библиотечный PASS не заменяет
@@ -113,3 +113,24 @@ unit gateway и не заменяется schema/codegen PASS этой библ�
 Ограничения и lifecycle — [#2038](../../../docs/operations/jira-create-fields-2038.md).
 Исторические exact Jira1.0.0 pins разрешаются из frozen snapshot без наследования
 новых inputs и configuration; Cloud package не расширяется.
+
+## Встроенные исторические snapshots
+
+Compatibility registry хранит полный frozen predecessor, а не пересобирает его
+из successor. Process-local cache содержит только canonical JSON bytes известных
+embedded YAML snapshots. Lazy initialization выполняет прежний strict YAML Parse,
+проверяет exact key/version/adapter/SHIPPED origin и предел256KiB. Bytes хранятся
+как immutable string; неизвестный caller не добавляет cache entries.
+
+Каждый resolve сохраняет проверку текущего successor и requested version, заново
+передаёт owned bytes в прежний strict JSON Parse, получает отдельные nested
+fields и сверяет requested digest. Ни mutable Package, ни результат текущей
+валидации, actor/grant/credential/readiness не кешируются. Ошибка embedded snapshot
+закрыто сохраняет недоступность; fallback либо изменение frozen digests отсутствуют.
+Библиотека не создаёт events и не заменяет owner eligibility или per-call provider
+permissions. Это production optimization разбора неизменяемых metadata в полном
+unit #2145, не сокращение operation matrix, UTF-8/EOF проверок либо timeout.
+
+Проверены Context7 `/websites/pkg_go_dev_go1_25_3` (`sync` once initialization)
+и фактический `sync.OnceValues` в pinned Go1.26.10 `src/sync/oncefunc.go`.
+Новых dependency/version changes нет.

@@ -247,7 +247,7 @@ func (repository *Repository) sourceInput(ctx context.Context, tx pgx.Tx, curren
 	if locked.version != payload.ExpectedConnectionVersion {
 		return entity.ManagedConfigurationSourceWork{}, "", "", errs.ErrVersionMismatch
 	}
-	connection, err := readConnection(ctx, tx, current, payload.ConnectionRef)
+	connection, err := repository.readConnection(ctx, tx, current, payload.ConnectionRef)
 	if err != nil {
 		return entity.ManagedConfigurationSourceWork{}, "", "", err
 	}
@@ -326,7 +326,7 @@ func (repository *Repository) changeConfigurationSource(ctx context.Context, tx 
 		if readErr != nil || set.ManagedBy != "GIT" || (source.State != "READY" && source.State != "SYNC_BLOCKED") {
 			return commandOutcome{}, errs.ErrConflict
 		}
-		connection, err := readConnection(ctx, tx, current, source.ConnectionRef)
+		connection, err := repository.readConnection(ctx, tx, current, source.ConnectionRef)
 		if err != nil {
 			return commandOutcome{}, err
 		}

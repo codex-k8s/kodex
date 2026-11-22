@@ -5,6 +5,7 @@ import (
 	"time"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
@@ -39,6 +40,16 @@ func (server *Server) ListPersonalIntegrationConnections(ctx context.Context, re
 		}
 		view := &controlplanev1.PersonalIntegrationConnection{ConnectionRef: item.Ref, ConnectionVersion: item.Version,
 			Name: item.Name, DefinitionKey: item.DefinitionKey, Policy: controlplanev1.IntegrationCredentialPolicy(policy), Enabled: item.Enabled, Available: item.Available}
+		view.CredentialDeliveryKind, view.BrokerIdentityPurpose = castCredentialDelivery(item.CredentialDelivery)
+		if item.KubernetesSetupRequirements != nil {
+			if view.CredentialDeliveryKind != controlplanev1.IntegrationCredentialDeliveryKind_INTEGRATION_CREDENTIAL_DELIVERY_KIND_BROKER_IDENTITY || view.BrokerIdentityPurpose != controlplanev1.IntegrationBrokerIdentityPurpose_INTEGRATION_BROKER_IDENTITY_PURPOSE_KUBERNETES_TARGET {
+				return nil, status.Error(codes.Unavailable, personalCredentialResultUnavailable)
+			}
+			view.KubernetesSetupRequirements = kubernetesSetupRequirementsToProto(item.KubernetesSetupRequirements, item.Version, item.Policy)
+			if view.KubernetesSetupRequirements == nil {
+				return nil, status.Error(codes.Unavailable, personalCredentialResultUnavailable)
+			}
+		}
 		if item.Credential != nil {
 			if item.Credential.ConnectionRef != item.Ref || item.Credential.ConnectionVersion != item.Version || item.Credential.CredentialPolicy != item.Policy {
 				return nil, status.Error(codes.Unavailable, personalCredentialResultUnavailable)
@@ -189,22 +200,39 @@ func castPersonalIntegrationCredential(binding entity.PersonalIntegrationCredent
 	}
 	policy, policyKnown := controlplanev1.IntegrationCredentialPolicy_value["INTEGRATION_CREDENTIAL_POLICY_"+string(binding.CredentialPolicy)]
 	state, stateKnown := controlplanev1.PersonalIntegrationCredentialState_value["PERSONAL_INTEGRATION_CREDENTIAL_STATE_"+binding.State]
+	kind, purpose := castCredentialDelivery(integrationpackage.CredentialDelivery{Kind: integrationpackage.CredentialDeliveryKind(binding.Kind), BrokerPurpose: string(binding.BrokerPurpose)})
+	knownDelivery := kind == controlplanev1.IntegrationCredentialDeliveryKind_INTEGRATION_CREDENTIAL_DELIVERY_KIND_TOKEN || kind == controlplanev1.IntegrationCredentialDeliveryKind_INTEGRATION_CREDENTIAL_DELIVERY_KIND_BROKER_IDENTITY
+	unknownDelivery := binding.Kind == "" && binding.BrokerPurpose == "" && binding.BrokerIdentity == nil
 	if binding.Ref == "" || binding.ConnectionRef == "" || binding.Version < 1 || binding.ConnectionVersion < 1 || now.IsZero() ||
 		!policyKnown || policy == 0 || !stateKnown || state == 0 || binding.State == "EXPIRED" ||
+		binding.Generation < 1 || !knownDelivery && !unknownDelivery ||
 		len(binding.VerifiedCapabilities) > 256 || len(binding.DeniedCapabilities) > 256 {
 		return invalid()
 	}
 	if binding.Credential != nil && (!binding.Credential.ValidDescriptor() || binding.Credential.Ref == "" || binding.Credential.Revision < 1 || binding.Credential.CreatedAt.IsZero()) {
 		return invalid()
 	}
-	if binding.State == "NOT_CONFIGURED" && binding.Credential != nil ||
-		binding.State != "NOT_CONFIGURED" && binding.State != "REVOKED" && binding.Credential == nil {
+	if binding.Credential != nil && knownDelivery && kind != controlplanev1.IntegrationCredentialDeliveryKind_INTEGRATION_CREDENTIAL_DELIVERY_KIND_TOKEN ||
+		binding.BrokerIdentity != nil && (kind != controlplanev1.IntegrationCredentialDeliveryKind_INTEGRATION_CREDENTIAL_DELIVERY_KIND_BROKER_IDENTITY ||
+			!binding.BrokerIdentity.ValidMetadata() || binding.BrokerIdentity.CreatedAt.After(now) || binding.BrokerIdentity.Purpose != binding.BrokerPurpose) {
+		return invalid()
+	}
+	configured := binding.Credential != nil || binding.BrokerIdentity != nil
+	if binding.State == "NOT_CONFIGURED" && configured ||
+		binding.State != "NOT_CONFIGURED" && binding.State != "REVOKED" && !configured {
 		return invalid()
 	}
 	view := &controlplanev1.PersonalIntegrationCredentialView{ConnectionRef: binding.ConnectionRef, BindingRef: binding.Ref,
+		CredentialDeliveryKind: kind, BrokerIdentityPurpose: purpose,
 		Version: binding.Version, ConnectionVersion: binding.ConnectionVersion, Policy: controlplanev1.IntegrationCredentialPolicy(policy),
-		State: controlplanev1.PersonalIntegrationCredentialState(state), CredentialConfigured: binding.Credential != nil, GithubDiscovery: castGitHubDiscovery(binding.GitHubDiscovery),
+		State: controlplanev1.PersonalIntegrationCredentialState(state), CredentialConfigured: configured, GithubDiscovery: castGitHubDiscovery(binding.GitHubDiscovery),
 		VerifiedCapabilityKeys: append([]string(nil), binding.VerifiedCapabilities...), DeniedCapabilityKeys: append([]string(nil), binding.DeniedCapabilities...)}
+	if knownDelivery {
+		view.BindingGeneration = binding.Generation
+	}
+	if binding.BrokerIdentity != nil {
+		view.BrokerIdentityRef, view.BrokerIdentityRevision = binding.BrokerIdentity.Ref, binding.BrokerIdentity.Revision
+	}
 	if binding.ExpiresAt != nil {
 		view.ExpiresAt = timestamppb.New(*binding.ExpiresAt)
 		if view.ExpiresAt.CheckValid() != nil {

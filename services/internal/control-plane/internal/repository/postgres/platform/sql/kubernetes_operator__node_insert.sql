@@ -1,0 +1,2 @@
+-- name: kubernetes_operator__node_insert :exec
+INSERT INTO control_plane.kubernetes_node_transport_pins(ref,generation,target_ref,target_revision,cluster_uid,node_uid,protocol,serving_key_sha256,registry_revision,payload,content_sha256) VALUES(@ref,@generation,@target_ref,@target_revision,@cluster_uid::uuid,@node_uid::uuid,@protocol,@serving_key_sha256,@registry_revision,@payload,@content_sha256) ON CONFLICT(ref) DO NOTHING;

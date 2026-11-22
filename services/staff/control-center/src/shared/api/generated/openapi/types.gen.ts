@@ -1139,6 +1139,10 @@ export type Project = {
  * Авторитетный снимок surviving purge receipt. Версия относится к восстановлению, а не к удалённому проекту. Не содержит имён файлов, ключей хранилища и содержимого.
  */
 export type ProjectPurgeRecovery = {
+    /**
+     * Закрытая причина. Незавершённый staged object либо manual artifact purge сохраняет прежний lifecycle проекта и достижимый owner readback; повторный Delete не выдаётся.
+     */
+    reasonCode?: 'NONE' | 'KUBERNETES_STAGING_RECONCILIATION_REQUIRED' | 'ARTIFACT_PURGE_RECONCILIATION_REQUIRED';
     projectRef: OpaqueRef;
     version: number;
     snapshotDigest: string;
@@ -3766,6 +3770,8 @@ export type SystemAssistantIntegrationGrantInput = {
     connectionRef: OpaqueRef;
     capabilityKey: string;
     enabled: boolean;
+    kubernetesNamespace?: KubernetesGrantNamespace;
+    kubernetesGrantRef?: OpaqueRef;
     approvalPolicy: 'NONE' | 'HUMAN_EACH_EFFECT' | 'HUMAN_SCOPED';
     approvalScopePaths?: Array<string>;
 };
@@ -3894,8 +3900,66 @@ export type OwnerGate = {
     resolutionAttachmentSetRef?: OpaqueRef;
     sourceAttachmentSetRef?: OpaqueRef;
     decisionConsequences: Array<OwnerGateDecisionConsequence>;
+    kubernetesChild?: KubernetesOwnerGateChild;
     integrationIntent?: IntegrationIntent;
     nextActions: Array<NextAction>;
+};
+
+/**
+ * Сохранённое описание одного дочернего действия, без material и execution credit. Решение относится только к этому child исходного plan.
+ */
+export type KubernetesOwnerGateChild = {
+    planRef: OpaqueRef;
+    childRef: OpaqueRef;
+    operation: string;
+    planDigest: string;
+    inputDigest: string;
+    targetRef: OpaqueRef;
+    targetRevision: number;
+    resource: KubernetesOwnerGateResource;
+    intendedName: string;
+    intendedGenerateName: string;
+    preview: KubernetesOwnerGatePreview;
+};
+
+export type KubernetesOwnerGatePreview = {
+    inputDigest: string;
+    options: Array<KubernetesOwnerGatePreviewOption>;
+    changes: Array<KubernetesOwnerGatePreviewChange>;
+    secretMaterialRef: string;
+    limitations: Array<'NOT_AUTHORIZED' | 'SENSITIVE_OR_UNCLASSIFIED_FIELDS_HIDDEN' | 'PROTECTED_MATERIAL_HIDDEN' | 'BUDGET_EXCEEDED' | 'PORT_FORWARD_LOGICAL_STREAM_16_ACTIVE'>;
+};
+
+export type KubernetesOwnerGatePreviewOption = {
+    key: string;
+    kind: 'NONE' | 'STRING' | 'NUMBER' | 'BOOLEAN' | 'ARRAY' | 'OBJECT' | 'NULL';
+    valueJson: string;
+    redacted: boolean;
+};
+
+export type KubernetesOwnerGatePreviewChange = {
+    operation: 'SUBMIT' | 'add' | 'remove' | 'replace' | 'copy' | 'move' | 'test';
+    path: string;
+    from: string;
+    valueKind: 'NONE' | 'STRING' | 'NUMBER' | 'BOOLEAN' | 'ARRAY' | 'OBJECT' | 'NULL';
+    valueJson: string;
+    redacted: boolean;
+};
+
+/**
+ * Безопасные координаты из original child observation. Пустые UID/RV у CREATE collection не означают доказанную ABSENT incarnation.
+ */
+export type KubernetesOwnerGateResource = {
+    group: string;
+    version: string;
+    resource: string;
+    namespace: string;
+    name: string;
+    uid: string;
+    resourceVersion: string;
+    subresource: string;
+    namespaced: boolean;
+    allNamespaces: boolean;
 };
 
 export type WorkflowReworkStepPreview = {
@@ -3974,6 +4038,7 @@ export type Artifact = {
     purgeAfter?: Timestamp;
     agentBindings: Array<OpaqueRef>;
     previewAvailable: boolean;
+    captureOrigin?: KubernetesArtifactCaptureOrigin;
     createdAt: Timestamp;
     nextActions: Array<NextAction>;
 };
@@ -3989,7 +4054,37 @@ export type ArtifactRevision = {
     scanState: 'PENDING' | 'SCANNING' | 'CLEAN' | 'NOT_SCANNED' | 'QUARANTINED' | 'FAILED';
     source: 'CONTROL_CENTER' | 'AGENT_RESULT' | 'INTEGRATION_RESULT' | 'KNOWLEDGE_SOURCE' | 'INTERACTION_ATTACHMENT';
     previewAvailable: boolean;
+    captureOrigin?: KubernetesArtifactCaptureOrigin;
     createdAt: Timestamp;
+};
+
+/**
+ * Сохранённый owner-ACK prefix. FULL описывает полноту capture, а не успешность удалённой команды; PARTIAL не подтверждает остановку либо join. Поле не выдаёт новые полномочия.
+ */
+export type KubernetesArtifactCaptureOrigin = {
+    invocationRef: OpaqueRef;
+    streamRef: OpaqueRef;
+    streamGeneration: number;
+    captureGeneration: number;
+    operation: 'kubernetes.exec' | 'kubernetes.attach' | 'kubernetes.debug' | 'kubernetes.logs' | 'kubernetes.watch' | 'kubernetes.watch.all-namespaces' | 'kubernetes.cp.upload' | 'kubernetes.cp.download' | 'kubernetes.port-forward';
+    channel: 'STDOUT' | 'STDERR' | 'CONTROL' | 'PORT_FORWARD' | 'FILE_CONTENT';
+    kind: 'FULL' | 'PARTIAL';
+    acknowledgedPrefix: string;
+    outputWatermark: string;
+    droppedBytes: string;
+    nativeTerminalKnown: boolean;
+    transportJoined: boolean;
+    ownerState: 'COMPLETED' | 'CANCELED' | 'REVOKED' | 'EXPIRED' | 'LOST';
+    localState: 'UNKNOWN' | 'COMPLETED' | 'CANCELED' | 'REVOKED' | 'EXPIRED' | 'LOST';
+    remoteOutcome: 'SUCCEEDED' | 'FAILED' | 'UNKNOWN';
+    exitCode?: number;
+    resource: KubernetesOwnerGateResource;
+    targetRef: OpaqueRef;
+    targetRevision: number;
+    connectionRef: OpaqueRef;
+    sourceDigest: string;
+    reasonCode: string;
+    sealedAt: Timestamp;
 };
 
 export type ArtifactRevisionPage = {
@@ -4611,7 +4706,7 @@ export type IntegrationCapability = {
     approvalPolicy: 'NONE' | 'HUMAN_EACH_EFFECT' | 'HUMAN_SCOPED';
     allowedApprovalPolicies: Array<'NONE' | 'HUMAN_EACH_EFFECT' | 'HUMAN_SCOPED'>;
     approvalScope?: IntegrationApprovalScopeContract;
-    resourceKind: 'SYNTHETIC_JOURNAL' | 'GITHUB_REPOSITORY' | 'GITHUB_SCOPE' | 'MATTERMOST_CHANNEL' | 'GITLAB_PROJECT' | 'GITLAB_SCOPE' | 'JIRA_PROJECT' | 'CONFLUENCE_SPACE' | 'EMAIL_SENDER' | 'HTTPS_RESOURCE' | 'SSH_TARGET';
+    resourceKind: 'SYNTHETIC_JOURNAL' | 'GITHUB_REPOSITORY' | 'GITHUB_SCOPE' | 'MATTERMOST_CHANNEL' | 'GITLAB_PROJECT' | 'GITLAB_SCOPE' | 'JIRA_PROJECT' | 'CONFLUENCE_SPACE' | 'EMAIL_SENDER' | 'HTTPS_RESOURCE' | 'SSH_TARGET' | 'KUBERNETES_TARGET';
     inputFields: Array<IntegrationConfigurationField>;
     inputSchema?: string;
     inputSchemaSha256?: string;
@@ -4637,6 +4732,7 @@ export type IntegrationConfigurationField = {
 };
 
 export type IntegrationDefinition = {
+    credentialDelivery?: IntegrationCredentialDelivery;
     nextActions: Array<'COPY'>;
     /**
      * Авторитетная версия каталога для If-Match при SHIPPED copy.
@@ -4654,7 +4750,7 @@ export type IntegrationDefinition = {
     definitionVersion: string;
     origin: 'SHIPPED';
     digest: string;
-    adapter: 'SYNTHETIC_HTTP' | 'GITHUB' | 'GITLAB' | 'JIRA' | 'CONFLUENCE' | 'EMAIL_HTTPS' | 'MATTERMOST_INTERACTION' | 'TELEGRAM_INTERACTION' | 'HTTPS_JSON_READ' | 'OPENAPI_MCP' | 'CONTEXT7' | 'SSH_COMPOSE' | 'SENTRY' | 'OBSERVABILITY';
+    adapter: 'SYNTHETIC_HTTP' | 'GITHUB' | 'GITLAB' | 'JIRA' | 'CONFLUENCE' | 'EMAIL_HTTPS' | 'MATTERMOST_INTERACTION' | 'TELEGRAM_INTERACTION' | 'HTTPS_JSON_READ' | 'OPENAPI_MCP' | 'CONTEXT7' | 'SSH_COMPOSE' | 'SENTRY' | 'OBSERVABILITY' | 'SSH_TARGET' | 'KUBERNETES';
     adapterOwner: 'integration-gateway' | 'interaction-gateway';
     executionRoute: 'MANAGED_MCP' | 'INTERACTION';
     adapterReadiness: 'READY' | 'NOT_READY';
@@ -4664,7 +4760,7 @@ export type IntegrationDefinition = {
 };
 
 export type IntegrationResourceScope = {
-    kind: 'SYNTHETIC_JOURNAL' | 'GITHUB_REPOSITORY' | 'GITHUB_SCOPE' | 'MATTERMOST_CHANNEL' | 'GITLAB_PROJECT' | 'GITLAB_SCOPE' | 'JIRA_PROJECT' | 'CONFLUENCE_SPACE' | 'EMAIL_SENDER' | 'HTTPS_RESOURCE' | 'SSH_TARGET';
+    kind: 'SYNTHETIC_JOURNAL' | 'GITHUB_REPOSITORY' | 'GITHUB_SCOPE' | 'MATTERMOST_CHANNEL' | 'GITLAB_PROJECT' | 'GITLAB_SCOPE' | 'JIRA_PROJECT' | 'CONFLUENCE_SPACE' | 'EMAIL_SENDER' | 'HTTPS_RESOURCE' | 'SSH_TARGET' | 'KUBERNETES_TARGET';
     values: {
         [key: string]: string;
     };
@@ -4726,9 +4822,65 @@ export type EmailMailboxOperationPolicy = {
 };
 
 /**
+ * Явный профиль SMTP/IMAP endpoints; пароль приложения Gmail не заявляет OAuth/XOAUTH2 lifecycle или успешный вход.
+ */
+export type EmailMailboxProviderProfile = 'CUSTOM' | 'TIMEWEB_PASSWORD' | 'GMAIL_APP_PASSWORD';
+
+export type EmailMailboxOwnership = {
+    connectionRef: OpaqueRef;
+    connectionVersion: number;
+    deliveryKind: 'MAILBOX_CONFIGURATION';
+    /**
+     * Текущая eligibility владельца и конфигуратора; не grant и не разрешение внешней операции.
+     */
+    ownerEligible: boolean;
+    policy: 'INITIATOR_REQUIRED' | 'PROJECT_SHARED';
+    state: 'UNCONFIGURED' | 'ACTIVE' | 'REVOKED';
+    generation: number;
+    serviceSubjectRef?: OpaqueRef;
+};
+
+export type PersonalEmailMailboxMutationOperation = 'CREATE' | 'CONFIGURE' | 'REVOKE';
+
+export type PersonalEmailMailboxMutationReceipt = {
+    operation: PersonalEmailMailboxMutationOperation;
+    mailbox?: MyEmailMailbox;
+    ownership?: EmailMailboxOwnership;
+};
+
+export type PersonalEmailMailboxConnectionInput = {
+    /**
+     * До160 Unicode codepoints в исходном вводе; имя сохраняется без пробелов по краям.
+     */
+    name: string;
+    sender: string;
+};
+
+/**
+ * INITIATOR_REQUIRED назначает только текущего USER и запрещает serviceSubjectRef; PROJECT_SHARED требует явный serviceSubjectRef. Owner проверяет выбранный вариант до idempotency replay.
+ */
+export type EmailMailboxOwnershipInput = {
+    policy: 'INITIATOR_REQUIRED' | 'PROJECT_SHARED';
+    serviceSubjectRef?: OpaqueRef;
+};
+
+export type MyEmailMailbox = {
+    ownership: EmailMailboxOwnership;
+    name: string;
+    enabled: boolean;
+    available: boolean;
+};
+
+export type MyEmailMailboxPage = {
+    items: Array<MyEmailMailbox>;
+    nextPageToken?: string;
+};
+
+/**
  * Только редактируемые поля; неполный DRAFT допустим, полноценную пригодность проверяет owner при validate/publish/bind.
  */
 export type EmailMailboxSpecification = {
+    providerProfile?: EmailMailboxProviderProfile;
     enabled?: boolean;
     receiveProtocol?: EmailMailboxReceiveProtocol;
     allowedFolders?: Array<string>;
@@ -4857,11 +5009,48 @@ export type EmailMailboxCredential = {
     connectionVersion: number;
 };
 
+export type SshIdentitySetupBeginInput = {
+    expectedConnectionVersion: number;
+    contentSHA256: string;
+    contentBytes: number;
+};
+
+export type SshIdentitySetup = {
+    ref: string;
+    connectionRef: OpaqueRef;
+    identityRef: OpaqueRef;
+    targetRef: OpaqueRef;
+    reasonCode: 'PREPARED' | 'ATTEMPTING' | 'MATERIAL_UNKNOWN' | 'MISSING_COMPLETION' | 'ACK_REJECTED' | 'COMPLETED' | 'CANCELLED' | 'EXPIRED' | 'STALE_OWNER' | 'MATERIAL_RECORDED_NO_ATTACHMENT' | 'QUARANTINED' | 'SETUP_EXPIRED' | 'SETUP_EXPIRED_WITH_MATERIAL_UNRESOLVED' | 'OWNER_REVOKED' | 'OWNER_REPLACED';
+    version: number;
+    connectionVersion: number;
+    bindingVersion: number;
+    bindingGeneration: number;
+    identityRevision: number;
+    policy: 'INITIATOR_REQUIRED' | 'PROJECT_SHARED';
+    state: 'PREPARED' | 'ATTEMPTING' | 'UNKNOWN' | 'UNREPORTED' | 'ACK_REJECTED' | 'COMPLETED' | 'CANCELLED' | 'EXPIRED' | 'QUARANTINED';
+    expiresAt: string;
+};
+
+export type SshIdentitySetupAdmission = {
+    setup: SshIdentitySetup;
+    reconcileOnly: false;
+    upload: {
+        origin: string;
+        tlsServerName: string;
+        readonly permit: string;
+    };
+} | {
+    setup: SshIdentitySetup;
+    reconcileOnly: true;
+};
+
 export type IntegrationCredentialPolicyInput = {
     policy: 'PROJECT_SHARED' | 'INITIATOR_REQUIRED';
 };
 
 export type PersonalIntegrationConnection = {
+    kubernetesSetupRequirements?: KubernetesIdentitySetupRequirements;
+    credentialDelivery?: IntegrationCredentialDelivery;
     connectionRef: OpaqueRef;
     connectionVersion: number;
     name: string;
@@ -4870,7 +5059,7 @@ export type PersonalIntegrationConnection = {
     enabled: boolean;
     credential?: PersonalIntegrationCredential;
     /**
-     * Адаптер включён и поддерживает настройку ключа; false не скрывает собственный ключ для отзыва и не заменяет проверку полномочий.
+     * Адаптер включён и тип личных реквизитов подтверждён; false не скрывает собственную привязку для отзыва и не заменяет проверку полномочий.
      */
     available: boolean;
 };
@@ -4904,7 +5093,28 @@ export type PersonalIntegrationConnectionList = {
     nextPageToken?: string;
 };
 
+/**
+ * Только owner-derived metadata выбранного представления. Отсутствие поля означает UNKNOWN, не NONE и не разрешение выбрать TOKEN. BROKER_IDENTITY использует purpose-specific protected setup и не выдаёт generic Secret descriptor.
+ */
+export type IntegrationCredentialDelivery = {
+    kind: 'NONE' | 'TOKEN';
+} | {
+    kind: 'BROKER_IDENTITY';
+    brokerPurpose: 'KUBERNETES_TARGET' | 'SSH_TARGET';
+};
+
+/**
+ * Безопасные metadata собственной или явно выбранной PROJECT_SHARED identity. Ref и revision не являются grant; Secret ref, UID, resourceVersion, content digest, kubeconfig и private key никогда не входят в это представление.
+ */
+export type IntegrationBrokerIdentityMetadata = {
+    ref: OpaqueRef;
+    revision: number;
+};
+
 export type PersonalIntegrationCredential = {
+    credentialDelivery?: IntegrationCredentialDelivery;
+    brokerIdentity?: IntegrationBrokerIdentityMetadata;
+    bindingGeneration?: number;
     connectionRef: OpaqueRef;
     bindingRef: OpaqueRef;
     version: number;
@@ -4953,6 +5163,434 @@ export type PersonalIntegrationCredentialRevokeInput = {
     [key: string]: never;
 };
 
+export type KubernetesResourceMaterialBeginInput = {
+    /**
+     * Текущая personal binding version либо shared Connection version; eligibility заново разрешает owner.
+     */
+    expectedVersion: number;
+    expectedConnectionVersion: number;
+    operation: 'kubernetes.create' | 'kubernetes.replace' | 'kubernetes.apply' | 'kubernetes.edit' | 'kubernetes.patch';
+    namespace: string;
+    name: string;
+    /**
+     * Только CREATE, ровно один name/generateName.
+     */
+    generateName: string;
+    /**
+     * Тип Secret; service-account-token закрыто запрещён.
+     */
+    secretType: string;
+    /**
+     * Непустой native dialect только для PATCH.
+     */
+    patchType: '' | 'JSON' | 'MERGE' | 'STRATEGIC';
+    contentSHA256: string;
+    contentBytes: number;
+};
+
+export type KubernetesCaptureSummary = {
+    captureRef: string;
+    streamRef: OpaqueRef;
+    captureGeneration: number;
+    version: number;
+    state: 'READY' | 'CLAIMED' | 'COMPLETE' | 'UNKNOWN' | 'REJECTED' | 'WAITING_OWNER' | 'SUPERSEDED';
+    reasonCode: '' | 'CAPTURE_ELIGIBILITY_CHANGED' | 'CAPTURE_SOURCE_INVALID' | 'CAPTURE_STORAGE_UNKNOWN' | 'CAPTURE_RETRY_EXHAUSTED' | 'CAPTURE_RETENTION_EXPIRED' | 'CAPTURE_CONTENT_REJECTED' | 'CAPTURE_SUPERSEDED';
+};
+
+export type KubernetesCapturedArtifact = {
+    channel: 'CONTROL' | 'STDOUT' | 'STDERR' | 'FILE_CONTENT' | 'PORT_FORWARD';
+    artifactRef: OpaqueRef;
+    revisionRef: OpaqueRef;
+    digest: string;
+    sizeBytes: number;
+    captureGeneration: number;
+    partial: boolean;
+};
+
+export type KubernetesCaptureStatus = {
+    summary: KubernetesCaptureSummary;
+    invocationRef: OpaqueRef;
+    runRef: OpaqueRef;
+    nodeRef: OpaqueRef;
+    operation: string;
+    kind: 'NONE' | 'EMPTY' | 'FULL' | 'PARTIAL';
+    attemptCount: number;
+    repairGeneration: number;
+    sealedAt: string;
+    retainUntil?: string;
+    cleanup?: KubernetesStagingCleanupStatus;
+    artifacts: Array<KubernetesCapturedArtifact>;
+};
+
+export type KubernetesCaptureRepairReceipt = {
+    captureRef: string;
+    repairGeneration: number;
+    version: number;
+    attemptCount: number;
+    acceptedAt: string;
+};
+
+export type KubernetesCapturePage = {
+    items: Array<KubernetesCaptureStatus>;
+    nextPageToken: string;
+};
+
+export type KubernetesCaptureReadback = {
+    view: KubernetesCaptureStatus;
+    repairReceipt?: KubernetesCaptureRepairReceipt;
+    cleanupReceipt?: KubernetesStagingCleanupRepairReceipt;
+};
+
+export type KubernetesStagingCleanupStatus = {
+    version: number;
+    repairGeneration: number;
+    outstandingCount: number;
+    outstandingBytes: number;
+    exhaustedCount: number;
+    eligibleExhaustedCount: number;
+};
+
+export type KubernetesStagingCleanupRepairReceipt = {
+    captureRef: string;
+    version: number;
+    repairGeneration: number;
+    repairedCount: number;
+    remainingExhaustedCount: number;
+    acceptedAt: string;
+};
+
+export type KubernetesFileInputList = ({
+    projection: 'SOURCE';
+} & KubernetesFileSourceList) | ({
+    projection: 'CLEANUP_ONLY';
+} & KubernetesFileCleanupList);
+
+export type KubernetesFileSourceList = {
+    projection: 'SOURCE';
+    items: Array<KubernetesFileInputView>;
+};
+
+export type KubernetesFileCleanupList = {
+    projection: 'CLEANUP_ONLY';
+    items: Array<KubernetesFileCleanupView>;
+};
+
+export type KubernetesFileInputReadback = ({
+    projection: 'SOURCE';
+} & KubernetesFileSourceReadback) | ({
+    projection: 'CLEANUP_ONLY';
+} & KubernetesFileCleanupReadback);
+
+export type KubernetesFileSourceReadback = {
+    projection: 'SOURCE';
+    view: KubernetesFileInputView;
+};
+
+export type KubernetesFileCleanupReadback = {
+    projection: 'CLEANUP_ONLY';
+    cleanupView: KubernetesFileCleanupView;
+    cleanupReceipt?: KubernetesFileCleanupRepairReceipt;
+};
+
+export type KubernetesFileCleanupView = {
+    sourceRef: string;
+    invocationRef: OpaqueRef;
+    cleanup: KubernetesStagingCleanupStatus;
+    /**
+     * Доступность команды в профиле шлюза. При отсутствии поля команда недоступна. Права пользователя проверяются отдельно при вызове.
+     */
+    repairAvailable?: boolean;
+};
+
+export type KubernetesFileCleanupRepairReceipt = {
+    sourceRef: string;
+    version: number;
+    repairGeneration: number;
+    repairedCount: number;
+    remainingExhaustedCount: number;
+    acceptedAt: string;
+};
+
+export type KubernetesFileInputView = {
+    sourceRef: string;
+    invocationRef: OpaqueRef;
+    planRef: string;
+    childRef: string;
+    streamRef: string;
+    state: 'PREPARING' | 'READY' | 'UNKNOWN' | 'REJECTED' | 'CANCELLED' | 'TRANSFERRED' | 'EXPIRED';
+    version: number;
+    artifactRef: OpaqueRef;
+    artifactRevisionRef: OpaqueRef;
+    artifactSHA256: string;
+    artifactSizeBytes: number;
+    transferFormat: 'FILE' | 'TAR';
+    normalizedSHA256: string;
+    normalizedSizeBytes: number;
+    normalizationRevision: number;
+    stagedBytes: number;
+    acknowledgedBytes: number;
+    eofAcknowledged: boolean;
+    reason: 'NONE' | 'SOURCE_UNAVAILABLE' | 'SOURCE_CHANGED' | 'PERMISSION_LOST' | 'CONTENT_REJECTED' | 'INPUT_UNKNOWN' | 'CANCELLED' | 'EXPIRED';
+    createdAt: string;
+    hardDeadline: string;
+    /**
+     * Null означает недоступный port; нулевые physical counters не фабрикуются.
+     */
+    cleanup: KubernetesStagingCleanupStatus | null;
+};
+
+export type KubernetesToolView = {
+    invocationRef: OpaqueRef;
+    runRef: OpaqueRef;
+    nodeRef: OpaqueRef;
+    connectionRef: OpaqueRef;
+    targetRef: string;
+    targetRevision: number;
+    operation: string;
+    state: 'READY' | 'WAITING_APPROVAL' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'REJECTED' | 'CANCELLED' | 'UNKNOWN_OUTCOME';
+    version: number;
+    waitingForGate: boolean;
+    /**
+     * Закрытая сохранённая причина отказа до создания stream; не provider diagnostic и не разрешение retry.
+     */
+    safeReasonCode: 'NONE' | 'KUBERNETES_PORT_FORWARD_PROFILE_UNSUPPORTED';
+    captureStatuses: Array<KubernetesCaptureSummary>;
+};
+
+export type KubernetesToolPage = {
+    items: Array<KubernetesToolView>;
+    nextPageToken: string;
+};
+
+export type KubernetesStreamOutputFrame = {
+    stageRef: string;
+    sequence: string;
+    channel: 'STDOUT' | 'STDERR' | 'CONTROL' | 'PORT_FORWARD' | 'FILE_CONTENT';
+    payloadDigest: string;
+    payloadBase64: string;
+};
+
+export type KubernetesStreamOutputReadback = {
+    invocationRef: OpaqueRef;
+    streamRef: KubernetesStreamInputRef;
+    generation: string;
+    afterSequence: string;
+    outputWatermark: string;
+    status: 'WAITING' | 'FRAME' | 'ENDED' | 'INCOMPLETE';
+    authorizedUntil: string;
+    nativeTerminalKnown: boolean;
+    transportJoined: boolean;
+    droppedBytes: string;
+    frame?: KubernetesStreamOutputFrame;
+};
+
+export type KubernetesStreamInputRef = string;
+
+export type KubernetesStreamInputChannel = 'STDIN' | 'TERMINAL_RESIZE' | 'PORT_FORWARD' | 'FILE_CONTENT' | 'CONTROL';
+
+export type KubernetesPortForwardConnectionRef = string;
+
+/**
+ * Без TCP bytes и authority. Owner closure, local write/read-end и positive native pair join — разные факты; remote FIN/RST и remote success не выводятся из этих metadata.
+ */
+export type KubernetesPortForwardConnectionView = {
+    connectionRef: KubernetesPortForwardConnectionRef;
+    invocationRef: OpaqueRef;
+    streamRef: KubernetesStreamInputRef;
+    streamGeneration: number;
+    generation: number;
+    slot: number;
+    state: 'PREPARED' | 'OPENING' | 'OPEN' | 'CLOSED' | 'UNKNOWN' | 'CANCELLED' | 'EXPIRED';
+    inputVersion: number;
+    localWriteClosed: boolean;
+    readEndObserved: boolean;
+    nativeJoined: boolean;
+    hardDeadline: Timestamp;
+    reasonCode: string;
+};
+
+/**
+ * Числовая TCP mapping из original immutable owner input; не caller override и не разрешение открыть listener.
+ */
+export type KubernetesPortForwardMapping = {
+    port: number;
+    targetPort: number;
+};
+
+export type KubernetesPortForwardConnectionProfile = {
+    protocol: '' | 'PORT_FORWARD_SPDY_V1' | 'PORT_FORWARD_WEBSOCKET_V4';
+    maximumActiveConnections: number;
+    activeConnections: number;
+    admissionReasonCode: string;
+    ports: Array<KubernetesPortForwardMapping>;
+    timeoutSeconds: number;
+};
+
+export type KubernetesPortForwardConnectionPage = {
+    items: Array<KubernetesPortForwardConnectionView>;
+    nextPageToken: string;
+    profile: KubernetesPortForwardConnectionProfile;
+};
+
+export type KubernetesPortForwardConnectionReadback = {
+    connection: KubernetesPortForwardConnectionView;
+    submission?: KubernetesStreamInputSubmission;
+};
+
+export type KubernetesPortForwardConnectionOpened = {
+    connection: KubernetesPortForwardConnectionView;
+    input: KubernetesStreamInputView;
+    submission: KubernetesStreamInputSubmission;
+};
+
+export type KubernetesPortForwardConnectionClosed = {
+    connection: KubernetesPortForwardConnectionView;
+    input: KubernetesStreamInputView;
+    submission?: KubernetesStreamInputSubmission;
+};
+
+export type KubernetesStreamInputSubmission = {
+    ref: string;
+    invocationRef: OpaqueRef;
+    streamRef: KubernetesStreamInputRef;
+    generation: number;
+    sequence: number;
+    channel: KubernetesStreamInputChannel;
+    payloadDigest: string;
+    byteCount: number;
+    endOfInput: boolean;
+    state: 'QUEUED' | 'CLAIMED' | 'ACKNOWLEDGED' | 'UNKNOWN' | 'REJECTED' | 'CANCELLED';
+};
+
+export type KubernetesStreamInputView = {
+    invocationRef: OpaqueRef;
+    streamRef: KubernetesStreamInputRef;
+    runRef: OpaqueRef;
+    nodeRef: OpaqueRef;
+    generation: number;
+    operation: string;
+    namespace: string;
+    podName: string;
+    container: string;
+    state: 'PREPARED' | 'ACTIVE' | 'COMPLETED' | 'CANCELED' | 'REVOKED' | 'EXPIRED' | 'LOST';
+    version: number;
+    inputChannels: Array<KubernetesStreamInputChannel>;
+    closedInputChannels: Array<KubernetesStreamInputChannel>;
+    maximumFrameBytes: number;
+    maximumTotalBytes: number;
+    maximumStagedBytes: number;
+    maximumStagedObjects: number;
+    acknowledgedSequence: number;
+    pending?: KubernetesStreamInputSubmission;
+    hardDeadline: string;
+    resource: KubernetesOwnerGateResource;
+    targetRef: string;
+    targetRevision: number;
+    connectionRef: OpaqueRef;
+    reasonCode: string;
+};
+
+export type KubernetesStreamInputPage = {
+    items: Array<KubernetesStreamInputView>;
+    nextPageToken: string;
+};
+
+export type KubernetesStreamInputReadback = {
+    view: KubernetesStreamInputView;
+    submission?: KubernetesStreamInputSubmission;
+};
+
+/**
+ * PORT_FORWARD содержит base64 от binary frame: byte0 — zero-based mapping slot0..15, затем не менее одного TCP byte. Exact owner profile дополнительно ограничивает slot. Empty EndOfInput закрывает весь tunnel. FILE_CONTENT и CONTROL публично запрещены.
+ */
+export type KubernetesStreamInputSubmit = {
+    channel: 'STDIN' | 'TERMINAL_RESIZE' | 'PORT_FORWARD';
+    payloadBase64: string;
+    payloadDigest: string;
+    endOfInput: boolean;
+};
+
+export type KubernetesResourceMaterialView = {
+    materialRef: OpaqueRef;
+    connectionRef: OpaqueRef;
+    connectionVersion: number;
+    identityRef: OpaqueRef;
+    identityRevision: number;
+    targetRef: OpaqueRef;
+    namespace: string;
+    name: string;
+    generateName: string;
+    operation: 'kubernetes.create' | 'kubernetes.replace' | 'kubernetes.apply' | 'kubernetes.edit' | 'kubernetes.patch';
+    secretType: string;
+    patchType: '' | 'JSON' | 'MERGE' | 'STRATEGIC';
+    state: 'PREPARED' | 'ATTEMPTING' | 'AVAILABLE' | 'UNKNOWN' | 'ACK_REJECTED' | 'CANCELLED' | 'EXPIRED' | 'CONSUMED';
+    expiresAt: string;
+    version: number;
+    reasonCode: '' | 'MATERIAL_EXPIRED_PENDING_CLOSURE' | 'MATERIAL_COMPLETION_REQUIRED' | 'MATERIAL_ACK_REJECTED' | 'MATERIAL_ACK_CONFLICT' | 'MATERIAL_SOURCE_CHANGED' | 'MATERIAL_CANCELLED' | 'MATERIAL_CONSUMED' | 'MATERIAL_UNAVAILABLE' | 'MATERIAL_OBSERVATION_ABSENT';
+    credentialPolicy: 'INITIATOR_REQUIRED' | 'PROJECT_SHARED';
+    bindingVersion: number;
+};
+
+export type KubernetesResourceMaterialAdmission = {
+    material: KubernetesResourceMaterialView;
+    reconcileOnly: boolean;
+    uploadPermit?: string;
+    endpoint?: KubernetesIdentityUploadEndpoint;
+};
+
+export type KubernetesIdentitySetupBeginInput = {
+    /**
+     * Для личного setup текущая binding version либо явный ноль отсутствия binding; для shared текущая Connection version.
+     */
+    expectedVersion: number;
+    expectedConnectionVersion: number;
+    contentSHA256: string;
+    contentBytes: number;
+};
+
+/**
+ * Безопасные требования scoped подключения для локального экспорта до Begin. Отсутствие означает недоступность требований; эти метаданные не выдают доступ к target и не заменяют проверки владельца.
+ */
+export type KubernetesIdentitySetupRequirements = {
+    targetRef: OpaqueRef;
+    targetRevision: number;
+    canonicalContext: string;
+    connectionVersion: number;
+    credentialPolicy: 'INITIATOR_REQUIRED' | 'PROJECT_SHARED';
+};
+
+export type KubernetesIdentitySetupView = {
+    setupRef: OpaqueRef;
+    connectionRef: OpaqueRef;
+    connectionVersion: number;
+    bindingGeneration: number;
+    identityRef: OpaqueRef;
+    identityRevision: number;
+    targetRef: OpaqueRef;
+    canonicalContext: string;
+    state: 'PREPARED' | 'ATTEMPTING' | 'COMPLETED' | 'CANCELLED' | 'EXPIRED' | 'UNKNOWN' | 'ACK_REJECTED';
+    expiresAt: string;
+    reasonCode: '' | 'SETUP_EXPIRED_PENDING_CLOSURE' | 'SETUP_COMPLETION_REQUIRED' | 'SETUP_ACK_REJECTED' | 'SETUP_ACK_CONFLICT';
+    version: number;
+    credentialPolicy: 'INITIATOR_REQUIRED' | 'PROJECT_SHARED';
+    bindingVersion: number;
+};
+
+export type KubernetesIdentityUploadEndpoint = {
+    serverOrigin: string;
+    tlsServerName: string;
+    certificateAuthorityPem: string;
+    certificateAuthoritySHA256: string;
+    addressIPs: Array<string>;
+};
+
+export type KubernetesIdentitySetupAdmission = {
+    setup: KubernetesIdentitySetupView;
+    reconcileOnly: boolean;
+    uploadPermit?: string;
+    endpoint?: KubernetesIdentityUploadEndpoint;
+};
+
 export type IntegrationCredentialInput = {
     value: string;
 };
@@ -4974,6 +5612,9 @@ export type IntegrationGrant = {
 };
 
 export type IntegrationConnection = {
+    kubernetesSetupRequirements?: KubernetesIdentitySetupRequirements;
+    credentialDelivery?: IntegrationCredentialDelivery;
+    brokerIdentity?: IntegrationBrokerIdentityMetadata;
     ref: OpaqueRef;
     version: number;
     definitionKey: string;
@@ -5034,8 +5675,15 @@ export type IntegrationGrantInput = {
     agentRef?: OpaqueRef;
     workflowRef?: OpaqueRef;
     enabled: boolean;
+    kubernetesNamespace?: KubernetesGrantNamespace;
+    kubernetesGrantRef?: OpaqueRef;
     approvalScopePaths?: Array<string>;
 };
+
+/**
+ * Только для Kubernetes. Явный namespace либо отдельная cluster/all-namespaces область; не wildcard и не источник полномочий.
+ */
+export type KubernetesGrantNamespace = string;
 
 export type AssistantPlanOperation = {
     ref: OpaqueRef;
@@ -5381,6 +6029,18 @@ export type EmailMailboxCredentialInputWritable = {
     value: string;
 };
 
+export type SshIdentitySetupAdmissionWritable = {
+    setup: SshIdentitySetup;
+    reconcileOnly: false;
+    upload: {
+        origin: string;
+        tlsServerName: string;
+    };
+} | {
+    setup: SshIdentitySetup;
+    reconcileOnly: true;
+};
+
 export type PersonalIntegrationCredentialConfigureInputWritable = {
     expectedConnectionVersion: number;
     value: string;
@@ -5432,6 +6092,10 @@ export type ConfigurationRevisionRef = OpaqueRef;
 export type CsrfToken = string;
 
 export type IdempotencyKey = string;
+
+export type SshIdentitySetupRef = string;
+
+export type SshSetupIfMatch = string;
 
 export type IfMatch = string;
 
@@ -8470,6 +9134,619 @@ export type RebindRuntimeSecretResponses = {
 
 export type RebindRuntimeSecretResponse = RebindRuntimeSecretResponses[keyof RebindRuntimeSecretResponses];
 
+export type ListManagedKubernetesToolsData = {
+    body?: never;
+    path: {
+        runRef: OpaqueRef;
+        nodeRef: OpaqueRef;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/runs/{runRef}/nodes/{nodeRef}/kubernetes-tools';
+};
+
+export type ListManagedKubernetesToolsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListManagedKubernetesToolsError = ListManagedKubernetesToolsErrors[keyof ListManagedKubernetesToolsErrors];
+
+export type ListManagedKubernetesToolsResponses = {
+    /**
+     * Безопасная страница состояний владельца
+     */
+    200: KubernetesToolPage;
+};
+
+export type ListManagedKubernetesToolsResponse = ListManagedKubernetesToolsResponses[keyof ListManagedKubernetesToolsResponses];
+
+export type ListManagedKubernetesCapturesData = {
+    body?: never;
+    path: {
+        runRef: OpaqueRef;
+        nodeRef: OpaqueRef;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/runs/{runRef}/nodes/{nodeRef}/kubernetes-captures';
+};
+
+export type ListManagedKubernetesCapturesErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListManagedKubernetesCapturesError = ListManagedKubernetesCapturesErrors[keyof ListManagedKubernetesCapturesErrors];
+
+export type ListManagedKubernetesCapturesResponses = {
+    /**
+     * Безопасная страница сохранённой истории
+     */
+    200: KubernetesCapturePage;
+};
+
+export type ListManagedKubernetesCapturesResponse = ListManagedKubernetesCapturesResponses[keyof ListManagedKubernetesCapturesResponses];
+
+export type GetManagedKubernetesCaptureStatusData = {
+    body?: never;
+    path: {
+        captureRef: string;
+    };
+    query?: {
+        repairIdempotencyKey?: string;
+        cleanupIdempotencyKey?: string;
+    };
+    url: '/api/v1/kubernetes-captures/{captureRef}';
+};
+
+export type GetManagedKubernetesCaptureStatusErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetManagedKubernetesCaptureStatusError = GetManagedKubernetesCaptureStatusErrors[keyof GetManagedKubernetesCaptureStatusErrors];
+
+export type GetManagedKubernetesCaptureStatusResponses = {
+    /**
+     * Текущее состояние и квитанция исходного repair key без повторной mutation
+     */
+    200: KubernetesCaptureReadback;
+};
+
+export type GetManagedKubernetesCaptureStatusResponse = GetManagedKubernetesCaptureStatusResponses[keyof GetManagedKubernetesCaptureStatusResponses];
+
+export type RepairManagedKubernetesCaptureData = {
+    body: {
+        [key: string]: never;
+    };
+    headers: {
+        'Idempotency-Key': string;
+        'If-Match': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        captureRef: string;
+    };
+    query?: never;
+    url: '/api/v1/kubernetes-captures/{captureRef}/repair';
+};
+
+export type RepairManagedKubernetesCaptureErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RepairManagedKubernetesCaptureError = RepairManagedKubernetesCaptureErrors[keyof RepairManagedKubernetesCaptureErrors];
+
+export type RepairManagedKubernetesCaptureResponses = {
+    /**
+     * Квитанция нового цикла и текущее состояние; не завершение публикации
+     */
+    200: KubernetesCaptureReadback;
+};
+
+export type RepairManagedKubernetesCaptureResponse = RepairManagedKubernetesCaptureResponses[keyof RepairManagedKubernetesCaptureResponses];
+
+export type RepairManagedKubernetesStagingCleanupData = {
+    body: {
+        [key: string]: never;
+    };
+    headers: {
+        'Idempotency-Key': string;
+        'If-Match': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        captureRef: string;
+    };
+    query?: never;
+    url: '/api/v1/kubernetes-captures/{captureRef}/cleanup-repair';
+};
+
+export type RepairManagedKubernetesStagingCleanupResponses = {
+    /**
+     * Квитанция cleanup цикла; не подтверждение удаления либо освобождения квоты
+     */
+    200: KubernetesCaptureReadback;
+};
+
+export type RepairManagedKubernetesStagingCleanupResponse = RepairManagedKubernetesStagingCleanupResponses[keyof RepairManagedKubernetesStagingCleanupResponses];
+
+export type ListManagedKubernetesFileInputsData = {
+    body?: never;
+    path: {
+        invocationRef: OpaqueRef;
+    };
+    query?: {
+        /**
+         * Minimal original-root/run.view cleanup projection без artifact/hash/file/path; не source authority.
+         */
+        cleanupOnly?: boolean;
+    };
+    url: '/api/v1/integration-invocations/{invocationRef}/kubernetes-file-inputs';
+};
+
+export type ListManagedKubernetesFileInputsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListManagedKubernetesFileInputsError = ListManagedKubernetesFileInputsErrors[keyof ListManagedKubernetesFileInputsErrors];
+
+export type ListManagedKubernetesFileInputsResponses = {
+    /**
+     * Только metadata; READY источника не подтверждает выполнение копирования
+     */
+    200: KubernetesFileInputList;
+};
+
+export type ListManagedKubernetesFileInputsResponse = ListManagedKubernetesFileInputsResponses[keyof ListManagedKubernetesFileInputsResponses];
+
+export type GetManagedKubernetesFileInputData = {
+    body?: never;
+    path: {
+        invocationRef: OpaqueRef;
+        sourceRef: string;
+    };
+    query?: {
+        /**
+         * Minimal original-root/run.view cleanup projection без artifact/hash/file/path; не source authority.
+         */
+        cleanupOnly?: boolean;
+        /**
+         * Exact original-key receipt readback только при cleanupOnly=true; не повтор repair.
+         */
+        cleanupIdempotencyKey?: string;
+    };
+    url: '/api/v1/integration-invocations/{invocationRef}/kubernetes-file-inputs/{sourceRef}';
+};
+
+export type GetManagedKubernetesFileInputErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetManagedKubernetesFileInputError = GetManagedKubernetesFileInputErrors[keyof GetManagedKubernetesFileInputErrors];
+
+export type GetManagedKubernetesFileInputResponses = {
+    /**
+     * Explicit SOURCE либо CLEANUP_ONLY metadata projection
+     */
+    200: KubernetesFileInputReadback;
+};
+
+export type GetManagedKubernetesFileInputResponse = GetManagedKubernetesFileInputResponses[keyof GetManagedKubernetesFileInputResponses];
+
+export type RepairManagedKubernetesFileCleanupData = {
+    body: {
+        [key: string]: never;
+    };
+    headers: {
+        'Idempotency-Key': string;
+        'If-Match': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        invocationRef: OpaqueRef;
+        sourceRef: string;
+    };
+    query?: never;
+    url: '/api/v1/integration-invocations/{invocationRef}/kubernetes-file-inputs/{sourceRef}/cleanup-repair';
+};
+
+export type RepairManagedKubernetesFileCleanupErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    503: Problem;
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RepairManagedKubernetesFileCleanupError = RepairManagedKubernetesFileCleanupErrors[keyof RepairManagedKubernetesFileCleanupErrors];
+
+export type RepairManagedKubernetesFileCleanupResponses = {
+    /**
+     * Bounded cleanup cycle принят; deletion/quota release/native join не подтверждаются
+     */
+    200: KubernetesFileCleanupReadback;
+};
+
+export type RepairManagedKubernetesFileCleanupResponse = RepairManagedKubernetesFileCleanupResponses[keyof RepairManagedKubernetesFileCleanupResponses];
+
+export type GetManagedKubernetesToolData = {
+    body?: never;
+    path: {
+        invocationRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/integration-invocations/{invocationRef}/kubernetes-tool';
+};
+
+export type GetManagedKubernetesToolErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetManagedKubernetesToolError = GetManagedKubernetesToolErrors[keyof GetManagedKubernetesToolErrors];
+
+export type GetManagedKubernetesToolResponses = {
+    /**
+     * Текущее состояние, не подтверждение остановки удалённого процесса
+     */
+    200: KubernetesToolView;
+};
+
+export type GetManagedKubernetesToolResponse = GetManagedKubernetesToolResponses[keyof GetManagedKubernetesToolResponses];
+
+export type StopManagedKubernetesToolData = {
+    body: {
+        [key: string]: never;
+    };
+    headers: {
+        'Idempotency-Key': string;
+        'If-Match': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        invocationRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/integration-invocations/{invocationRef}/kubernetes-tool/stop';
+};
+
+export type StopManagedKubernetesToolErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type StopManagedKubernetesToolError = StopManagedKubernetesToolErrors[keyof StopManagedKubernetesToolErrors];
+
+export type StopManagedKubernetesToolResponses = {
+    /**
+     * Авторитетное закрытое состояние вызова
+     */
+    200: KubernetesToolView;
+};
+
+export type StopManagedKubernetesToolResponse = StopManagedKubernetesToolResponses[keyof StopManagedKubernetesToolResponses];
+
+export type ListManagedKubernetesStreamInputsData = {
+    body?: never;
+    path: {
+        runRef: OpaqueRef;
+        nodeRef: OpaqueRef;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/runs/{runRef}/nodes/{nodeRef}/kubernetes-stream-inputs';
+};
+
+export type ListManagedKubernetesStreamInputsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListManagedKubernetesStreamInputsError = ListManagedKubernetesStreamInputsErrors[keyof ListManagedKubernetesStreamInputsErrors];
+
+export type ListManagedKubernetesStreamInputsResponses = {
+    /**
+     * Только safe owner metadata; первый произвольный child не выбирается
+     */
+    200: KubernetesStreamInputPage;
+};
+
+export type ListManagedKubernetesStreamInputsResponse = ListManagedKubernetesStreamInputsResponses[keyof ListManagedKubernetesStreamInputsResponses];
+
+export type ReadManagedKubernetesStreamOutputData = {
+    body?: never;
+    path: {
+        invocationRef: OpaqueRef;
+        streamRef: KubernetesStreamInputRef;
+    };
+    query: {
+        generation: string;
+        afterSequence: string;
+    };
+    url: '/api/v1/integration-invocations/{invocationRef}/kubernetes-streams/{streamRef}/output';
+};
+
+export type ReadManagedKubernetesStreamOutputErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ReadManagedKubernetesStreamOutputError = ReadManagedKubernetesStreamOutputErrors[keyof ReadManagedKubernetesStreamOutputErrors];
+
+export type ReadManagedKubernetesStreamOutputResponses = {
+    /**
+     * Один bounded кадр либо явное состояние; завершение stream не является business SUCCESS
+     */
+    200: KubernetesStreamOutputReadback;
+};
+
+export type ReadManagedKubernetesStreamOutputResponse = ReadManagedKubernetesStreamOutputResponses[keyof ReadManagedKubernetesStreamOutputResponses];
+
+export type GetManagedKubernetesStreamInputData = {
+    body?: never;
+    path: {
+        invocationRef: OpaqueRef;
+        streamRef: KubernetesStreamInputRef;
+    };
+    query?: {
+        submissionIdempotencyKey?: string;
+    };
+    url: '/api/v1/integration-invocations/{invocationRef}/kubernetes-streams/{streamRef}/input';
+};
+
+export type GetManagedKubernetesStreamInputErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetManagedKubernetesStreamInputError = GetManagedKubernetesStreamInputErrors[keyof GetManagedKubernetesStreamInputErrors];
+
+export type GetManagedKubernetesStreamInputResponses = {
+    /**
+     * Metadata без private bytes либо нового разрешения write
+     */
+    200: KubernetesStreamInputReadback;
+};
+
+export type GetManagedKubernetesStreamInputResponse = GetManagedKubernetesStreamInputResponses[keyof GetManagedKubernetesStreamInputResponses];
+
+export type SubmitManagedKubernetesStreamInputData = {
+    body: KubernetesStreamInputSubmit;
+    headers: {
+        'Idempotency-Key': string;
+        'If-Match': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        invocationRef: OpaqueRef;
+        streamRef: KubernetesStreamInputRef;
+    };
+    query?: never;
+    url: '/api/v1/integration-invocations/{invocationRef}/kubernetes-streams/{streamRef}/input';
+};
+
+export type SubmitManagedKubernetesStreamInputErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type SubmitManagedKubernetesStreamInputError = SubmitManagedKubernetesStreamInputErrors[keyof SubmitManagedKubernetesStreamInputErrors];
+
+export type SubmitManagedKubernetesStreamInputResponses = {
+    /**
+     * Owner submission metadata; ACKNOWLEDGED означает local transport write, не remote execution success
+     */
+    201: KubernetesStreamInputReadback;
+};
+
+export type SubmitManagedKubernetesStreamInputResponse = SubmitManagedKubernetesStreamInputResponses[keyof SubmitManagedKubernetesStreamInputResponses];
+
+export type StopManagedKubernetesStreamData = {
+    body: {
+        [key: string]: never;
+    };
+    headers: {
+        'Idempotency-Key': string;
+        'If-Match': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        invocationRef: OpaqueRef;
+        streamRef: KubernetesStreamInputRef;
+    };
+    query?: never;
+    url: '/api/v1/integration-invocations/{invocationRef}/kubernetes-streams/{streamRef}/stop';
+};
+
+export type StopManagedKubernetesStreamErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type StopManagedKubernetesStreamError = StopManagedKubernetesStreamErrors[keyof StopManagedKubernetesStreamErrors];
+
+export type StopManagedKubernetesStreamResponses = {
+    /**
+     * Авторитетное owner metadata; не подтверждение remote process stop либо local transport join
+     */
+    200: KubernetesStreamInputView;
+};
+
+export type StopManagedKubernetesStreamResponse = StopManagedKubernetesStreamResponses[keyof StopManagedKubernetesStreamResponses];
+
+export type ListManagedKubernetesPortForwardConnectionsData = {
+    body?: never;
+    path: {
+        invocationRef: OpaqueRef;
+        streamRef: KubernetesStreamInputRef;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: KubernetesPortForwardConnectionRef;
+    };
+    url: '/api/v1/integration-invocations/{invocationRef}/kubernetes-streams/{streamRef}/port-forward-connections';
+};
+
+export type ListManagedKubernetesPortForwardConnectionsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListManagedKubernetesPortForwardConnectionsError = ListManagedKubernetesPortForwardConnectionsErrors[keyof ListManagedKubernetesPortForwardConnectionsErrors];
+
+export type ListManagedKubernetesPortForwardConnectionsResponses = {
+    /**
+     * Безопасные owner metadata и текущий budget, не target READY либо native join
+     */
+    200: KubernetesPortForwardConnectionPage;
+};
+
+export type ListManagedKubernetesPortForwardConnectionsResponse = ListManagedKubernetesPortForwardConnectionsResponses[keyof ListManagedKubernetesPortForwardConnectionsResponses];
+
+export type OpenManagedKubernetesPortForwardConnectionData = {
+    body: {
+        slot: number;
+    };
+    headers: {
+        'Idempotency-Key': string;
+        'If-Match': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        invocationRef: OpaqueRef;
+        streamRef: KubernetesStreamInputRef;
+    };
+    query?: never;
+    url: '/api/v1/integration-invocations/{invocationRef}/kubernetes-streams/{streamRef}/port-forward-connections';
+};
+
+export type OpenManagedKubernetesPortForwardConnectionErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type OpenManagedKubernetesPortForwardConnectionError = OpenManagedKubernetesPortForwardConnectionErrors[keyof OpenManagedKubernetesPortForwardConnectionErrors];
+
+export type OpenManagedKubernetesPortForwardConnectionResponses = {
+    /**
+     * Owner connection и immutable OPEN submission; PREPARED не доказывает TCP connect
+     */
+    201: KubernetesPortForwardConnectionOpened;
+};
+
+export type OpenManagedKubernetesPortForwardConnectionResponse = OpenManagedKubernetesPortForwardConnectionResponses[keyof OpenManagedKubernetesPortForwardConnectionResponses];
+
+export type GetManagedKubernetesPortForwardConnectionData = {
+    body?: never;
+    path: {
+        invocationRef: OpaqueRef;
+        streamRef: KubernetesStreamInputRef;
+    };
+    query?: {
+        connectionRef?: KubernetesPortForwardConnectionRef;
+        openIdempotencyKey?: string;
+    };
+    url: '/api/v1/integration-invocations/{invocationRef}/kubernetes-streams/{streamRef}/port-forward-connection';
+};
+
+export type GetManagedKubernetesPortForwardConnectionErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetManagedKubernetesPortForwardConnectionError = GetManagedKubernetesPortForwardConnectionErrors[keyof GetManagedKubernetesPortForwardConnectionErrors];
+
+export type GetManagedKubernetesPortForwardConnectionResponses = {
+    /**
+     * Exact owner connection и optional immutable submission metadata
+     */
+    200: KubernetesPortForwardConnectionReadback;
+};
+
+export type GetManagedKubernetesPortForwardConnectionResponse = GetManagedKubernetesPortForwardConnectionResponses[keyof GetManagedKubernetesPortForwardConnectionResponses];
+
+export type CloseManagedKubernetesPortForwardConnectionData = {
+    body: {
+        [key: string]: never;
+    };
+    headers: {
+        'Idempotency-Key': string;
+        'If-Match': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        invocationRef: OpaqueRef;
+        streamRef: KubernetesStreamInputRef;
+        connectionRef: KubernetesPortForwardConnectionRef;
+    };
+    query?: never;
+    url: '/api/v1/integration-invocations/{invocationRef}/kubernetes-streams/{streamRef}/port-forward-connections/{connectionRef}/close';
+};
+
+export type CloseManagedKubernetesPortForwardConnectionErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CloseManagedKubernetesPortForwardConnectionError = CloseManagedKubernetesPortForwardConnectionErrors[keyof CloseManagedKubernetesPortForwardConnectionErrors];
+
+export type CloseManagedKubernetesPortForwardConnectionResponses = {
+    /**
+     * Owner closure и optional native CLOSE submission; NativeJoined остаётся отдельным фактом
+     */
+    200: KubernetesPortForwardConnectionClosed;
+};
+
+export type CloseManagedKubernetesPortForwardConnectionResponse = CloseManagedKubernetesPortForwardConnectionResponses[keyof CloseManagedKubernetesPortForwardConnectionResponses];
+
 export type GetEmailEffectReceiptData = {
     body?: never;
     path: {
@@ -9514,6 +10791,183 @@ export type GetRuntimeSecretDraftImpactResponses = {
 };
 
 export type GetRuntimeSecretDraftImpactResponse = GetRuntimeSecretDraftImpactResponses[keyof GetRuntimeSecretDraftImpactResponses];
+
+export type GetPersonalEmailMailboxMutationReceiptData = {
+    body?: never;
+    path?: never;
+    query: {
+        operation: PersonalEmailMailboxMutationOperation;
+        idempotencyKey: string;
+    };
+    url: '/api/v1/personal-email-mailboxes/mutation-receipt';
+};
+
+export type GetPersonalEmailMailboxMutationReceiptErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetPersonalEmailMailboxMutationReceiptError = GetPersonalEmailMailboxMutationReceiptErrors[keyof GetPersonalEmailMailboxMutationReceiptErrors];
+
+export type GetPersonalEmailMailboxMutationReceiptResponses = {
+    /**
+     * Собственная immutable setup receipt без credentials
+     */
+    200: PersonalEmailMailboxMutationReceipt;
+};
+
+export type GetPersonalEmailMailboxMutationReceiptResponse = GetPersonalEmailMailboxMutationReceiptResponses[keyof GetPersonalEmailMailboxMutationReceiptResponses];
+
+export type ListMyEmailMailboxesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/personal-email-mailboxes';
+};
+
+export type ListMyEmailMailboxesErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListMyEmailMailboxesError = ListMyEmailMailboxesErrors[keyof ListMyEmailMailboxesErrors];
+
+export type ListMyEmailMailboxesResponses = {
+    /**
+     * Собственные настройки почты без credentials
+     */
+    200: MyEmailMailboxPage;
+};
+
+export type ListMyEmailMailboxesResponse = ListMyEmailMailboxesResponses[keyof ListMyEmailMailboxesResponses];
+
+export type CreatePersonalEmailMailboxConnectionData = {
+    body: PersonalEmailMailboxConnectionInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/personal-email-mailboxes';
+};
+
+export type CreatePersonalEmailMailboxConnectionErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreatePersonalEmailMailboxConnectionError = CreatePersonalEmailMailboxConnectionErrors[keyof CreatePersonalEmailMailboxConnectionErrors];
+
+export type CreatePersonalEmailMailboxConnectionResponses = {
+    /**
+     * Создано собственное подключение; credentials, публикация и проверка входа ещё обязательны
+     */
+    201: MyEmailMailbox;
+};
+
+export type CreatePersonalEmailMailboxConnectionResponse = CreatePersonalEmailMailboxConnectionResponses[keyof CreatePersonalEmailMailboxConnectionResponses];
+
+export type RevokeEmailMailboxOwnershipData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        connectionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/integration-connections/{connectionRef}/email-mailbox/ownership';
+};
+
+export type RevokeEmailMailboxOwnershipErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RevokeEmailMailboxOwnershipError = RevokeEmailMailboxOwnershipErrors[keyof RevokeEmailMailboxOwnershipErrors];
+
+export type RevokeEmailMailboxOwnershipResponses = {
+    /**
+     * Доступ отозван
+     */
+    200: EmailMailboxOwnership;
+};
+
+export type RevokeEmailMailboxOwnershipResponse = RevokeEmailMailboxOwnershipResponses[keyof RevokeEmailMailboxOwnershipResponses];
+
+export type GetEmailMailboxOwnershipData = {
+    body?: never;
+    path: {
+        connectionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/integration-connections/{connectionRef}/email-mailbox/ownership';
+};
+
+export type GetEmailMailboxOwnershipErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetEmailMailboxOwnershipError = GetEmailMailboxOwnershipErrors[keyof GetEmailMailboxOwnershipErrors];
+
+export type GetEmailMailboxOwnershipResponses = {
+    /**
+     * Текущие safe metadata владельца настройки
+     */
+    200: EmailMailboxOwnership;
+};
+
+export type GetEmailMailboxOwnershipResponse = GetEmailMailboxOwnershipResponses[keyof GetEmailMailboxOwnershipResponses];
+
+export type ConfigureEmailMailboxOwnershipData = {
+    body: EmailMailboxOwnershipInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        connectionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/integration-connections/{connectionRef}/email-mailbox/ownership';
+};
+
+export type ConfigureEmailMailboxOwnershipErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ConfigureEmailMailboxOwnershipError = ConfigureEmailMailboxOwnershipErrors[keyof ConfigureEmailMailboxOwnershipErrors];
+
+export type ConfigureEmailMailboxOwnershipResponses = {
+    /**
+     * Новое поколение владельца; новые credentials и публикация ещё обязательны
+     */
+    200: EmailMailboxOwnership;
+};
+
+export type ConfigureEmailMailboxOwnershipResponse = ConfigureEmailMailboxOwnershipResponses[keyof ConfigureEmailMailboxOwnershipResponses];
 
 export type ListEmailMailboxConfigurationsData = {
     body?: never;
@@ -12211,6 +13665,130 @@ export type CommandScheduleResponses = {
 
 export type CommandScheduleResponse = CommandScheduleResponses[keyof CommandScheduleResponses];
 
+export type GetSshIdentitySetupByBeginKeyData = {
+    body?: never;
+    path: {
+        connectionRef: OpaqueRef;
+    };
+    query: {
+        beginIdempotencyKey: string;
+    };
+    url: '/api/v1/integration-connections/{connectionRef}/ssh-identity-setups';
+};
+
+export type GetSshIdentitySetupByBeginKeyErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetSshIdentitySetupByBeginKeyError = GetSshIdentitySetupByBeginKeyErrors[keyof GetSshIdentitySetupByBeginKeyErrors];
+
+export type GetSshIdentitySetupByBeginKeyResponses = {
+    /**
+     * Актуальная safe metadata исходного setup
+     */
+    200: SshIdentitySetup;
+};
+
+export type GetSshIdentitySetupByBeginKeyResponse = GetSshIdentitySetupByBeginKeyResponses[keyof GetSshIdentitySetupByBeginKeyResponses];
+
+export type BeginSshIdentitySetupData = {
+    body: SshIdentitySetupBeginInput;
+    headers: {
+        'Idempotency-Key': string;
+        'If-Match': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        connectionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/integration-connections/{connectionRef}/ssh-identity-setups';
+};
+
+export type BeginSshIdentitySetupErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type BeginSshIdentitySetupError = BeginSshIdentitySetupErrors[keyof BeginSshIdentitySetupErrors];
+
+export type BeginSshIdentitySetupResponses = {
+    /**
+     * Первый admission либо safe metadata replay без нового permit
+     */
+    200: SshIdentitySetupAdmission;
+};
+
+export type BeginSshIdentitySetupResponse = BeginSshIdentitySetupResponses[keyof BeginSshIdentitySetupResponses];
+
+export type GetSshIdentitySetupData = {
+    body?: never;
+    path: {
+        connectionRef: OpaqueRef;
+        setupRef: string;
+    };
+    query?: never;
+    url: '/api/v1/integration-connections/{connectionRef}/ssh-identity-setups/{setupRef}';
+};
+
+export type GetSshIdentitySetupErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetSshIdentitySetupError = GetSshIdentitySetupErrors[keyof GetSshIdentitySetupErrors];
+
+export type GetSshIdentitySetupResponses = {
+    /**
+     * Safe metadata без физических Secret pins и key material
+     */
+    200: SshIdentitySetup;
+};
+
+export type GetSshIdentitySetupResponse = GetSshIdentitySetupResponses[keyof GetSshIdentitySetupResponses];
+
+export type CancelSshIdentitySetupData = {
+    body: {
+        [key: string]: never;
+    };
+    headers: {
+        'Idempotency-Key': string;
+        'If-Match': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        connectionRef: OpaqueRef;
+        setupRef: string;
+    };
+    query?: never;
+    url: '/api/v1/integration-connections/{connectionRef}/ssh-identity-setups/{setupRef}/cancel';
+};
+
+export type CancelSshIdentitySetupErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CancelSshIdentitySetupError = CancelSshIdentitySetupErrors[keyof CancelSshIdentitySetupErrors];
+
+export type CancelSshIdentitySetupResponses = {
+    /**
+     * Safe metadata закрытого setup
+     */
+    200: SshIdentitySetup;
+};
+
+export type CancelSshIdentitySetupResponse = CancelSshIdentitySetupResponses[keyof CancelSshIdentitySetupResponses];
+
 export type SetIntegrationCredentialPolicyData = {
     body: IntegrationCredentialPolicyInput;
     headers: {
@@ -12485,6 +14063,194 @@ export type RevokePersonalIntegrationCredentialResponses = {
 };
 
 export type RevokePersonalIntegrationCredentialResponse = RevokePersonalIntegrationCredentialResponses[keyof RevokePersonalIntegrationCredentialResponses];
+
+export type GetManagedKubernetesIdentitySetupData = {
+    body?: never;
+    path: {
+        connectionRef: OpaqueRef;
+    };
+    query?: {
+        setupRef?: string;
+        beginIdempotencyKey?: string;
+    };
+    url: '/api/v1/me/integration-connections/{connectionRef}/kubernetes-setups';
+};
+
+export type GetManagedKubernetesIdentitySetupErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetManagedKubernetesIdentitySetupError = GetManagedKubernetesIdentitySetupErrors[keyof GetManagedKubernetesIdentitySetupErrors];
+
+export type GetManagedKubernetesIdentitySetupResponses = {
+    /**
+     * Безопасное состояние setup; COMPLETED ещё требует проверки target RBAC
+     */
+    200: KubernetesIdentitySetupView;
+};
+
+export type GetManagedKubernetesIdentitySetupResponse = GetManagedKubernetesIdentitySetupResponses[keyof GetManagedKubernetesIdentitySetupResponses];
+
+export type BeginManagedKubernetesIdentitySetupData = {
+    body: KubernetesIdentitySetupBeginInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        connectionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/me/integration-connections/{connectionRef}/kubernetes-setups';
+};
+
+export type BeginManagedKubernetesIdentitySetupErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type BeginManagedKubernetesIdentitySetupError = BeginManagedKubernetesIdentitySetupErrors[keyof BeginManagedKubernetesIdentitySetupErrors];
+
+export type BeginManagedKubernetesIdentitySetupResponses = {
+    /**
+     * Одноразовый admission либо metadata ранее принятого setup
+     */
+    201: KubernetesIdentitySetupAdmission;
+};
+
+export type BeginManagedKubernetesIdentitySetupResponse = BeginManagedKubernetesIdentitySetupResponses[keyof BeginManagedKubernetesIdentitySetupResponses];
+
+export type CancelManagedKubernetesIdentitySetupData = {
+    body: PersonalIntegrationCredentialRevokeInputWritable;
+    headers: {
+        'Idempotency-Key': string;
+        'If-Match': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        connectionRef: OpaqueRef;
+        setupRef: string;
+    };
+    query?: never;
+    url: '/api/v1/me/integration-connections/{connectionRef}/kubernetes-setups/{setupRef}/cancel';
+};
+
+export type CancelManagedKubernetesIdentitySetupErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CancelManagedKubernetesIdentitySetupError = CancelManagedKubernetesIdentitySetupErrors[keyof CancelManagedKubernetesIdentitySetupErrors];
+
+export type CancelManagedKubernetesIdentitySetupResponses = {
+    /**
+     * Setup закрыт; отсутствие неизвестного внешнего эффекта не утверждается
+     */
+    200: KubernetesIdentitySetupView;
+};
+
+export type CancelManagedKubernetesIdentitySetupResponse = CancelManagedKubernetesIdentitySetupResponses[keyof CancelManagedKubernetesIdentitySetupResponses];
+
+export type GetManagedKubernetesResourceMaterialData = {
+    body?: never;
+    path: {
+        connectionRef: OpaqueRef;
+    };
+    query?: {
+        materialRef?: string;
+        beginIdempotencyKey?: string;
+    };
+    url: '/api/v1/me/integration-connections/{connectionRef}/kubernetes-resource-materials';
+};
+
+export type GetManagedKubernetesResourceMaterialErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetManagedKubernetesResourceMaterialError = GetManagedKubernetesResourceMaterialErrors[keyof GetManagedKubernetesResourceMaterialErrors];
+
+export type GetManagedKubernetesResourceMaterialResponses = {
+    /**
+     * Safe metadata; version относится к artifact и возвращается также в ETag
+     */
+    200: KubernetesResourceMaterialView;
+};
+
+export type GetManagedKubernetesResourceMaterialResponse = GetManagedKubernetesResourceMaterialResponses[keyof GetManagedKubernetesResourceMaterialResponses];
+
+export type BeginManagedKubernetesResourceMaterialData = {
+    body: KubernetesResourceMaterialBeginInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        connectionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/me/integration-connections/{connectionRef}/kubernetes-resource-materials';
+};
+
+export type BeginManagedKubernetesResourceMaterialErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type BeginManagedKubernetesResourceMaterialError = BeginManagedKubernetesResourceMaterialErrors[keyof BeginManagedKubernetesResourceMaterialErrors];
+
+export type BeginManagedKubernetesResourceMaterialResponses = {
+    /**
+     * Первый одноразовый upload admission либо safe metadata ранее созданного artifact
+     */
+    201: KubernetesResourceMaterialAdmission;
+};
+
+export type BeginManagedKubernetesResourceMaterialResponse = BeginManagedKubernetesResourceMaterialResponses[keyof BeginManagedKubernetesResourceMaterialResponses];
+
+export type CancelManagedKubernetesResourceMaterialData = {
+    body: PersonalIntegrationCredentialRevokeInputWritable;
+    headers: {
+        'Idempotency-Key': string;
+        'If-Match': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        connectionRef: OpaqueRef;
+        materialRef: string;
+    };
+    query?: never;
+    url: '/api/v1/me/integration-connections/{connectionRef}/kubernetes-resource-materials/{materialRef}/cancel';
+};
+
+export type CancelManagedKubernetesResourceMaterialErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CancelManagedKubernetesResourceMaterialError = CancelManagedKubernetesResourceMaterialErrors[keyof CancelManagedKubernetesResourceMaterialErrors];
+
+export type CancelManagedKubernetesResourceMaterialResponses = {
+    /**
+     * Future artifact use закрыт; отмена уже совершённого target эффекта не утверждается
+     */
+    200: KubernetesResourceMaterialView;
+};
+
+export type CancelManagedKubernetesResourceMaterialResponse = CancelManagedKubernetesResourceMaterialResponses[keyof CancelManagedKubernetesResourceMaterialResponses];
 
 export type ListIntegrationDefinitionsData = {
     body?: never;

@@ -40,6 +40,16 @@ const connection: IntegrationConnection = {
   definitionDigest: "a".repeat(64),
   publicConfiguration: {},
 };
+const ownership = {
+  connectionRef: connection.ref,
+  connectionVersion: connection.version,
+  deliveryKind: "MAILBOX_CONFIGURATION" as const,
+  policy: "PROJECT_SHARED" as const,
+  state: "ACTIVE" as const,
+  generation: 1,
+  ownerEligible: true,
+  serviceSubjectRef: "subject_service",
+};
 const receipt: EmailMailboxCredential = {
   connectionRef: connection.ref,
   connectionVersion: 4,
@@ -87,6 +97,7 @@ describe("EMAIL write-only credential", () => {
       connection,
       "AUTH_SECRET",
       value,
+      ownership,
     );
     const signal = new AbortController().signal;
     expect(JSON.stringify(attempt)).not.toContain(value);
@@ -109,6 +120,7 @@ describe("EMAIL write-only credential", () => {
       connection,
       "AUTH_SECRET",
       "synthetic",
+      ownership,
     );
     sdk.configureEmailMailboxCredential.mockRejectedValueOnce(
       new TypeError("Synthetic timeout"),
@@ -121,11 +133,18 @@ describe("EMAIL write-only credential", () => {
       { ...connection, version: 4 },
       "AUTH_SECRET",
       "synthetic",
+      { ...ownership, connectionVersion: 4 },
       attempt,
     );
     expect(retry).toEqual(attempt);
     await expect(
-      prepareMailboxCredential(connection, "USERNAME", "changed", attempt),
+      prepareMailboxCredential(
+        connection,
+        "USERNAME",
+        "changed",
+        ownership,
+        attempt,
+      ),
     ).rejects.toBeInstanceOf(MailboxCredentialMismatch);
     await saveMailboxCredential(
       retry,
@@ -147,6 +166,7 @@ describe("EMAIL write-only credential", () => {
       connection,
       "AUTH_SECRET",
       "synthetic",
+      ownership,
     );
     sdk.configureEmailMailboxCredential.mockResolvedValue({
       data: { ...receipt, ...change },
@@ -156,14 +176,31 @@ describe("EMAIL write-only credential", () => {
       saveMailboxCredential(attempt, "synthetic", new AbortController().signal),
     ).rejects.toThrow();
   });
-  it("не начинает команду без разрешённого nextAction", async () => {
+  it("требует текущий typed mailbox owner вместо generic nextAction", async () => {
     await expect(
       prepareMailboxCredential(
         { ...connection, nextActions: [] },
         "AUTH_SECRET",
         "synthetic",
+        { ...ownership, ownerEligible: false },
       ),
     ).rejects.toThrow();
     expect(sdk.configureEmailMailboxCredential).not.toHaveBeenCalled();
+    await expect(
+      prepareMailboxCredential(
+        {
+          ...connection,
+          nextActions: [],
+          credentialPolicy: "INITIATOR_REQUIRED",
+        },
+        "AUTH_SECRET",
+        "synthetic",
+        {
+          ...ownership,
+          policy: "INITIATOR_REQUIRED",
+          serviceSubjectRef: undefined,
+        },
+      ),
+    ).resolves.toMatchObject({ ownerGeneration: 1 });
   });
 });

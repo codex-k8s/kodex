@@ -18,3 +18,19 @@ func TestEmailWorkerGrantTrustRegistration(t *testing.T) {
 		t.Fatal("email trust registration changed another workload boundary")
 	}
 }
+
+// TestArtifactRetentionWorkerGrantTrustRegistration checks that the protected capture worker
+// uses an independent trust file and the optional profile leaves it absent when disabled.
+// TestArtifactRetentionWorkerGrantTrustRegistration проверяет выделенный файл доверия
+// для защищённого обработчика захвата и отсутствие файла при отключённом профиле.
+func TestArtifactRetentionWorkerGrantTrustRegistration(t *testing.T) {
+	config := Config{SessionArchiveGrantTrustFile: "/trust/session-archive.jwk"}
+	if _, ok := workerGrantTrustFilesFor(config)["artifact-retention"]; ok {
+		t.Fatal("disabled artifact-retention trust was registered")
+	}
+	config.ArtifactRetentionGrantTrustFile = "/trust/artifact-retention.jwk"
+	files := workerGrantTrustFilesFor(config)
+	if files["artifact-retention"] != config.ArtifactRetentionGrantTrustFile || files["session-archive"] != config.SessionArchiveGrantTrustFile {
+		t.Fatal("artifact-retention trust registration changed another workload boundary")
+	}
+}

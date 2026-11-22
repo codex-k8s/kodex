@@ -45,7 +45,7 @@ func (repository *Repository) Claim(
 	claims := make([]retention.Claim, 0, batchSize)
 	for rows.Next() {
 		var claim retention.Claim
-		if err := rows.Scan(&claim.ArtifactID, &claim.ArtifactRef, &claim.RevisionID, &claim.ObjectKey, &claim.ObjectVersion, &claim.Generation); err != nil {
+		if err := rows.Scan(&claim.ArtifactID, &claim.ArtifactRef, &claim.RevisionID, &claim.ObjectKey, &claim.ObjectVersion, &claim.Generation, &claim.Manual, &claim.ReconcileOnly, &claim.AuthorizedUntil); err != nil {
 			return nil, fmt.Errorf("scan artifact retention claim: %w", err)
 		}
 		claims = append(claims, claim)
@@ -122,6 +122,13 @@ func (repository *Repository) Finalize(
 	if result.RowsAffected() != 1 {
 		return retention.ErrLostClaim
 	}
+	if claim.Manual {
+		if _, err := tx.Exec(ctx, queryManualComplete, pgx.StrictNamedArgs{
+			"artifact_id": claim.ArtifactID, "claim_owner": owner, "claim_generation": claim.Generation,
+		}); err != nil {
+			return fmt.Errorf("complete manual artifact purge receipt: %w", err)
+		}
+	}
 	if _, err := tx.Exec(ctx, queryDeleteRevisions, pgx.StrictNamedArgs{"artifact_id": claim.ArtifactID}); err != nil {
 		return fmt.Errorf("delete purged artifact revision metadata: %w", err)
 	}
@@ -134,6 +141,7 @@ func (repository *Repository) Finalize(
 		"actor_id":        actorID,
 		"artifact_ref":    artifactRef,
 		"correlation_ref": correlationRef,
+		"manual":          claim.Manual,
 	}); err != nil {
 		return fmt.Errorf("record artifact retention audit: %w", err)
 	}

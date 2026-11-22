@@ -100,6 +100,12 @@ func readControlPlaneMigrationProof(t *testing.T, ctx context.Context, observer 
 	}
 	var verifier string
 	switch profile {
+	case "personal-integrations":
+		verifier = "validPersonalIntegrationsMigration"
+	case "personal-integrations-backup":
+		verifier = "validPersonalIntegrationsBackupMigration"
+	case "workflow-file-provenance-backup":
+		verifier = "validWorkflowFileProvenanceBackupMigration"
 	case "telegram-notifications":
 		verifier = "validTelegramNotificationsMigration"
 	case "telegram-notifications-backup":
@@ -179,6 +185,9 @@ func readControlPlaneMigrationProof(t *testing.T, ctx context.Context, observer 
 		t.Fatal("resolve shipped review QA proof directory")
 	}
 	filename := profile + "-migration-" + phase + ".sql"
+	if profile == "workflow-file-provenance-backup" {
+		filename = "workflow-file-provenance-backup-migration.sql"
+	}
 	if aclReadback {
 		filename = "workspace-backup-acl-readback.sql"
 	}
