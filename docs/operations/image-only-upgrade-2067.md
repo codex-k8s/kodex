@@ -57,6 +57,13 @@ native catalog verifier. Unknown schema и дополнительные поля
    и native schema до первой mutation. Если передана квитанция, подготовка
    admission, apply, resume и readback используют тот же приватный снимок
    render, который проверила их точка входа.
+   Registry и Deployment publisher сверяются с этим снимком до записи.
+   Смена образа publisher выполняется штатной процедурой
+   `tools/release/authority-publisher-image.mjs`. Подготовленный render
+   должен закреплять уже действующие registry data, rotation markers и spec
+   publisher.
+   При наличии `release-artifact-materializer` его spec и состояние сверяются
+   до записи rollout. Поздний запуск по-прежнему использует штатный lifecycle Job.
    Все пять bootstrap Jobs пропускаются; штатный materializer и остальные
    rollout/readback gates остаются обязательными.
 5. Проверить actual CRI digests, readiness, данные и функции. Сохранить новый
@@ -69,7 +76,7 @@ native catalog verifier. Unknown schema и дополнительные поля
 | --- | --- | --- |
 | prepare | Operator + Git-managed exact profile и два render | Новый render сохраняет пять прежних effects; mismatch закрыто отклоняется, API вызовов нет |
 | capture | Оба исходных render + прежний pinned completion + текущие Kubernetes UID/spec и native SQL catalog | Новый `SAME_SCHEMA_IMAGE_UPGRADE` receipt сохраняет исходные Job UID/timestamps и закрепляет подготовленный render; только чтение |
-| verify/apply | Stock operator lifecycle + новый receipt/profile и свежий native proof | Bootstrap не повторяется; штатные rollout/resource fences сохраняются |
+| verify/apply | Stock operator lifecycle + новый receipt/profile, свежий native proof и точная пара registry/publisher | Bootstrap не повторяется; пара authority остаётся в области записи штатной ротации |
 | TTL / повтор / второе обновление | Прежняя цепочка receipt, original cluster/namespace и fingerprints | Сохраняются те же effects; отсутствие доказательств не заменяется успехом |
 | Drift / crash / неизвестный исход apply | Actual readback и сохранённый operation journal | Нет автоматического повторного apply либо новых bootstrap effects |
 

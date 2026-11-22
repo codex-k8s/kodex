@@ -231,6 +231,12 @@ portable_delete() {
 
 apply_render() {
   local name=$1 expression=$2 output
+  if [[ "$mode" == upgrade ]]; then
+    # Publisher и registry принадлежат owner lifecycle ротации полномочий.
+    expression="($expression) | select(.metadata.namespace != \"kodex-system\" or
+      ((.kind != \"ConfigMap\" or .metadata.name != \"internal-rpc-authority-publisher-target-registry\") and
+       (.kind != \"Deployment\" or .metadata.name != \"internal-rpc-authority-publisher\")))"
+  fi
   output=$(render_filter "$name" "$expression")
   if [[ -n "${profile_mode:-}" ]]; then
     portable_apply_file "$output"
@@ -353,6 +359,7 @@ reconcile_immutable_configmaps() {
   local name current expected current_content expected_content
   while IFS= read -r name; do
     [[ -n "$name" ]] || continue
+    [[ "$mode" != upgrade || "$name" != internal-rpc-authority-publisher-target-registry ]] || continue
     if ! current=$(kubectl --context "$context" -n "$namespace" get \
       "configmap/$name" -o json 2>/dev/null); then
       continue
@@ -1001,9 +1008,11 @@ if [[ "$mode" == apply || "$mode" == upgrade ]]; then
     completion_arguments=(--bootstrap-completion-receipt "$completion_output" --bootstrap-completion-sha256 "$completion_sha")
   fi
 
-	apply_render authority-publisher '
-		select(.kind == "Deployment" and .metadata.name == "internal-rpc-authority-publisher")
-	'
+  if [[ "$mode" == apply ]]; then
+    apply_render authority-publisher '
+      select(.kind == "Deployment" and .metadata.name == "internal-rpc-authority-publisher")
+    '
+  fi
 	# Publisher materializes bootstrap keys before it can become Ready: full
 	# readiness requires readbacks from workloads applied in the next phase.
 	wait_authority_projections bootstrap

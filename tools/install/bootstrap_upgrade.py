@@ -208,10 +208,13 @@ def verify_apply(state, resources, receipt):
             'UPGRADE_COMPLETION_ORIGIN_REQUIRED')
     if receipt['origin'] == IMAGE_ORIGIN:
         completion.verify_render_pin(receipt, sha(render_bytes(resources)))
+    from authority_registry import verify_upgrade_preconditions
+    verify_upgrade_preconditions(state, resources)
     completion.verify(state, resources, receipt)
     proof = schema_proof(state, profile['schema_profile'], profile['to_schema_heads']['control-plane'])
     if receipt['origin'] == IMAGE_ORIGIN:
         completion.verify(state, resources, receipt)
+    verify_upgrade_preconditions(state, resources)
     return {'status': 'SAME_SCHEMA_UPGRADE_APPLY_VERIFIED' if receipt['origin'] == IMAGE_ORIGIN else 'FORWARD_UPGRADE_APPLY_VERIFIED',
             'schema_proof_sha256': proof, 'effects_replayed': False}
 

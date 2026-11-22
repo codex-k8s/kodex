@@ -13,6 +13,7 @@ import bootstrap_upgrade as upgrade
 import observability_profile
 from deployment_profile import Rejected
 from test_bootstrap_completion import State, uuid, write
+from test_authority_registry import fixture as authority_fixture
 
 
 def fixture(previous_version=20261030000100, target_version=20261105000100):
@@ -29,6 +30,12 @@ def fixture(previous_version=20261030000100, target_version=20261105000100):
     target = copy.deepcopy(resources)
     target[0]['data'].update({'source.sha': 'b' * 40, 'schema-heads.json': json.dumps({**heads, 'control-plane': target_version})})
     for resource in target[1:]: resource['spec']['template']['spec']['containers'][0]['image'] = 'registry.example.invalid/kodex/cli@sha256:' + 'b' * 64
+    authority = [resource for resource in authority_fixture() if resource['kind'] != 'Job']
+    materializer = copy.deepcopy(resources[-1])
+    materializer['metadata']['name'] = 'release-artifact-materializer'
+    preserved = [*authority, materializer]
+    resources.extend(preserved)
+    target.extend(copy.deepcopy(preserved))
     before, after = yaml.safe_dump_all(resources).encode(), yaml.safe_dump_all(target).encode()
     profile = {'schema': upgrade.SCHEMA, 'managed_by': 'git', 'previous_render_sha256': upgrade.sha(before), 'target_render_sha256': upgrade.sha(after),
                'previous_source_sha': 'a' * 40, 'target_source_sha': 'b' * 40, 'from_schema_heads': heads,
