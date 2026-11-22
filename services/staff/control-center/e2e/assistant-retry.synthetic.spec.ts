@@ -213,12 +213,37 @@ for (const scope of ["SYSTEM", "PROJECT"] as const)
       await expect
         .poll(async () => Object.keys((await diagnostic(page)).artifacts))
         .toContain("art_retry_child");
-      await expect(page.locator("#run-graph-panel")).toBeVisible();
+      const graphPanel = page.locator("#run-graph-panel");
+      await expect(graphPanel).toBeVisible();
+      // На узком экране штатно открыт список; геометрию и легенду проверяем
+      // после явного перехода в настоящий граф через его toolbar.
+      const graphView = graphPanel.getByRole("button", {
+        name: locale === "ru" ? "Граф выполнения" : "Execution graph",
+        exact: true,
+      });
+      await graphView.click();
+      await expect(graphView).toHaveAttribute("aria-pressed", "true");
+      await expect(graphPanel.locator(".graph-viewport")).toBeVisible();
+      await expect(graphPanel.locator(".run-node")).toHaveCount(2);
+      await expect(
+        graphPanel.locator('[data-edge-type="RETRY_OF"]'),
+      ).toHaveCount(1);
       await expect(page.locator(".run-node__kind")).toHaveText([
         locale === "ru" ? "Помощник Kodex" : "Kodex assistant",
         locale === "ru" ? "Помощник Kodex" : "Kodex assistant",
       ]);
-      await expect(page.locator(".graph-legend__states")).toContainText(
+      const legend = graphPanel.locator(".graph-legend");
+      await expect(legend).toBeVisible();
+      const legendToggle = legend.getByRole("button", {
+        name: locale === "ru" ? "связи графа" : "graph connections",
+        exact: true,
+      });
+      if (await legendToggle.isVisible()) {
+        await legendToggle.click();
+        await expect(legendToggle).toHaveAttribute("aria-expanded", "true");
+      }
+      await expect(legend.locator(".graph-legend__states")).toBeVisible();
+      await expect(legend.locator(".graph-legend__states")).toContainText(
         locale === "ru" ? "Помощник Kodex" : "Kodex assistant",
       );
       await expect(page.locator(".run-node__role").first()).toHaveAttribute(
@@ -239,9 +264,9 @@ for (const scope of ["SYSTEM", "PROJECT"] as const)
         () => document.documentElement.scrollWidth > innerWidth,
       );
       expect(overflow).toBe(false);
-      await page
+      await graphPanel
         .getByRole("button", {
-          name: locale === "ru" ? "Вместить" : "Fit",
+          name: locale === "ru" ? "Весь граф" : "Whole graph",
           exact: true,
         })
         .click();
