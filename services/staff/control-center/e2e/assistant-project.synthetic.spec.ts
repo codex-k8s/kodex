@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { syntheticAssistantRuntimeConfig } from "./fixtures/assistant-runtime-config";
+import { forwardSyntheticStaticRequest } from "./synthetic-runtime-route";
 
 for (const width of [1440, 390]) {
   for (const locale of ["ru", "en"]) {
@@ -19,8 +20,11 @@ for (const width of [1440, 390]) {
         `/e2e/fixtures/ui-proof.html?fixture=project-assistant&locale=${locale}`,
       );
       await page.locator(".assistant-fab").click();
+      await page.locator(".assistant-plan-record > summary").click();
       const card = page.locator(".assistant-created-entity");
-      await expect(card.locator("a")).toHaveAttribute(
+      const resultLink = card.getByRole("link");
+      await expect(resultLink).toBeVisible();
+      await expect(resultLink).toHaveAttribute(
         "href",
         "/projects/project_fixture/agents/agent_helper_fixture?assistantForm=1",
       );
@@ -67,6 +71,7 @@ for (const mismatch of [
     await installFixture(page, calls, mismatch);
     await page.goto("/e2e/fixtures/ui-proof.html?fixture=project-assistant");
     await page.locator(".assistant-fab").click();
+    await page.locator(".assistant-plan-record > summary").click();
     const card = page.locator(".assistant-created-entity");
     await expect(card.getByRole("alert")).toBeVisible();
     await expect(card.locator("a")).toHaveCount(0);
@@ -138,11 +143,7 @@ async function installFixture(
       url.origin === "https://kodex.test" &&
       !url.pathname.startsWith("/api/")
     ) {
-      await route.fulfill({
-        response: await route.fetch({
-          url: `http://127.0.0.1:43122${url.pathname}${url.search}`,
-        }),
-      });
+      await forwardSyntheticStaticRequest(route);
     } else {
       throw new Error(`Unexpected fixture request ${url.pathname}`);
     }

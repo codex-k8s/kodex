@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { syntheticAssistantRuntimeConfig } from "./fixtures/assistant-runtime-config";
+import { forwardSyntheticStaticRequest } from "./synthetic-runtime-route";
 import { verifiedInventoryFixture } from "../src/test-utils/image-inventory-fixture";
 const now = "2026-10-04T00:00:00Z",
   digest = "a".repeat(64);
@@ -147,11 +148,7 @@ for (const width of [1440, 390])
         }
         if (url.pathname.startsWith("/api/"))
           throw new Error(`Unexpected synthetic request ${url.pathname}`);
-        await route.fulfill({
-          response: await route.fetch({
-            url: `http://127.0.0.1:43122${url.pathname}${url.search}`,
-          }),
-        });
+        await forwardSyntheticStaticRequest(route);
       });
       await page.goto(
         `/e2e/fixtures/assistant-environment.html?locale=${locale}`,
