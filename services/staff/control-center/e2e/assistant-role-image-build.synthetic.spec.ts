@@ -7,6 +7,7 @@ import type {
   RoleImageRecipeDetail,
   ProviderAccount,
   ProviderAccountUsageContext,
+  ProviderDefinitionPage,
   RoleEnvironmentPage,
   ModelCapabilityPage,
 } from "../src/shared/api/generated/openapi/types.gen";
@@ -127,6 +128,8 @@ for (const width of [1440, 390]) {
           }
           const response = await route.fetch({
             url: `http://127.0.0.1:43122${url.pathname}${url.search}`,
+            maxRetries: route.request().method() === "GET" ? 2 : 0,
+            timeout: 15_000,
           });
           await route.fulfill({ response });
         });
@@ -272,6 +275,26 @@ for (const width of [1440, 390]) {
             });
             return;
           }
+          if (url.pathname === "/api/v1/provider-definitions") {
+            const definitions: ProviderDefinitionPage = {
+              items: [
+                {
+                  key: "openai-codex",
+                  name: "Синтетический провайдер",
+                  description: "",
+                  authorizationMethods: ["API_KEY"],
+                  modelIds: ["model-synthetic", "model-synthetic-new"],
+                  defaultModelId: "model-synthetic",
+                  available: true,
+                  ready: true,
+                  readinessBlockers: [],
+                },
+              ],
+              nextPageToken: "",
+            };
+            await route.fulfill({ json: definitions });
+            return;
+          }
           if (url.pathname.startsWith("/api/v1/provider-accounts")) {
             const context: ProviderAccountUsageContext = {
               purpose: "CONFIGURE",
@@ -356,12 +379,20 @@ for (const width of [1440, 390]) {
           }
           const response = await route.fetch({
             url: `http://127.0.0.1:43122${url.pathname}${url.search}`,
+            maxRetries: request.method() === "GET" ? 2 : 0,
+            timeout: 15_000,
           });
           await route.fulfill({ response });
         });
         await page.goto(
           `https://kodex.test/e2e/fixtures/assistant-role-image-build.html?scope=${scope}&editor=${editor}`,
         );
+        const saveName = "Сохранить новую ревизию";
+        const saveEvenWhenHidden = page.getByRole("button", {
+          name: saveName,
+          exact: true,
+          includeHidden: true,
+        });
         if (editor.startsWith("runtime")) {
           const effort = page.locator('select[name$="-effort"]');
           await expect(effort).toBeEnabled();
@@ -382,9 +413,7 @@ for (const width of [1440, 390]) {
             .click();
           if (editor === "runtime-nonreasoning") {
             await expect(effort).toBeDisabled();
-            await expect(
-              page.getByRole("button", { name: "Сохранить новую ревизию" }),
-            ).toHaveCount(0);
+            await expect(saveEvenWhenHidden).toHaveCount(0);
             releaseModel?.();
             await expect(effort).toBeEnabled();
             await expect(effort).toHaveValue("high");
@@ -392,16 +421,12 @@ for (const width of [1440, 390]) {
               "high",
               "Модель без степени рассуждения",
             ]);
-            await expect(
-              page.getByRole("button", { name: "Сохранить новую ревизию" }),
-            ).toHaveCount(0);
+            await expect(saveEvenWhenHidden).toHaveCount(0);
             await effort.selectOption("");
           }
         } else {
           if (scope === "PROJECT") {
-            await expect(
-              page.getByRole("button", { name: "Сохранить новую ревизию" }),
-            ).toHaveCount(0);
+            await expect(saveEvenWhenHidden).toHaveCount(0);
             await expect(
               page.getByText("Сотрудник не найден в доступном каталоге"),
             ).toBeVisible();
@@ -438,9 +463,11 @@ for (const width of [1440, 390]) {
               .evaluate((element) => getComputedStyle(element).overflowY),
           ).toBe("auto");
         }
-        const save = page.getByRole("button", {
-          name: "Сохранить новую ревизию",
-        });
+        if (width === 390)
+          await page
+            .getByRole("button", { name: "Действия", exact: true })
+            .click();
+        const save = page.getByRole("button", { name: saveName, exact: true });
         await expect(save).toBeVisible();
         await save.click();
         const saved = JSON.parse(
