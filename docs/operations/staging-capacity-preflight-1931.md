@@ -75,6 +75,7 @@ FS-показатели и ограниченные policy-поля; pod/PV cont
 
 ```bash
 python3 tools/dev/staging-capacity-preflight.py \
+  --kubeconfig "$KODEX_KUBECONFIG_FILE" \
   --expected-cluster-uid "$EXPECTED_CLUSTER_UID" \
   --expected-namespace-uid "$EXPECTED_NAMESPACE_UID" \
   --expected-server-node-uid "$EXPECTED_SERVER_NODE_UID" \
@@ -82,6 +83,11 @@ python3 tools/dev/staging-capacity-preflight.py \
   --budget-bytes "$FUTURE_WORK_BUDGET_BYTES" \
   --reserve-bytes 5368709120
 ```
+
+С `--kubeconfig` каждый дочерний запрос использует указанный файл и context
+`k3d-kodex`. Путь к файлу исключён из отчёта. При отсутствии аргумента
+действуют стандартные правила выбора kubeconfig в kubectl.
+[Правила выбора файла и context](https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/#merging-kubeconfig-files).
 
 Приватный отчёт сохраняется как новый файл0600 в каталоге0700. Повторное
 использование старого PASS после другой записи/очистки или перед новой работой

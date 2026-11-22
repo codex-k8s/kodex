@@ -196,15 +196,20 @@ def node_proof(name, uid, conditions, summary, config, budget, reserve, now, pro
 class Reader:
     """Только фиксированные GET с explicit context и ограниченным временем каждого запроса."""
 
-    def __init__(self):
+    def __init__(self, kubeconfig=None):
         self.deadline = time.monotonic() + TOTAL_SECONDS
+        self.command = ["kubectl"]
+        if kubeconfig is not None:
+            require(kubeconfig and "\x00" not in kubeconfig, "KUBECONFIG_PATH_INVALID")
+            self.command.append("--kubeconfig=" + kubeconfig)
+        self.command.extend(["--context", CONTEXT, f"--request-timeout={REQUEST_SECONDS}s",
+                             "--namespace", NAMESPACE, "get"])
 
     def get(self, arguments):
         remaining = self.deadline - time.monotonic()
         require(remaining > 0, "PREFLIGHT_BUDGET_EXHAUSTED")
         try:
-            result = subprocess.run(["kubectl", "--context", CONTEXT, f"--request-timeout={REQUEST_SECONDS}s",
-                                     "--namespace", NAMESPACE, "get", *arguments],
+            result = subprocess.run([*self.command, *arguments],
                                     capture_output=True, timeout=min(PROCESS_SECONDS, remaining), check=False)
         except subprocess.TimeoutExpired:
             raise Failure("KUBERNETES_READ_TIMEOUT") from None
@@ -265,11 +270,13 @@ def main(argv=None):
     try:
         parser = Parser(description=__doc__, allow_abbrev=False)
         parser.add_argument("--profile", choices=("recovery", "bounded-qa"), default="recovery")
+        parser.add_argument("--kubeconfig", help="Use the specified kubeconfig for every Kubernetes read")
         for name in ("cluster", "namespace", "server-node", "agent-node"):
             parser.add_argument("--expected-" + name + "-uid", required=True)
         parser.add_argument("--budget-bytes", required=True, type=int)
         parser.add_argument("--reserve-bytes", required=True, type=int)
-        result = inspect(parser.parse_args(argv), Reader())
+        args = parser.parse_args(argv)
+        result = inspect(args, Reader(args.kubeconfig))
         print(json.dumps(result, sort_keys=True))
         return 0
     except Failure as error:

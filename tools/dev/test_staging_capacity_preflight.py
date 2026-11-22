@@ -155,11 +155,15 @@ class CapacityTests(unittest.TestCase):
 
     def response(self, command, **options):
         self.calls.append(command)
-        self.assertEqual(command[:7], ["kubectl", "--context", "k3d-kodex", "--request-timeout=5s",
-                                       "--namespace", "kodex-system", "get"])
+        prefix = ["kubectl"]
+        if hasattr(self.args, "kubeconfig"):
+            prefix.append("--kubeconfig=" + self.args.kubeconfig)
+        prefix.extend(["--context", "k3d-kodex", "--request-timeout=5s",
+                       "--namespace", "kodex-system", "get"])
+        self.assertEqual(command[:len(prefix)], prefix)
         self.assertLessEqual(options["timeout"], 8)
         self.assertFalse(options["check"])
-        tail = command[7:]
+        tail = command[len(prefix):]
         if tail[0] == "namespace":
             self.assertEqual(tail[2:], ["-o", "json"])
             body = self.namespaces[tail[1]]
@@ -374,6 +378,23 @@ class CapacityTests(unittest.TestCase):
                     self.assertEqual(C.main(self.argv()), 1)
                 self.assertEqual(json.loads(output.getvalue())["status"], "FAIL")
                 self.assertNotIn("synthetic-private", output.getvalue())
+
+    def test_explicit_kubeconfig_is_pinned_for_all_reads_and_omitted_from_proof(self):
+        self.args.kubeconfig = "/synthetic kube context/path"
+        output = io.StringIO()
+        with patch.object(C.subprocess, "run", side_effect=self.response), contextlib.redirect_stdout(output):
+            self.assertEqual(C.main(self.argv()), 0)
+        self.assertEqual(len(self.calls), 10)
+        self.assertEqual(json.loads(output.getvalue())["status"], "PASS")
+        self.assertNotIn(self.args.kubeconfig, output.getvalue())
+
+    def test_empty_explicit_kubeconfig_does_not_fall_back_to_ambient_configuration(self):
+        self.args.kubeconfig = ""
+        output = io.StringIO()
+        with patch.object(C.subprocess, "run") as child, contextlib.redirect_stdout(output):
+            self.assertEqual(C.main(self.argv()), 1)
+        child.assert_not_called()
+        self.assertEqual(json.loads(output.getvalue())["code"], "KUBECONFIG_PATH_INVALID")
 
     def test_duplicate_json_keys_and_excess_output_close(self):
         for raw in (b'{"node":{},"node":{}}', b'{"availableBytes":NaN}', b"x" * (C.MAX_RESPONSE_BYTES + 1)):
