@@ -29,15 +29,34 @@ func TestMailboxApprovalExceptionIsEmailOnly(t *testing.T) {
 		}
 	}
 	email := definitions["email"]
-	for index := range email.Spec.Capabilities {
-		if email.Spec.Capabilities[index].Risk != "READ" {
-			email.Spec.Capabilities[index].Operation = "email.unregistered.effect"
-			if validate(&email) == nil {
-				t.Fatal("unregistered email operation inherited mailbox exception")
-			}
-			break
+	for index, capability := range email.Spec.Capabilities {
+		if capability.Operation != "email.draft.create" {
+			continue
 		}
+		changed := email
+		changed.Spec.Capabilities = append([]Capability(nil), email.Spec.Capabilities...)
+		draft := &changed.Spec.Capabilities[index]
+		draft.ApprovalScope = &ApprovalScopeContract{Name: "mailbox", RequiredInputPaths: []string{}}
+		draft.ApprovalPolicy = string(ApprovalHumanScoped)
+		draft.AllowedApprovalPolicies = []string{string(ApprovalHumanScoped)}
+		if err := validate(&changed); err != nil {
+			t.Fatalf("registered draft with typed scope was rejected: %v", err)
+		}
+		draft.Operation, draft.Key = "email.unregistered.effect", "email.unregistered.effect"
+		if validate(&changed) == nil {
+			t.Error("unregistered email operation inherited typed mailbox scope")
+		}
+		draft.Operation, draft.Key = capability.Operation, capability.Key
+		draft.Risk = string(RiskRead)
+		draft.ApprovalPolicy = string(ApprovalNone)
+		draft.AllowedApprovalPolicies = []string{string(ApprovalNone)}
+		draft.Execution.Idempotency = string(IdempotencyReadOnly)
+		if validate(&changed) == nil {
+			t.Error("email draft mutation accepted as a read")
+		}
+		return
 	}
+	t.Fatal("registered draft capability missing")
 }
 
 // TestLoadShippedDefinitions checks the complete shipped registry, canonical digests and exact

@@ -707,17 +707,29 @@ func ValidHTTPSResourcePath(value string) bool {
 // Проверка авторитетной mailbox policy перед каждым эффектом принадлежит
 // почтовому сервису; этот предикат лишь ограничивает исключение из package policy.
 func emailMailboxApproval(result *Package, capability Capability) bool {
+	return capability.ApprovalPolicy == string(ApprovalNone) && capability.Risk != string(RiskRead) &&
+		validEmailMailboxCapability(result, capability)
+}
+
+// validEmailMailboxCapability keeps package approval metadata tied to the exact operations
+// consumed by the email bridge and rejects a write presented as a read.
+// validEmailMailboxCapability связывает метаданные подтверждения с точными операциями
+// почтового моста и отклоняет изменение, представленное как чтение.
+func validEmailMailboxCapability(result *Package, capability Capability) bool {
 	if result.Metadata.Key != "email" ||
 		result.Spec.Adapter != "EMAIL_HTTPS" || result.Spec.AdapterOwner != "integration-gateway" ||
 		result.Spec.ExecutionRoute != "MANAGED_MCP" || capability.ResourceScope.Kind != "EMAIL_SENDER" ||
-		capability.ApprovalPolicy != "NONE" {
+		capability.Key != capability.Operation {
 		return false
 	}
 	switch capability.Operation {
+	case "email.delivery.health.read", "email.mailbox.list", "email.message.list", "email.message.search",
+		"email.message.read", "email.attachment.read", "email.message.status.read", "email.thread.read", "email.attachment.list":
+		return capability.Risk == string(RiskRead)
 	case "email.message.send", "email.message.reply", "email.message.reply_all", "email.message.forward",
 		"email.message.delete", "email.message.mark_read", "email.message.mark_unread", "email.message.move",
 		"email.message.archive", "email.draft.create", "email.draft.update", "email.draft.delete":
-		return true
+		return capability.Risk != string(RiskRead)
 	default:
 		return false
 	}
@@ -794,6 +806,9 @@ func validate(result *Package) error {
 			capability.Execution.RetryBackoffMilliseconds < 50 || capability.Execution.RetryBackoffMilliseconds > 5000 ||
 			(capability.Risk == "READ") != (capability.Execution.Idempotency == "READ_ONLY") {
 			return errors.New("integration package capability is invalid")
+		}
+		if result.Spec.Adapter == string(AdapterEmailHTTPS) && !validEmailMailboxCapability(result, capability) {
+			return errors.New("integration email capability exceeds adapter contract")
 		}
 		if _, exists := capabilityKeys[capability.Key]; exists {
 			return errors.New("integration package capability key is duplicated")
