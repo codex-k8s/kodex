@@ -50,6 +50,7 @@ const context = {
   allowedOperations: [],
 };
 const assistant = useAssistantStore();
+if (assistantImportFixture) assistant.setContext(context, context.entityRef);
 const historyRequests = ref(0);
 const pickerRequests = ref(0);
 const selected = ref<string | null>(null);
@@ -106,6 +107,19 @@ assistant.conversations = Array.from({ length: 30 }, (_, index) =>
 assistant.selectedRef = "conversation_0";
 assistant.nextPageToken = "second";
 assistant.load = () => Promise.resolve();
+if (assistantImportFixture) {
+  usePlatformStore().applyPlatformSnapshot(
+    "SYSTEM_ASSISTANT",
+    context.entityRef,
+    {
+      assistant: { assistant: assistant.assistant },
+      conversations: {
+        conversations: assistant.conversations,
+        page: { nextPageToken: assistant.nextPageToken },
+      },
+    },
+  );
+}
 if (projectAssistantFixture) {
   const profile: ProjectAssistantProfile = {
     ref: "asstp_fixture",
