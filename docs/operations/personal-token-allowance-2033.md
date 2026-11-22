@@ -23,7 +23,7 @@ updated: 2026-11-22
 | Dispatch envelope | В возвращаемом `WorkLease.expires_at` минимум owner lease и текущего ACL. DB lease, generation и fence сохраняют прежнюю семантику reconciliation. |
 | Begin | `PersonalIntegrationCredentialService.BeginPersonalIntegrationInvocation`, `platform.personal-integration-calls.begin`; Connection→binding→invocation, exact pins и один immutable admission receipt. |
 | Disclosure | `requireAccessUntil` заново разрешает root actor и текущие bindings; минимум этого allowance и DB lease проверяется до/после COMMIT и перед транспортным ответом. |
-| Ответ и native consumer | Новый `authorized_until=5` — timestamp владельца. Gateway требует его presence/validity, проверяет бюджет и сохраняет минимум с original claim без перезаписи исходного claim. Native request получает ограниченный context. |
+| Ответ и native consumer | Новый `authorized_until=5` — timestamp владельца. Gateway требует его presence/validity, проверяет бюджет и сохраняет минимум с original claim без перезаписи исходного claim. Original claim ceiling фиксируется monotonic deadline до Begin RPC; fresh bound может только сузить унаследованный context. Native request получает ограниченный context. |
 | Audit и результат | Прежний `PERSONAL_INTEGRATION_CALL_ADMITTED`; completion использует прежние receipt, claimed workload, generation/fence и owner DB lease. Новое domain event не добавляется. |
 
 `requireAccessUntil` повторно использует исходный allow-only evaluator. Среди
@@ -51,7 +51,8 @@ updated: 2026-11-22
 прежняя strict проверка ответа закрывает personal вызов. Нужна совместная
 поставка CP/generated contracts/gateway; shared calls сохраняют прежний путь.
 
-Native regression входит в `make test-personal-integration-credentials-postgres`:
+Native regression входит в `make test-personal-integration-token-allowance-postgres`:
+текущая canonical046 без изменения исторического034 upgrade-профиля,
 исходный второй actor, реальный claim, native COMMIT с задержкой только ACK,
 отсутствие descriptor, сохранённый одноразовый receipt, revoke/regrant и completion
 уже допущенного результата. Gateway regression использует настоящий dispatch
@@ -60,3 +61,16 @@ helper и synthetic owner/adapter, включая старый wire descriptor. 
 
 Генерация: `buf generate --template buf.gen.local.yaml` с закреплёнными
 `protoc-gen-go v1.36.11` и `protoc-gen-go-grpc 1.6.2`.
+
+## Отдельный открытый аналог
+
+Verification probe остаётся отдельным gap #2033: `currentPersonalCredentialTestInput`
+использует `personal_credential__read_owned.sql` с boolean `integration.view`;
+`BeginPersonalIntegrationCredentialProbe` не передаёт Until и не проверяет expiry
+после успешного COMMIT ACK. Gateway `personal_credentials.go` после ACK запускает
+bounded provider READ. Поэтому при истечении view allowance во время ACK новый
+verification READ всё ещё возможен; claim также уже содержит descriptor metadata.
+Это статический source finding, не отдельный native regression в этом срезе.
+Существующие exact lease, pin, revoke и одноразовый PROBING предотвращают повтор
+после lost ACK, но не сохраняют finite ACL deadline. Общая готовность personal
+credentials этим исправлением не утверждается.

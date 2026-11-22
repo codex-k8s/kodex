@@ -52,13 +52,22 @@ type invocationExecution struct {
 func executeInvocationClaim(ctx context.Context, owner personalInvocationAdmissionClient, adapter invocationExecutionAdapter, claim *cp.IntegrationInvocationClaim, config Config) (invocationExecution, error) {
 	var empty invocationExecution
 	lease := claim.GetLease()
+	observed := time.Now()
 	budget := config.OperationTimeout + config.RequestTimeout
 	if claim.GetCredentialAdmissionRequired() {
 		budget += config.RequestTimeout
 	}
 	if claim == nil || lease == nil || lease.GetExpiresAt() == nil || lease.GetExpiresAt().CheckValid() != nil ||
-		lease.GetExpiresAt().AsTime().Before(time.Now().Add(budget)) {
+		lease.GetExpiresAt().AsTime().Before(observed.Add(budget)) {
 		return empty, errors.New("integration lease budget is insufficient")
+	}
+	if claim.GetCredentialAdmissionRequired() {
+		// Retain the original monotonic ceiling through Begin; a later clock read or fresh grant cannot extend it.
+		// Сохраняем original monotonic ceiling через Begin: позднее чтение часов или fresh grant не продлевает его.
+		originalUntil := observed.Add(lease.GetExpiresAt().AsTime().Sub(observed))
+		var cancelOriginal context.CancelFunc
+		ctx, cancelOriginal = context.WithDeadline(ctx, originalUntil)
+		defer cancelOriginal()
 	}
 	work, err := admitPersonalInvocation(ctx, owner, claim, config)
 	if err != nil || work == nil {
@@ -66,7 +75,9 @@ func executeInvocationClaim(ctx context.Context, owner personalInvocationAdmissi
 	}
 	if claim.GetCredentialAdmissionRequired() {
 		var cancelAllowance context.CancelFunc
-		ctx, cancelAllowance = context.WithDeadline(ctx, work.GetLease().GetExpiresAt().AsTime())
+		freshObserved := time.Now()
+		freshUntil := freshObserved.Add(work.GetLease().GetExpiresAt().AsTime().Sub(freshObserved))
+		ctx, cancelAllowance = context.WithDeadline(ctx, freshUntil)
 		defer cancelAllowance()
 	}
 	operation, cancel := context.WithTimeout(ctx, config.OperationTimeout)

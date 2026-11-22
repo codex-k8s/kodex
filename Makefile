@@ -207,6 +207,10 @@ test-control-plane-postgres:
 	@bash scripts/tests/control-plane-postgres-test.sh --authority-proof-counter-fresh-install
 	@./scripts/tests/control-plane-postgres-test.sh
 
+.PHONY: test-personal-integration-token-allowance-postgres
+test-personal-integration-token-allowance-postgres: check-go-toolchain
+	@timeout --kill-after=10s 300s env KODEX_TEST_POSTGRES_STORAGE=ram ./scripts/tests/control-plane-postgres-test.sh '^TestPersonalIntegrationCredentialsComponent$$'
+
 .PHONY: test-personal-integration-credentials-postgres
 test-personal-integration-credentials-postgres: check-go-toolchain
 	@timeout --kill-after=10s 240s bash scripts/tests/control-plane-postgres-test.sh --personal-credentials-upgrade
