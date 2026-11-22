@@ -75,8 +75,7 @@ func executeInvocationClaim(ctx context.Context, owner personalInvocationAdmissi
 	}
 	if claim.GetCredentialAdmissionRequired() {
 		var cancelAllowance context.CancelFunc
-		freshObserved := time.Now()
-		freshUntil := freshObserved.Add(work.GetLease().GetExpiresAt().AsTime().Sub(freshObserved))
+		freshUntil := observed.Add(work.GetLease().GetExpiresAt().AsTime().Sub(observed))
 		ctx, cancelAllowance = context.WithDeadline(ctx, freshUntil)
 		defer cancelAllowance()
 	}
