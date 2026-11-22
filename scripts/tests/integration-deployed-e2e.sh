@@ -115,10 +115,10 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 if [[ $github_enabled == 1 ]]; then
-  if [[ -n ${KODEX_GITHUB_BOT_PAT:-} && -n ${KODEX_GITHUB_BOT_PAT_FILE:-} ]] ||
-    [[ -z ${KODEX_GITHUB_BOT_PAT:-} && -z ${KODEX_GITHUB_BOT_PAT_FILE:-} ]]; then
-    fail 'exactly one GitHub token source is required'
-  fi
+  [[ ${KODEX_INTEGRATION_E2E_GITHUB_PAT_FILE:-} == /* &&
+    -f $KODEX_INTEGRATION_E2E_GITHUB_PAT_FILE &&
+    ! -L $KODEX_INTEGRATION_E2E_GITHUB_PAT_FILE ]] ||
+    fail 'an absolute dedicated GitHub fixture token file is required'
 fi
 if [[ $provider_api_key_enabled == 1 ]]; then
   if [[ -n ${OPENAI_API_KEY:-} && -n ${KODEX_PROVIDER_E2E_API_KEY_FILE:-} ]] ||
@@ -181,7 +181,7 @@ fi
 if [[ $github_enabled == 1 ]]; then
   if (
     cd -- "$control_center"
-    KODEX_E2E_PRIVATE_OUTPUT_DIR="$temporary_directory/playwright-output/github" \
+    DEBUG='' PWDEBUG='' KODEX_E2E_PRIVATE_OUTPUT_DIR="$temporary_directory/playwright-output/github" \
       ./node_modules/.bin/playwright test --config playwright.integration.config.ts \
         --grep 'опциональный GitHub READ и обратимый WRITE проходят через MCP'
   ); then

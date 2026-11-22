@@ -110,18 +110,17 @@ export KODEX_INTEGRATION_E2E_GITHUB_OWNER=example-owner
 export KODEX_INTEGRATION_E2E_GITHUB_REPOSITORY=kodex-integration-e2e
 ```
 
-Credential задаётся ровно одним способом:
+Передайте путь к отдельному PAT тестового пользователя:
 
 ```bash
-export KODEX_GITHUB_BOT_PAT_FILE=/absolute/private/path/github-token
-# или KODEX_GITHUB_BOT_PAT через локальный secret manager/процесс запуска
+export KODEX_INTEGRATION_E2E_GITHUB_PAT_FILE=/absolute/private/path/github-fixture-token
 ```
 
-Token file должен быть обычным owner-private файлом, не symlink, с mode без
-group/other bits. Токен не печатается, не попадает в Playwright artifacts,
-создаваемую connection metadata или Git. Test repository должен быть private,
-а credential — принадлежать отдельному bot account с минимальными правами на
-metadata и Issues только этого repository.
+Это принадлежащий оператору обычный файл `0600` с одной ссылкой. Playwright
+проверяет владельца и открывает файл без перехода по symlink. Значение PAT
+проходит через API личной привязки и не выводится в Playwright artifacts,
+connection metadata или Git. Ограничьте выдачу PAT одним разрешённым private
+repository и минимальными правами на metadata и Issues.
 
 ## Ручная диагностика
 
