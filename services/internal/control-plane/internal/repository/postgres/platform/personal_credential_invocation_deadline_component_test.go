@@ -72,9 +72,16 @@ func assertPersonalInvocationFiniteAllowance(t *testing.T, ctx context.Context, 
 		}
 	}
 	defer setUntil(nil)
-	for _, scenario := range []string{"late-ack", "late-effect-receipt", "restored-before-begin"} {
+	workerService, err := platformservice.New(repository)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, scenario := range []string{"late-ack", "late-effect-receipt", "restored-before-begin", "shortened-before-begin"} {
 		until := time.Now().Add(3 * time.Second).Truncate(time.Microsecond).UTC()
 		setUntil(until)
+		if scenario == "shortened-before-begin" {
+			setUntil(nil)
+		}
 		invocation, err := service.ResolveIntegrationInvocation(ctx, worker, map[string]string{"run_ref": runRef, "node_ref": nodeRef, "connection_ref": connectionRef, "capability_key": "gitlab.project.metadata.read", "idempotency_key": "personal-finite-" + scenario}, map[string]any{})
 		if err != nil {
 			t.Fatal("resolve finite-allowance personal intent", scenario, err)
@@ -113,6 +120,9 @@ func assertPersonalInvocationFiniteAllowance(t *testing.T, ctx context.Context, 
 		if scenario == "restored-before-begin" {
 			setUntil(nil)
 		}
+		if scenario == "shortened-before-begin" {
+			setUntil(until)
+		}
 		response, err := personalRuntimeRPCClient(t, observedService).BeginPersonalIntegrationInvocation(personalRuntimeRPCContext(ctx), request)
 		pool.Close()
 		if scenario == "late-ack" {
@@ -124,7 +134,7 @@ func assertPersonalInvocationFiniteAllowance(t *testing.T, ctx context.Context, 
 				t.Fatal("late ACK erased committed one-shot admission", err)
 			}
 			setUntil(nil)
-			repeated, err := personalRuntimeRPCClient(t, service).BeginPersonalIntegrationInvocation(personalRuntimeRPCContext(ctx), request)
+			repeated, err := personalRuntimeRPCClient(t, workerService).BeginPersonalIntegrationInvocation(personalRuntimeRPCContext(ctx), request)
 			if err != nil || repeated.GetAdmitted() || repeated.GetCredentialRevision() != nil {
 				t.Fatal("restored grant replayed consumed admission", err)
 			}
@@ -135,6 +145,10 @@ func assertPersonalInvocationFiniteAllowance(t *testing.T, ctx context.Context, 
 			if scenario == "restored-before-begin" {
 				if !dispatchUntil.Equal(until) || !response.GetAuthorizedUntil().AsTime().After(dispatchUntil) {
 					t.Fatal("restoration lost original conservative claim envelope")
+				}
+			} else if scenario == "shortened-before-begin" {
+				if !dispatchUntil.After(until) || response.GetAuthorizedUntil().AsTime().After(until) {
+					t.Fatal("fresh shortened ACL was lost after claim")
 				}
 			} else {
 				if response.GetAuthorizedUntil().AsTime().After(until) {
@@ -147,7 +161,7 @@ func assertPersonalInvocationFiniteAllowance(t *testing.T, ctx context.Context, 
 				}
 			}
 		}
-		if !dispatchUntil.Equal(until) || !ownerLease.After(until) {
+		if (scenario != "shortened-before-begin" && !dispatchUntil.Equal(until)) || !ownerLease.After(until) {
 			t.Fatal("personal dispatch allowance replaced reconciliation lease", scenario)
 		}
 	}

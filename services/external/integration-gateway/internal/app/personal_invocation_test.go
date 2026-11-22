@@ -22,12 +22,14 @@ import (
 // personalInvocationFixture observes the real loop helper's owner/adapter order without live HTTP.
 // personalInvocationFixture наблюдает owner/adapter порядок рабочего helper без живого HTTP.
 type personalInvocationFixture struct {
-	t         *testing.T
-	response  *cp.BeginPersonalIntegrationInvocationResponse
-	err       error
-	steps     []string
-	request   *cp.BeginPersonalIntegrationInvocationRequest
-	beforeACK func()
+	t            *testing.T
+	response     *cp.BeginPersonalIntegrationInvocationResponse
+	err          error
+	steps        []string
+	request      *cp.BeginPersonalIntegrationInvocationRequest
+	beforeACK    func()
+	afterEffect  func(context.Context)
+	effectResult integration.Result
 }
 
 // BeginPersonalIntegrationInvocation captures the exact requested lease and can lose its ACK.
@@ -43,12 +45,15 @@ func (fixture *personalInvocationFixture) BeginPersonalIntegrationInvocation(_ c
 
 // Execute observes only the admitted immutable credential and records a single synthetic effect.
 // Execute наблюдает лишь допущенную immutable credential и фиксирует один synthetic effect.
-func (fixture *personalInvocationFixture) Execute(_ context.Context, request integration.Request) (integration.Result, error) {
+func (fixture *personalInvocationFixture) Execute(ctx context.Context, request integration.Request) (integration.Result, error) {
 	fixture.steps = append(fixture.steps, "execute")
 	if request.Credential == nil || request.Credential.Ref != "icr_personalfixture" {
 		fixture.t.Fatal("execution selected a shared or missing credential")
 	}
-	return integration.Result{}, nil
+	if fixture.afterEffect != nil {
+		fixture.afterEffect(ctx)
+	}
+	return fixture.effectResult, nil
 }
 
 // Recover records read-only recovery separately; it cannot be replaced by Execute.
@@ -104,6 +109,14 @@ func TestPersonalInvocationExecutionBoundary(t *testing.T) {
 		}, []string{"begin"}, false, true},
 		{"invalid owner allowance", func(f *personalInvocationFixture, _ *cp.IntegrationInvocationClaim) {
 			f.response.AuthorizedUntil = &timestamppb.Timestamp{Seconds: 253402300800}
+		}, []string{"begin"}, false, true},
+		{"unknown allowance wire", func(f *personalInvocationFixture, _ *cp.IntegrationInvocationClaim) {
+			f.response.AuthorizedUntil.ProtoReflect().SetUnknown([]byte{0xf8, 0x01, 1})
+		}, []string{"begin"}, false, true},
+		{"denial carrying allowance", func(f *personalInvocationFixture, _ *cp.IntegrationInvocationClaim) {
+			f.response.Admitted = false
+			f.response.CredentialRevision = nil
+			f.response.WorkMode = 0
 		}, []string{"begin"}, false, true},
 		{"admitted", func(*personalInvocationFixture, *cp.IntegrationInvocationClaim) {}, []string{"begin", "execute"}, true, false},
 		{"recovery", func(f *personalInvocationFixture, c *cp.IntegrationInvocationClaim) {
@@ -307,4 +320,26 @@ func TestPersonalInvocationLegacyOwnerWireRejectsNewAllowance(t *testing.T) {
 	}
 	// The released gateway rejects every nonempty response unknown-field set before adapter dispatch.
 	// Выпущенный gateway отвергает непустой unknown-field set ответа до adapter dispatch.
+}
+
+// TestPersonalInvocationLateEffectACKRetainsResult keeps an already observed synthetic effect separate from the expired dispatch allowance and its canceled operation context.
+// TestPersonalInvocationLateEffectACKRetainsResult отделяет уже наблюдаемый synthetic effect от истёкшего dispatch allowance и отменённого operation context.
+func TestPersonalInvocationLateEffectACKRetainsResult(t *testing.T) {
+	until := time.Now().Add(40 * time.Millisecond)
+	claim := &cp.IntegrationInvocationClaim{InvocationRef: "inv_effectackfixture", CredentialAdmissionRequired: true, WorkMode: cp.IntegrationInvocationWorkMode_INTEGRATION_INVOCATION_WORK_MODE_EXECUTE,
+		Lease: &cp.WorkLease{Ref: "lea_effectackfixture", Fence: "fnc_effectackfixture", Generation: 1, ExpiresAt: timestamppb.New(time.Now().Add(time.Minute))}}
+	writes := 0
+	fixture := &personalInvocationFixture{t: t, response: &cp.BeginPersonalIntegrationInvocationResponse{Admitted: true, AuthorizedUntil: timestamppb.New(until), WorkMode: claim.WorkMode,
+		CredentialRevision: &cp.IntegrationCredentialRevision{Ref: "icr_personalfixture", Revision: 1, SecretRef: "kodex-system/kodex-integration-credentials#synthetic-personal", SecretUid: "10000000-0000-4000-8000-000000000001", SecretResourceVersion: "synthetic-version", ContentSha256: strings.Repeat("a", 64), CreatedAt: timestamppb.Now()}},
+		effectResult: integration.Result{Summary: "synthetic accepted effect"}, afterEffect: func(ctx context.Context) {
+			writes++
+			time.Sleep(time.Until(until) + time.Millisecond)
+			if ctx.Err() == nil {
+				t.Fatal("operation deadline did not expire")
+			}
+		}}
+	result, err := executeInvocationClaim(t.Context(), fixture, fixture, claim, Config{InstanceID: "effect-ack", RequestTimeout: time.Millisecond, OperationTimeout: time.Millisecond})
+	if err != nil || !result.executed || result.result.Summary != "synthetic accepted effect" || writes != 1 || t.Context().Err() != nil || !reflect.DeepEqual(fixture.steps, []string{"begin", "execute"}) {
+		t.Fatal("late native ACK discarded or replayed admitted effect", err, fixture.steps)
+	}
 }
