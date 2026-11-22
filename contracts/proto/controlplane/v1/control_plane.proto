@@ -9604,6 +9604,9 @@ message BeginPersonalIntegrationInvocationResponse {
   IntegrationCredentialRevision credential_revision = 2;
   IntegrationInvocationWorkMode work_mode = 3;
   IntegrationCredentialResourcePermissionProfile resource_permission_profile = 4;
+  // Серверный срок нового dispatch/disclosure; не продлевает owner lease для receipt.
+  // Обязателен при admitted=true, отсутствует при отказе.
+  google.protobuf.Timestamp authorized_until = 5;
 }
 
 enum IntegrationCredentialPolicy {

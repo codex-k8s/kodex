@@ -248,17 +248,18 @@ func assertPersonalInvocationAdmissionReceipt(t *testing.T, ctx context.Context,
 			t.Fatal("claim isolated invocation lease metadata", err)
 		}
 		var recovery bool
+		var leaseExpiry, observed time.Time
 		args := pgx.StrictNamedArgs{"organization_id": organizationID, "invocation_ref": invocationRef,
 			"lease_ref": lease, "generation": generation, "fence_digest": fenceDigest, "workload_instance": "personal-admission-fixture",
 			"connection_id": choice.context.connectionID, "root_run_id": choice.context.rootID, "subject_id": choice.context.subjectID,
 			"binding_id": choice.bindingID, "binding_generation": choice.selection.BindingGeneration,
 			"credential_ref": choice.selection.Credential.Ref, "definition_digest": choice.context.definitionDigest, "configuration_digest": choice.configurationDigest,
 			"resource_permission_profile": choice.selection.ResourcePermissionProfile}
-		if err := tx.QueryRow(ctx, queryPersonalInvocationBeginLease, args).Scan(&recovery); err != nil || recovery {
+		if err := tx.QueryRow(ctx, queryPersonalInvocationBeginLease, args).Scan(&recovery, &leaseExpiry, &observed); err != nil || recovery {
 			t.Fatal("exact invocation lease/pin did not admit execution metadata", err)
 		}
 		args["lease_ref"] = "lea_foreign_admission_fixture"
-		if err := tx.QueryRow(ctx, queryPersonalInvocationBeginLease, args).Scan(&recovery); !errors.Is(err, pgx.ErrNoRows) {
+		if err := tx.QueryRow(ctx, queryPersonalInvocationBeginLease, args).Scan(&recovery, &leaseExpiry, &observed); !errors.Is(err, pgx.ErrNoRows) {
 			t.Fatal("foreign invocation lease matched personal admission", err)
 		}
 		admission := pgx.StrictNamedArgs{"organization_id": organizationID, "invocation_id": choice.context.invocationID,

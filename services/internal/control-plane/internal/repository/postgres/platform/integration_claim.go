@@ -69,9 +69,10 @@ func (repository *Repository) claimIntegrationInvocationCandidateTx(ctx context.
 	}
 	initiatorScope := scope
 	initiatorScope.actorRef = item.initiatorRef
-	if err := repository.requireAccess(ctx, tx, initiatorScope, "integration.manage", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "INTEGRATION", ResourceRef: item.connectionRef}); err != nil {
+	accessUntil, accessErr := repository.requireAccessUntil(ctx, tx, initiatorScope, "integration.manage", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "INTEGRATION", ResourceRef: item.connectionRef})
+	if accessErr != nil {
 		if sshLane {
-			return nil, err
+			return nil, accessErr
 		}
 		return nil, nil
 	}
@@ -129,6 +130,12 @@ func (repository *Repository) claimIntegrationInvocationCandidateTx(ctx context.
 	if item.state == "UNKNOWN_OUTCOME" {
 		workMode = "RECOVER_READ_ONLY"
 	}
+	// Keep the persisted lease for admitted-result reconciliation; tighten only the outgoing dispatch envelope.
+	// Сохраняем DB lease для reconciliation допущенного результата; сужаем лишь выдаваемый dispatch envelope.
+	dispatchUntil := expiresAt
+	if item.credentialPolicy == entity.IntegrationCredentialInitiatorRequired && !accessUntil.IsZero() && accessUntil.Before(dispatchUntil) {
+		dispatchUntil = accessUntil
+	}
 	claim := map[string]any{
 		"invocationRef": item.ref, "connectionRef": item.connectionRef, "definitionKey": item.definitionKey,
 		"definitionPackage": asJSON(definition),
@@ -139,7 +146,7 @@ func (repository *Repository) claimIntegrationInvocationCandidateTx(ctx context.
 		"resourceKind": item.resourceKind, "resourceScope": resourceScope,
 		"resourceScopeDigest": item.resourceScopeDigest, "effectKey": item.effectKey, "inputDigest": item.inputDigest,
 		"workMode": workMode,
-		"leaseRef": leaseRef, "fence": fence, "generation": generation, "expiresAt": expiresAt,
+		"leaseRef": leaseRef, "fence": fence, "generation": generation, "expiresAt": dispatchUntil,
 	}
 	if item.credentialPolicy == entity.IntegrationCredentialInitiatorRequired {
 		claim["credentialAdmissionRequired"] = true

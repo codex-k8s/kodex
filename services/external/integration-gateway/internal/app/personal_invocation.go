@@ -12,6 +12,7 @@ import (
 	"github.com/codex-k8s/kodex/services/external/integration-gateway/internal/integration"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // personalInvocationAdmissionClient exposes only the one-time owner call-start operation.
@@ -63,8 +64,16 @@ func executeInvocationClaim(ctx context.Context, owner personalInvocationAdmissi
 	if err != nil || work == nil {
 		return empty, err
 	}
+	if claim.GetCredentialAdmissionRequired() {
+		var cancelAllowance context.CancelFunc
+		ctx, cancelAllowance = context.WithDeadline(ctx, work.GetLease().GetExpiresAt().AsTime())
+		defer cancelAllowance()
+	}
 	operation, cancel := context.WithTimeout(ctx, config.OperationTimeout)
 	defer cancel()
+	if err := operation.Err(); err != nil {
+		return empty, err
+	}
 	executed := invocationExecution{claim: work, executed: true}
 	if work.GetWorkMode() == cp.IntegrationInvocationWorkMode_INTEGRATION_INVOCATION_WORK_MODE_RECOVER_READ_ONLY {
 		executed.result, executed.operationErr = adapter.Recover(operation, integration.RequestFromInvocation(work))
@@ -114,10 +123,14 @@ func admitPersonalInvocation(ctx context.Context, client personalInvocationAdmis
 		return nil, errors.New("personal invocation admission response is invalid")
 	}
 	if !response.GetAdmitted() {
-		if response.GetCredentialRevision() != nil || response.GetWorkMode() != cp.IntegrationInvocationWorkMode_INTEGRATION_INVOCATION_WORK_MODE_UNSPECIFIED || response.GetResourcePermissionProfile() != 0 {
+		if response.GetAuthorizedUntil() != nil || response.GetCredentialRevision() != nil || response.GetWorkMode() != cp.IntegrationInvocationWorkMode_INTEGRATION_INVOCATION_WORK_MODE_UNSPECIFIED || response.GetResourcePermissionProfile() != 0 {
 			return nil, errors.New("personal invocation denial contains work authority")
 		}
 		return nil, nil
+	}
+	until := response.GetAuthorizedUntil()
+	if until == nil || until.CheckValid() != nil || len(until.ProtoReflect().GetUnknown()) != 0 || !until.AsTime().After(time.Now().Add(config.OperationTimeout+config.RequestTimeout)) {
+		return nil, errors.New("personal invocation admission allowance is invalid")
 	}
 	credential := response.GetCredentialRevision()
 	if response.GetWorkMode() != claim.GetWorkMode() || response.GetResourcePermissionProfile() != claim.GetResourcePermissionProfile() || credential == nil || len(credential.ProtoReflect().GetUnknown()) != 0 ||
@@ -129,6 +142,9 @@ func admitPersonalInvocation(ctx context.Context, client personalInvocationAdmis
 	}
 	work := proto.Clone(claim).(*cp.IntegrationInvocationClaim)
 	work.CredentialRevision = proto.Clone(credential).(*cp.IntegrationCredentialRevision)
+	if until.AsTime().Before(work.Lease.ExpiresAt.AsTime()) {
+		work.Lease.ExpiresAt = timestamppb.New(until.AsTime())
+	}
 	return work, nil
 }
 

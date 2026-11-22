@@ -13,6 +13,7 @@ updated: 2026-11-14
 - `OPS-DOC-GITHUB-SCOPE-2033` — [Личные репозитории GitHub и область подключения](../operations/github-repository-scope-2033.md).
 
 - `OPS-DOC-PERSONAL-CREDENTIALS-2033` — [Персональные подключения и допуск запуска](../operations/personal-credentials-2033.md) (draft).
+- `OPS-DOC-PERSONAL-TOKEN-ALLOWANCE-2033` — [Конечный допуск персонального TOKEN вызова](../operations/personal-token-allowance-2033.md).
 
 - `RUN-INT-SERVER-2029` — [Опциональные Server/DC-профили Jira и Confluence](../operations/atlassian-server-profiles-2029.md).
 

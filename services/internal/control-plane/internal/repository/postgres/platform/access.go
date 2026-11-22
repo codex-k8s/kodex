@@ -588,42 +588,8 @@ func (repository *Repository) accessReadTransaction(ctx context.Context, princip
 // authority-project, загружает активного actor с привязками и вычисляет точное разрешение на
 // текущее UTC время. Отказ скрывается как NotFound; привязка не создаётся.
 func (repository *Repository) requireAccess(ctx context.Context, tx pgx.Tx, current scope, permission string, target any) error {
-	var resolved resolvedAccessTarget
-	switch value := target.(type) {
-	case entity.AccessScope:
-		if value.Kind == "RESOURCE_KIND" {
-			if err := access.ValidateScope(value); err != nil {
-				return errs.ErrInvalid
-			}
-			resolved.scope = value
-		} else {
-			var err error
-			resolved, err = repository.resolveAccessTarget(ctx, tx, current.organizationID, value)
-			if err != nil {
-				return err
-			}
-		}
-	case resolvedAccessTarget:
-		resolved = value
-	default:
-		return errs.ErrInvalid
-	}
-	if current.authorityProjectID != "" && resolved.projectID != "" && current.authorityProjectID != resolved.projectID {
-		return errs.ErrNotFound
-	}
-	subject, err := repository.resolveAccessSubject(ctx, tx, current.organizationID, current.actorRef)
-	if err != nil {
-		return err
-	}
-	bindings, err := repository.loadAccessBindings(ctx, tx, current.organizationID, subject)
-	if err != nil {
-		return err
-	}
-	decision := access.Evaluate(subject.AccessSubject, permission, resolved.scope, resolved.ownerSubjectRef, bindings, time.Now().UTC())
-	if !decision.Allowed {
-		return errs.ErrNotFound
-	}
-	return nil
+	_, err := repository.requireAccessUntil(ctx, tx, current, permission, target)
+	return err
 }
 
 // resolveAccessSubject loads an active tenant subject and its groups, falling back to an OIDC

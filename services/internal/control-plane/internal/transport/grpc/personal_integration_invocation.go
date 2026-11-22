@@ -3,12 +3,14 @@ package grpc
 import (
 	"context"
 	"errors"
+	"time"
 
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // BeginPersonalIntegrationInvocation returns descriptor metadata only for a fresh committed admission.
@@ -30,7 +32,7 @@ func (server *Server) BeginPersonalIntegrationInvocation(ctx context.Context, re
 	if err != nil {
 		return nil, transportError(err)
 	}
-	if result.Credential == nil || result.Credential.Ref == "" || result.Credential.Revision < 1 || !result.Credential.ValidDescriptor() || result.Credential.CreatedAt.IsZero() {
+	if !time.Now().Before(result.AuthorizedUntil) || result.Credential == nil || result.Credential.Ref == "" || result.Credential.Revision < 1 || !result.Credential.ValidDescriptor() || result.Credential.CreatedAt.IsZero() {
 		return nil, status.Error(codes.Unavailable, "personal invocation credential result is unavailable")
 	}
 	mode := cp.IntegrationInvocationWorkMode_INTEGRATION_INVOCATION_WORK_MODE_EXECUTE
@@ -41,5 +43,5 @@ func (server *Server) BeginPersonalIntegrationInvocation(ctx context.Context, re
 	if profile < 0 {
 		return nil, status.Error(codes.Unavailable, "personal invocation resource permission profile is unavailable")
 	}
-	return &cp.BeginPersonalIntegrationInvocationResponse{Admitted: true, CredentialRevision: castIntegrationCredential(*result.Credential), WorkMode: mode, ResourcePermissionProfile: profile}, nil
+	return &cp.BeginPersonalIntegrationInvocationResponse{Admitted: true, AuthorizedUntil: timestamppb.New(result.AuthorizedUntil), CredentialRevision: castIntegrationCredential(*result.Credential), WorkMode: mode, ResourcePermissionProfile: profile}, nil
 }

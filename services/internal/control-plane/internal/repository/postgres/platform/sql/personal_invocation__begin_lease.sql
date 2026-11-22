@@ -1,5 +1,5 @@
 -- name: personal_invocation__begin_lease :one
-SELECT invocation.claimed_recovery_read_only
+SELECT invocation.claimed_recovery_read_only, invocation.lease_expires_at, clock_timestamp()
 FROM control_plane.integration_invocations invocation
 JOIN control_plane.integration_personal_invocation_credentials pin
  ON pin.invocation_id=invocation.id AND pin.organization_id=invocation.organization_id
