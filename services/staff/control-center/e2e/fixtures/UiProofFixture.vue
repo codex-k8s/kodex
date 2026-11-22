@@ -14,6 +14,7 @@ import DismissiblePopover from "../../src/shared/ui/DismissiblePopover.vue";
 import IntegrationsPage from "../../src/pages/IntegrationsPage.vue";
 import { usePlatformStore } from "../../src/features/platform/store";
 import { client } from "../../src/shared/api/generated/openapi/client.gen";
+import { selectProjectRef } from "../../src/shared/project-context";
 const lifecycleFixture =
   new URLSearchParams(location.search).get("fixture") === "popover-lifecycle";
 const lifecycleOpen = ref(false);
@@ -50,7 +51,10 @@ const context = {
   allowedOperations: [],
 };
 const assistant = useAssistantStore();
-if (assistantImportFixture) assistant.setContext(context, context.entityRef);
+if (assistantImportFixture) {
+  selectProjectRef(context.entityRef);
+  assistant.setContext(context, context.entityRef);
+}
 const historyRequests = ref(0);
 const pickerRequests = ref(0);
 const selected = ref<string | null>(null);
