@@ -113,25 +113,25 @@ func TestWriteAtomicRejectsSymlinkDirectory(t *testing.T) {
 	}
 }
 
-// TestSupportedWorkloadsIncludeAuthorityCallers pins four required local allowlist members without
+// TestSupportedWorkloadsIncludeAuthorityCallers pins required local allowlist members without
 // treating list membership as caller authentication.
-// TestSupportedWorkloadsIncludeAuthorityCallers закрепляет четыре обязательных элемента локального
+// TestSupportedWorkloadsIncludeAuthorityCallers закрепляет обязательные элементы локального
 // списка, не считая членство аутентификацией вызывающего.
 func TestSupportedWorkloadsIncludeAuthorityCallers(t *testing.T) {
 	t.Parallel()
-	for _, workloadID := range []string{"control-plane", "session-archive", "interaction-gateway", "email-bridge"} {
+	for _, workloadID := range []string{"control-plane", "session-archive", "interaction-gateway", "email-bridge", "artifact-retention"} {
 		if _, ok := supportedWorkloads[workloadID]; !ok {
 			t.Fatalf("%s отсутствует в закрытом реестре platform worker", workloadID)
 		}
 	}
 }
 
-// TestOptionalWorkerGrantExactIdentityAndRotation checks two local workload fixtures for exact
+// TestOptionalWorkerGrantExactIdentityAndRotation checks local workload fixtures for exact
 // credential fields and bounded lifetime, then requires revision/JTI advancement on a later issue.
-// TestOptionalWorkerGrantExactIdentityAndRotation проверяет точные поля и ограниченный срок двух
+// TestOptionalWorkerGrantExactIdentityAndRotation проверяет точные поля и ограниченный срок
 // локальных примеров нагрузки, затем требует роста ревизии и смены JTI при следующем выпуске.
 func TestOptionalWorkerGrantExactIdentityAndRotation(t *testing.T) {
-	for _, workload := range []string{"email-bridge", "interaction-gateway"} {
+	for _, workload := range []string{"email-bridge", "interaction-gateway", "artifact-retention"} {
 		t.Run(workload, func(t *testing.T) {
 			key, err := internalrpcauth.GenerateES256Key(workload + "-platform-worker-g3")
 			if err != nil {

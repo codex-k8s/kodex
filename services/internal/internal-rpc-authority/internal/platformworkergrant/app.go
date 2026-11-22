@@ -46,6 +46,7 @@ const (
 // supportedWorkloads — закрытый локальный список выпуска; членство дополнительно требует точной
 // привязки ключа к нагрузке и поколению и корректной настройки экземпляра.
 var supportedWorkloads = map[string]struct{}{
+	"artifact-retention":   {},
 	"automation-scheduler": {},
 	"image-admission":      {},
 	"image-promotion":      {},
