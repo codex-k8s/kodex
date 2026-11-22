@@ -143,6 +143,19 @@ API-key path из private owned file либо штатным UI авториза
 Default `glm-5.3`; `--default-model glm-5.3-flash` разрешает явный другой default.
 Установка не меняет модели уже существующих сотрудников.
 
+Для установки с действующими маршрутами передайте её полный Git-owned каталог
+в `--configuration /absolute/path/current-provider.json` той же команде.
+На выходе получится полный каталог новой `--source-revision` со всеми
+существующими маршрутами и Z.ai Coding Plan. Имеющиеся provider ID, модели,
+параметры и default сохраняются. Явный `--default-model glm-5.3` или
+`--default-model glm-5.3-flash` назначает Z.ai default новой конфигурации.
+Если в каталоге уже есть отличающийся маршрут Z.ai Coding Plan, preset
+отклоняет изменение. Правку существующего маршрута выполняют в его Git-источнике.
+Для Z.ai рядом с действующим default подключите отдельный аккаунт через
+интерфейс авторизации этого маршрута. Bootstrap API key относится к default.
+Ключ берётся из раздела Personal Coding Plan по
+[официальной инструкции для OpenCode](https://docs.z.ai/devpack/tool/opencode).
+
 Conservative owner ceilings: context1000000, output32768. Это operator limits,
 а не remote quota attestation. Доступные reasoning efforts в справочнике не
 расширяют runtime preference allowlist. Preset сохраняет provider default,

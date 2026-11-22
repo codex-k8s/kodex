@@ -17,6 +17,7 @@ import yaml
 from referencing import Registry, Resource
 
 ROOT = Path(__file__).resolve().parents[2]
+CONFIGURATION_MAX_BYTES = 524288
 
 
 def unique_object(pairs):
@@ -32,8 +33,8 @@ def configuration(path):
     with Path(path).open("rb") as source:
         if not stat.S_ISREG(os.fstat(source.fileno()).st_mode):
             raise ValueError()
-        raw = source.read(524289)
-    if not 0 < len(raw) <= 524288:
+        raw = source.read(CONFIGURATION_MAX_BYTES + 1)
+    if not 0 < len(raw) <= CONFIGURATION_MAX_BYTES:
         raise ValueError()
     value = json.loads(raw, object_pairs_hook=unique_object)
     return validate_configuration(value)
@@ -81,6 +82,21 @@ def zai_coding_plan(revision, addresses, default_model):
             'models': [{'id': model, 'context_window_tokens': 1000000, 'maximum_output_tokens': 32768} for model in models],
         }],
     })
+
+
+def extend_with_zai_coding_plan(base, preset, select_default):
+    revision = preset['source_revision']
+    route = preset['providers'][0]
+    providers = [{**provider, 'source_revision': revision} for provider in base['providers']]
+    existing = next((provider for provider in providers if provider['provider_id'] == route['provider_id']), None)
+    if existing is None:
+        providers.append(route)
+    elif existing != route:
+        raise ValueError()
+    result = {**base, 'source_revision': revision, 'providers': providers}
+    if select_default:
+        result.update(default_provider=preset['default_provider'], default_model=preset['default_model'])
+    return validate_configuration(result)
 
 
 def validate_provider(value):
@@ -231,13 +247,17 @@ def main():
     parser.add_argument('--output')
     args = parser.parse_args()
     if args.mode == 'preset-zai-coding-plan':
-        if args.configuration or args.render or args.api_key_file or not args.output or not args.source_revision or not args.address_cidr:
+        if args.render or args.api_key_file or not args.output or not args.source_revision or not args.address_cidr:
             raise ValueError()
         config = zai_coding_plan(args.source_revision, args.address_cidr, args.default_model or 'glm-5.3')
+        if args.configuration:
+            config = extend_with_zai_coding_plan(configuration(args.configuration), config, bool(args.default_model))
+        payload = (json.dumps(config, ensure_ascii=False, sort_keys=True, indent=2) + '\n').encode()
+        if len(payload) > CONFIGURATION_MAX_BYTES:
+            raise ValueError()
         out = os.open(args.output, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
-        with os.fdopen(out, 'w') as stream:
-            json.dump(config, stream, ensure_ascii=False, sort_keys=True, indent=2)
-            stream.write('\n')
+        with os.fdopen(out, 'wb') as stream:
+            stream.write(payload)
         print('Model provider operation completed')
         return
     if not args.configuration or args.source_revision or args.address_cidr:
