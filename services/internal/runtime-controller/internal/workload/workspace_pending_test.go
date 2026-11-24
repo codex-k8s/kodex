@@ -27,6 +27,7 @@ import (
 // Смешанная коллекция превышает 128 tickets; некорректные V2 pages не блокируют valid last-page observation.
 // Истечение continuation перезапускает обход без выдачи writer или deletion authority.
 func TestWorkspacePendingPaginationReachesTailAndRestartsExpiredCursor(t *testing.T) {
+	const malformedTickets = 96
 	for _, expire := range []bool{false, true} {
 		t.Run(fmt.Sprintf("expired=%t", expire), func(t *testing.T) {
 			manager, fakeClient, input, _ := workspaceStoragePodFixture(t)
@@ -46,7 +47,7 @@ func TestWorkspacePendingPaginationReachesTailAndRestartsExpiredCursor(t *testin
 				delete(legacy.Annotations, workspaceStorageProfileAnnotation)
 				tickets = append(tickets, *legacy)
 			}
-			for index := 0; index < 96; index++ {
+			for index := 0; index < malformedTickets; index++ {
 				invalid := tail.DeepCopy()
 				invalid.Name = fmt.Sprintf("invalid-%03d", index)
 				invalid.Data[inputKey] = []byte(`{"invalid":true}`)
@@ -87,7 +88,8 @@ func TestWorkspacePendingPaginationReachesTailAndRestartsExpiredCursor(t *testin
 					return
 				}
 				selector, err := labels.Parse(query.Get("labelSelector"))
-				if err != nil || query.Get("limit") != "32" {
+				limit, limitErr := strconv.Atoi(query.Get("limit"))
+				if err != nil || limitErr != nil || limit < 1 || limit > 4 {
 					t.Error("invalid bounded list request")
 					writer.WriteHeader(http.StatusBadRequest)
 					return
@@ -107,7 +109,7 @@ func TestWorkspacePendingPaginationReachesTailAndRestartsExpiredCursor(t *testin
 					writer.WriteHeader(http.StatusBadRequest)
 					return
 				}
-				end := min(start+32, len(eligible))
+				end := min(start+limit, len(eligible))
 				page := corev1.SecretList{TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "SecretList"}, Items: eligible[start:end]}
 				if end < len(eligible) {
 					page.Continue = fmt.Sprintf("page-%d", end)
@@ -121,9 +123,9 @@ func TestWorkspacePendingPaginationReachesTailAndRestartsExpiredCursor(t *testin
 			}
 			manager.client = client
 			found, failures := 0, 0
-			polls := 4
+			polls := 1 + malformedTickets/int(workspaceObservationPageSize)
 			if expire {
-				polls = 6
+				polls += 2
 			}
 			for index := 0; index < polls; index++ {
 				observations, err := manager.PendingWorkspaceQuiescence(ctx)
