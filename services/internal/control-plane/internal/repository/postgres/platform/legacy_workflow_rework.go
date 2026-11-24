@@ -157,7 +157,7 @@ func (repository *Repository) createLegacyWorkflowReworkTx(ctx context.Context, 
 			return "", err
 		}
 	}
-	providerID, err := repository.selectReadyProviderAccountForAgent(ctx, tx, current.organizationID, origin.AgentRef)
+	providerID, err := repository.selectReadyProviderAccountForRoot(ctx, tx, current.organizationID, origin.RootID, origin.ActorID, origin.AgentRef)
 	if err != nil {
 		return "", err
 	}

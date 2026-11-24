@@ -174,15 +174,16 @@ func (server *Server) ListProviderAccounts(w http.ResponseWriter, r *http.Reques
 		writeLocalProblem(w, 400, "INVALID_REQUEST", false)
 		return
 	}
+	personal := p.Personal != nil && *p.Personal
 	response, err := server.control.Query.ListProviderAccounts(r.Context(), &controlplanev1.ListProviderAccountsRequest{
-		Page: page(p.PageSize, p.PageToken), State: controlplanev1.ProviderAccountState(state), Query: stringValue(p.Query), DefinitionKey: stringValue(p.DefinitionKey), UsageContext: usage,
+		Page: page(p.PageSize, p.PageToken), State: controlplanev1.ProviderAccountState(state), Query: stringValue(p.Query), DefinitionKey: stringValue(p.DefinitionKey), UsageContext: usage, Personal: personal,
 	})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
 	}
 	for _, account := range response.GetAccounts() {
-		if !validProviderAccountRead(account, usage) {
+		if account.GetPersonal() != personal || !validProviderAccountRead(account, usage) {
 			writeLocalProblem(w, 502, "INVALID_UPSTREAM_RESPONSE", false)
 			return
 		}
@@ -219,7 +220,7 @@ func (server *Server) CreateProviderAccount(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	response, err := server.control.Command.CreateProviderAccount(r.Context(), &controlplanev1.CreateProviderAccountRequest{
-		Mutation: mutation, DefinitionKey: string(body.DefinitionKey), Name: body.Name,
+		Mutation: mutation, DefinitionKey: string(body.DefinitionKey), Name: body.Name, Personal: body.Personal != nil && *body.Personal,
 	})
 	writeRPCResult(w, http.StatusCreated, response, err, "account", "")
 }

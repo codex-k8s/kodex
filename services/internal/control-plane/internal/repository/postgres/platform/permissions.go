@@ -25,6 +25,33 @@ import (
 // capability/grant enablement и retry/publication/binding действия проходят свежие проверки до
 // сохранения устаревших прав receipt replay.
 func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, current scope, input command.Command) error {
+	if payload, ok := input.Payload.(command.ProviderAccountInput); ok {
+		if input.Kind == command.CreateProviderAccount {
+			if payload.Personal {
+				if input.Principal.CallerWorkload != "control-api-gateway" || current.authorityProjectID != "" || current.role == "SYSTEM" {
+					return errs.ErrForbidden
+				}
+				return nil
+			}
+		} else if payload.AccountRef != "" {
+			personal, err := personalModelAccount(ctx, tx, current, payload.AccountRef)
+			if err != nil {
+				return err
+			}
+			if personal {
+				if input.Principal.CallerWorkload != "control-api-gateway" {
+					return errs.ErrNotFound
+				}
+				switch input.Kind {
+				case command.AuthorizeProviderAPIKey, command.VerifyProviderAuthorization,
+					command.RevokeProviderAccount, command.DeleteProviderAccount, command.SetProviderAccountEnabled:
+					return nil
+				default:
+					return errs.ErrForbidden
+				}
+			}
+		}
+	}
 	if input.Kind == command.CreatePersonalEmailMailboxConnection {
 		return authorizePersonalEmailConnectionTx(ctx, tx, current, input)
 	}

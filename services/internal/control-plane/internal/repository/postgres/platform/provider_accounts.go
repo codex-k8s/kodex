@@ -2,6 +2,7 @@ package platform
 
 import (
 	"context"
+	_ "embed"
 	"errors"
 	"strings"
 	"time"
@@ -13,6 +14,31 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
+
+//go:embed sql/provider_accounts__read_personal_owner.sql
+var queryProviderAccountPersonalOwner string
+
+// personalModelAccount checks the authenticated subject against the stored tenant-bound owner.
+// personalModelAccount сверяет аутентифицированного субъекта с владельцем аккаунта в организации.
+func personalModelAccount(ctx context.Context, tx pgx.Tx, current scope, ref string) (bool, error) {
+	var owner string
+	err := tx.QueryRow(ctx, queryProviderAccountPersonalOwner, pgx.StrictNamedArgs{
+		"organization_id": current.organizationID, "account_ref": ref,
+	}).Scan(&owner)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, errs.ErrNotFound
+	}
+	if err != nil {
+		return false, errs.ErrUnavailable
+	}
+	if owner == "" {
+		return false, nil
+	}
+	if owner != current.actorID || current.authorityProjectID != "" {
+		return false, errs.ErrNotFound
+	}
+	return true, nil
+}
 
 // changeProviderAccount dispatches specialized account transitions after exact
 // organization/account lock and expected version, with creation and queued-work cancellation on
@@ -63,6 +89,10 @@ func (repository *Repository) changeProviderAccount(
 		return repository.cancelProviderAccountQueuedWork(ctx, tx, current, input, payload, accountID, version)
 	}
 	summary := "i18n:PROVIDER_ACCOUNT_UPDATED"
+	personal, err := personalModelAccount(ctx, tx, current, payload.AccountRef)
+	if err != nil {
+		return commandOutcome{}, err
+	}
 	emitEvent := true
 	switch input.Kind {
 	case command.SetProviderAccountConcurrency:
@@ -224,7 +254,7 @@ func (repository *Repository) changeProviderAccount(
 		result: command.Result{ProviderAccount: &item}, resourceKind: "PROVIDER_ACCOUNT",
 		resourceRef: item.Ref, summary: summary, platformAggregateVersion: item.Version, platformState: item.State,
 	}
-	if emitEvent {
+	if emitEvent && !personal {
 		outcome.platformEvent = "PROVIDER_ACCOUNT_CHANGED"
 	}
 	return outcome, nil
@@ -271,9 +301,18 @@ func (repository *Repository) ProviderMaterializationReferenced(
 		return false, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	target := entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "PROVIDER_ACCOUNT", ResourceRef: accountRef}
-	if err := repository.requireAccess(ctx, tx, current, "provider.account.view", target); err != nil {
+	personal, err := personalModelAccount(ctx, tx, current, accountRef)
+	if err != nil {
+		return false, err
+	}
+	if personal && principal.CallerWorkload != "control-api-gateway" {
 		return false, errs.ErrNotFound
+	}
+	if !personal {
+		target := entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "PROVIDER_ACCOUNT", ResourceRef: accountRef}
+		if err := repository.requireAccess(ctx, tx, current, "provider.account.view", target); err != nil {
+			return false, errs.ErrNotFound
+		}
 	}
 	var accountID string
 	if err := tx.QueryRow(ctx, queryProviderAccountsMaterializationGuard, pgx.StrictNamedArgs{
@@ -315,6 +354,9 @@ func (repository *Repository) createProviderAccount(
 	if payload.Name == "" || len(payload.Name) > 160 || !validStableKey(payload.DefinitionKey) {
 		return commandOutcome{}, errs.ErrInvalid
 	}
+	if payload.Personal && repository.configuredModelProvider(payload.DefinitionKey) == nil {
+		return commandOutcome{}, errs.ErrInvalid
+	}
 	ref, err := newRef("pacc")
 	if err != nil {
 		return commandOutcome{}, err
@@ -322,7 +364,7 @@ func (repository *Repository) createProviderAccount(
 	var created string
 	if err := tx.QueryRow(ctx, queryProviderAccountsCreate, pgx.StrictNamedArgs{
 		"account_ref": ref, "organization_id": current.organizationID, "definition_key": payload.DefinitionKey,
-		"name": payload.Name, "created_by": current.actorID,
+		"name": payload.Name, "created_by": current.actorID, "personal": payload.Personal,
 	}).Scan(&created); errors.Is(err, pgx.ErrNoRows) {
 		return commandOutcome{}, errs.ErrNotFound
 	} else if err != nil {
@@ -332,9 +374,13 @@ func (repository *Repository) createProviderAccount(
 	if err != nil {
 		return commandOutcome{}, err
 	}
+	event := "PROVIDER_ACCOUNT_CHANGED"
+	if payload.Personal {
+		event = ""
+	}
 	return commandOutcome{
 		result: command.Result{ProviderAccount: &item}, resourceKind: "PROVIDER_ACCOUNT", resourceRef: item.Ref,
-		summary: "i18n:PROVIDER_ACCOUNT_CREATED", platformEvent: "PROVIDER_ACCOUNT_CHANGED",
+		summary: "i18n:PROVIDER_ACCOUNT_CREATED", platformEvent: event,
 		platformAggregateVersion: item.Version, platformState: item.State,
 	}, nil
 }

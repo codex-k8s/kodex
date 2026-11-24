@@ -33,7 +33,7 @@ func (repository *Repository) authorizeSessionTurnTarget(ctx context.Context, tx
 		return errs.ErrInvalid
 	}
 	var projectID, projectRef, targetType, targetRef string
-	if err := tx.QueryRow(ctx, queryCommandsAddsessionturnSelectSessionsOrganizationIdRefState, current.organizationID, payload.SessionRef).Scan(&projectID, &projectRef, &targetType, &targetRef); err != nil {
+	if err := tx.QueryRow(ctx, queryCommandsAddsessionturnSelectSessionsOrganizationIdRefState, current.organizationID, payload.SessionRef, current.actorID).Scan(&projectID, &projectRef, &targetType, &targetRef); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return errs.ErrNotFound
 		}
@@ -59,7 +59,7 @@ func (repository *Repository) authorizeRetryTarget(ctx context.Context, tx pgx.T
 	}
 	var target entity.RunTarget
 	var projectRef string
-	if err := tx.QueryRow(ctx, queryRuntimeRetryAuthority, pgx.StrictNamedArgs{"organization_id": current.organizationID, "run_ref": payload.RunRef}).Scan(&target.Type, &target.Ref, &projectRef); err != nil {
+	if err := tx.QueryRow(ctx, queryRuntimeRetryAuthority, pgx.StrictNamedArgs{"organization_id": current.organizationID, "run_ref": payload.RunRef, "actor_id": current.actorID}).Scan(&target.Type, &target.Ref, &projectRef); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return errs.ErrNotFound
 		}

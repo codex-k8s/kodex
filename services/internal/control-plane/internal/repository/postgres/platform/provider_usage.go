@@ -119,11 +119,13 @@ type providerUsageContext struct {
 // SQL-массивом. Проверяет предел 4096 аккаунтов, 128KiB JSON моделей, жизненный цикл, ёмкость и
 // каталог. Сбой чтения или декодирования отбрасывает частичный результат с Unavailable;
 // переполнение имеет отдельную ошибку. Закрывает rows без commit.
-func readProviderUsageAccounts(ctx context.Context, tx pgx.Tx, organization string, refs []string, models bool) ([]providerUsageAccount, error) {
+func readProviderUsageAccounts(ctx context.Context, tx pgx.Tx, organization string, refs []string, models bool, personalOwner *string) ([]providerUsageAccount, error) {
 	if refs == nil {
 		refs = []string{}
 	}
-	rows, err := tx.Query(ctx, queryProviderUsageAccounts, pgx.StrictNamedArgs{"organization_id": organization, "account_refs": refs, "include_models": models})
+	rows, err := tx.Query(ctx, queryProviderUsageAccounts, pgx.StrictNamedArgs{
+		"organization_id": organization, "account_refs": refs, "include_models": models, "personal_owner": personalOwner,
+	})
 	if err != nil {
 		return nil, errs.ErrUnavailable
 	}
@@ -524,7 +526,18 @@ func (repository *Repository) providerUsageRead(ctx context.Context, p value.Pri
 	if err != nil {
 		return scope{}, nil, err
 	}
-	if err := repository.requireAccess(ctx, tx, current, "provider.account.view", target(current)); err != nil {
+	access := target(current)
+	if access.Kind == "RESOURCE_INSTANCE" && access.ResourceKind == "PROVIDER_ACCOUNT" {
+		personal, err := personalModelAccount(ctx, tx, current, access.ResourceRef)
+		if err != nil || personal && p.CallerWorkload != "control-api-gateway" {
+			_ = tx.Rollback(ctx)
+			return scope{}, nil, errs.ErrNotFound
+		}
+		if personal {
+			return current, tx, nil
+		}
+	}
+	if err := repository.requireAccess(ctx, tx, current, "provider.account.view", access); err != nil {
 		_ = tx.Rollback(ctx)
 		return scope{}, nil, errs.ErrNotFound
 	}
@@ -564,7 +577,7 @@ func (repository *Repository) providerAdmissionForAgents(ctx context.Context, tx
 	}
 	accounts := []providerUsageAccount{}
 	if len(accountRefs) > 0 {
-		accounts, err = readProviderUsageAccounts(ctx, tx, current.organizationID, accountRefs, true)
+		accounts, err = readProviderUsageAccounts(ctx, tx, current.organizationID, accountRefs, true, nil)
 		if err != nil {
 			return nil, err
 		}

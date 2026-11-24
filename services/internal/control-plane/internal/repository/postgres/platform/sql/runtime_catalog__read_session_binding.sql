@@ -10,7 +10,7 @@ JOIN control_plane.provider_accounts account ON account.id = binding.provider_ac
 JOIN control_plane.provider_account_policy_versions policy ON policy.id = binding.provider_account_policy_id AND policy.organization_id = binding.organization_id
 LEFT JOIN control_plane.agent_runtime_config_versions original ON original.agent_id=policy.agent_id
   AND original.version_number=policy.version_number AND original.provider_account_policy_id=policy.id
-  AND policy.mode='FIXED' AND (policy.account_candidates->1) ? 'runtimeProfileRef'
+  AND (policy.mode='PERSONAL' OR (policy.mode='FIXED' AND (policy.account_candidates->1) ? 'runtimeProfileRef'))
 LEFT JOIN LATERAL (
   SELECT candidate AS value FROM jsonb_array_elements(policy.account_candidates) candidate
   WHERE candidate->>'accountRef'=account.ref

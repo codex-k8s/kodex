@@ -40,6 +40,9 @@ var (
 	// ErrConflict marks an operation incompatible with current state, separately from an explicit optimistic-version mismatch.
 	// ErrConflict обозначает операцию, несовместимую с текущим состоянием, отдельно от явного несовпадения оптимистической версии.
 	ErrConflict = errors.New("conflict")
+	// ErrPersonalModelAccountRequired blocks launch without an eligible account owned by the initiator.
+	// ErrPersonalModelAccountRequired блокирует запуск без подходящего личного аккаунта инициатора.
+	ErrPersonalModelAccountRequired = errors.New("an authorized personal model account is required")
 	// ErrCapabilityRequired marks an operation whose required platform capability is not enabled; it does not authorize enabling that capability.
 	// ErrCapabilityRequired обозначает операцию с невключённой обязательной возможностью платформы; права включить эту возможность ошибка не даёт.
 	ErrCapabilityRequired = errors.New("required capability is not enabled")

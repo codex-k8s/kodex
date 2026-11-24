@@ -2000,11 +2000,12 @@ func (repository *Repository) launchRunWithAttachmentPolicy(ctx context.Context,
 			return commandOutcome{}, errs.ErrCapabilityRequired
 		}
 	}
+	personalSubjectID := interactiveModelAccountSubject(source, scope.actorID)
 	sessionRef := payload.SessionRef
 	var sessionID string
 	if sessionRef == "" {
 		sessionRef, _ = newRef("ses")
-		providerAccountID, err := repository.selectReadyProviderAccountForAgent(ctx, tx, scope.organizationID, targetAgentRefs[0])
+		providerAccountID, err := repository.preflightModelAccountsForLaunch(ctx, tx, scope.organizationID, targetAgentRefs, personalSubjectID)
 		if err != nil {
 			return commandOutcome{}, err
 		}
@@ -2014,7 +2015,7 @@ func (repository *Repository) launchRunWithAttachmentPolicy(ctx context.Context,
 		if err := bindSessionModelCatalog(ctx, tx, scope.organizationID, sessionID, targetAgentRefs[0]); err != nil {
 			return commandOutcome{}, err
 		}
-	} else if err := tx.QueryRow(ctx, queryCommandsLaunchrunSelectSessionsOrganizationIdProjectIdRef, scope.organizationID, projectID, sessionRef, payload.Target.Type, payload.Target.Ref).Scan(&sessionID); err != nil {
+	} else if err := tx.QueryRow(ctx, queryCommandsLaunchrunSelectSessionsOrganizationIdProjectIdRef, scope.organizationID, projectID, sessionRef, payload.Target.Type, payload.Target.Ref, personalSubjectID).Scan(&sessionID); err != nil {
 		return commandOutcome{}, fmt.Errorf("resolve continuation session: %w", errs.ErrConflict)
 	}
 	if err := validateSessionRuntimeCatalog(ctx, tx, scope.organizationID, sessionID, targetAgentRefs[0]); err != nil {
@@ -2857,7 +2858,7 @@ func (repository *Repository) addSessionTurn(ctx context.Context, tx pgx.Tx, sco
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	var projectID, projectRef, targetType, targetRef string
-	if err := tx.QueryRow(ctx, queryCommandsAddsessionturnSelectSessionsOrganizationIdRefState, scope.organizationID, payload.SessionRef).Scan(&projectID, &projectRef, &targetType, &targetRef); err != nil {
+	if err := tx.QueryRow(ctx, queryCommandsAddsessionturnSelectSessionsOrganizationIdRefState, scope.organizationID, payload.SessionRef, scope.actorID).Scan(&projectID, &projectRef, &targetType, &targetRef); err != nil {
 		return commandOutcome{}, errs.ErrNotFound
 	}
 	promptPin, err := repository.checkContinuationPreviewPinTx(ctx, tx, scope, payload)

@@ -218,23 +218,23 @@ func scanBootstrapRuntimeEnvironmentImage(row interface{ Scan(...any) error }) (
 // selectProviderAccountForAgent locks the agent, validates stored account/config/policy pins and prefers a candidate whose fresh catalog marks the requested model eligible. If none qualifies it retains the first authorized selection for reauthorization; subsequent RuntimeRevision construction must still reject an unverified model snapshot.
 // selectProviderAccountForAgent блокирует агента, проверяет сохранённые account/config/policy pins и предпочитает кандидата, чей свежий каталог допускает запрошенную модель. Если подходящего нет, сохраняет первый разрешённый выбор для повторной авторизации; последующая сборка RuntimeRevision всё равно должна отклонить непроверенный snapshot модели.
 func (repository *Repository) selectProviderAccountForAgent(ctx context.Context, tx pgx.Tx, organizationID, agentRef string) (string, error) {
-	return repository.selectAgentProviderAccount(ctx, tx, organizationID, agentRef, false)
+	return repository.selectAgentProviderAccount(ctx, tx, organizationID, agentRef, "", false)
 }
 
 // selectReadyProviderAccountForAgent selects one eligible account for a new session before any run is created.
 // selectReadyProviderAccountForAgent выбирает один готовый аккаунт для новой сессии до создания запуска.
-func (repository *Repository) selectReadyProviderAccountForAgent(ctx context.Context, tx pgx.Tx, organizationID, agentRef string) (string, error) {
-	return repository.selectAgentProviderAccount(ctx, tx, organizationID, agentRef, true)
+func (repository *Repository) selectReadyProviderAccountForAgent(ctx context.Context, tx pgx.Tx, organizationID, agentRef, personalSubjectID string) (string, error) {
+	return repository.selectAgentProviderAccount(ctx, tx, organizationID, agentRef, personalSubjectID, true)
 }
 
 // selectAgentProviderAccount evaluates candidates in policy order under the agent lock. The reauthorization path can retain an authorized account without a fresh catalog while the launch path requires exact model and overlay eligibility.
 // selectAgentProviderAccount проверяет кандидатов в порядке политики под блокировкой агента. Для повторной авторизации допустимо сохранить аккаунт без свежего каталога, а для запуска нужна точная проверка модели и overlay.
-func (repository *Repository) selectAgentProviderAccount(ctx context.Context, tx pgx.Tx, organizationID, agentRef string, requireReadyCatalog bool) (string, error) {
+func (repository *Repository) selectAgentProviderAccount(ctx context.Context, tx pgx.Tx, organizationID, agentRef, personalSubjectID string, requireReadyCatalog bool) (string, error) {
 	var lockedAgentID string
 	if err := tx.QueryRow(ctx, queryRuntimeCatalogLockAgent, organizationID, agentRef).Scan(&lockedAgentID); err != nil {
 		return "", errs.ErrConflict
 	}
-	rows, err := tx.Query(ctx, queryRuntimeConfigurationSelectProviderAccount, organizationID, agentRef)
+	rows, err := tx.Query(ctx, queryRuntimeConfigurationSelectProviderAccount, organizationID, agentRef, personalSubjectID)
 	if err != nil {
 		return "", errs.ErrUnavailable
 	}
@@ -261,9 +261,6 @@ func (repository *Repository) selectAgentProviderAccount(ctx context.Context, tx
 		return "", errs.ErrUnavailable
 	}
 	if requireReadyCatalog {
-		if len(selections) == 0 {
-			return "", errs.ErrConflict
-		}
 		configuration, overlay, err := readRuntimeCatalogConfiguration(ctx, tx, organizationID, agentRef, "")
 		if err != nil {
 			return "", err
@@ -277,7 +274,9 @@ func (repository *Repository) selectAgentProviderAccount(ctx context.Context, tx
 		}
 		for _, selection := range selections {
 			candidate, exists := candidates[selection.accountRef]
-			if !exists {
+			if configuration.ProviderPolicy.Mode == "PERSONAL" {
+				candidate = entity.ProviderAccountCandidate{AccountRef: selection.accountRef, Weight: 1}
+			} else if !exists {
 				return "", errs.ErrConflict
 			}
 			_, _, err := validateRuntimeCatalogCandidates(ctx, tx, scope{organizationID: organizationID},
@@ -290,6 +289,9 @@ func (repository *Repository) selectAgentProviderAccount(ctx context.Context, tx
 			default:
 				return "", err
 			}
+		}
+		if configuration.ProviderPolicy.Mode == "PERSONAL" {
+			return "", errs.ErrPersonalModelAccountRequired
 		}
 		return "", errs.ErrConflict
 	}
@@ -447,6 +449,9 @@ func (repository *Repository) publishAgentRuntimeConfigurationWithOverlay(ctx co
 	if !validRuntimeConfigurationAgent(agent) {
 		return commandOutcome{}, errs.ErrProtected
 	}
+	if payload.ProviderPolicyMode == "PERSONAL" && agent.projectID == "" {
+		return commandOutcome{}, errs.ErrInvalid
+	}
 	if *input.Mutation.ExpectedVersion != agent.agentVersion {
 		return commandOutcome{}, errs.ErrVersionMismatch
 	}
@@ -497,9 +502,16 @@ func (repository *Repository) publishAgentRuntimeConfigurationWithOverlay(ctx co
 	if err := requireCurrentRuntimeOverlayImageFeature(ctx, tx, scope.organizationID, payload.AgentRef, overlay); err != nil {
 		return commandOutcome{}, err
 	}
-	accounts, _, err = validateRuntimeCatalogCandidates(ctx, tx, scope, provider, payload.Model, overlay, accounts, true)
-	if err != nil {
-		return commandOutcome{}, fmt.Errorf("validate model catalog for provider policy: %w", err)
+	if payload.ProviderPolicyMode == "PERSONAL" {
+		accounts = []entity.ProviderAccountCandidate{}
+		if err := validatePersonalRuntimePreferences(ctx, tx, provider, payload.Model, overlay); err != nil {
+			return commandOutcome{}, err
+		}
+	} else {
+		accounts, _, err = validateRuntimeCatalogCandidates(ctx, tx, scope, provider, payload.Model, overlay, accounts, true)
+		if err != nil {
+			return commandOutcome{}, fmt.Errorf("validate model catalog for provider policy: %w", err)
+		}
 	}
 	if payload.ProviderPolicyMode == "FIXED" && len(accounts) == 2 && accounts[0].AccountRef != payload.ProviderAccounts[0].AccountRef {
 		accounts[0], accounts[1] = accounts[1], accounts[0]
@@ -586,14 +598,7 @@ func (repository *Repository) changeConfigOverlay(ctx context.Context, tx pgx.Tx
 		if err != nil {
 			return commandOutcome{}, err
 		}
-		_, efforts, err := validateRuntimeCatalogCandidates(ctx, tx, scope, configuration.Provider, configuration.Model, "", configuration.ProviderPolicy.AccountCandidates, false)
-		if err != nil {
-			return commandOutcome{}, err
-		}
-		if len(runtimecontract.DiagnoseConfigOverlay(content, efforts)) != 0 {
-			state = "INVALID"
-			problems = []string{"i18n:CONFIG_OVERLAY_INVALID_OR_PROTECTED"}
-		} else if _, _, preferenceErr := validateRuntimeCatalogCandidates(ctx, tx, scope, configuration.Provider, configuration.Model, content, configuration.ProviderPolicy.AccountCandidates, false); preferenceErr != nil {
+		if preferenceErr := validateConfiguredOverlay(ctx, tx, scope, configuration, content); preferenceErr != nil {
 			if !errors.Is(preferenceErr, errs.ErrConflict) && !errors.Is(preferenceErr, errs.ErrInvalid) {
 				return commandOutcome{}, preferenceErr
 			}
@@ -631,7 +636,7 @@ func (repository *Repository) changeConfigOverlay(ctx context.Context, tx pgx.Tx
 		if err != nil {
 			return commandOutcome{}, err
 		}
-		if _, _, err := validateRuntimeCatalogCandidates(ctx, tx, scope, configuration.Provider, configuration.Model, content, configuration.ProviderPolicy.AccountCandidates, false); err != nil {
+		if err := validateConfiguredOverlay(ctx, tx, scope, configuration, content); err != nil {
 			return commandOutcome{}, err
 		}
 		if err := requireCurrentRuntimeOverlayImageFeature(ctx, tx, scope.organizationID, payload.AgentRef, content); err != nil {
@@ -686,7 +691,7 @@ func (repository *Repository) changeConfigOverlay(ctx context.Context, tx pgx.Tx
 		if err := requireCurrentRuntimeOverlayImageFeature(ctx, tx, scope.organizationID, payload.AgentRef, view.PublishedOverlay.Content); err != nil {
 			return commandOutcome{}, err
 		}
-		if _, _, err := validateRuntimeCatalogCandidates(ctx, tx, scope, view.Configuration.Provider, view.Configuration.Model, view.PublishedOverlay.Content, view.Configuration.ProviderPolicy.AccountCandidates, false); err != nil {
+		if err := validateConfiguredOverlay(ctx, tx, scope, view.Configuration, view.PublishedOverlay.Content); err != nil {
 			return commandOutcome{}, err
 		}
 	}
@@ -1177,6 +1182,9 @@ func runtimeEnvironmentAuthenticationIsFresh(authenticatedAt, now time.Time) boo
 // validProviderPolicy checks unique account refs, weights and the optional model route of the second FIXED candidate.
 // validProviderPolicy проверяет уникальность аккаунтов, веса и параметры модели второго кандидата FIXED, если он задан.
 func validProviderPolicy(mode string, candidates []entity.ProviderAccountCandidate) bool {
+	if mode == "PERSONAL" {
+		return len(candidates) == 0
+	}
 	if !contains([]string{"FIXED", "LEAST_USED", "WEIGHTED"}, mode) || len(candidates) < 1 || len(candidates) > 128 ||
 		(mode == "FIXED" && len(candidates) > 2) {
 		return false

@@ -1440,6 +1440,7 @@ type ProviderAccountInput struct {
 	AuthorizationExpiresAt                                                 *time.Time
 	Credential                                                             *entity.ProviderCredentialDescriptor
 	Enabled                                                                bool
+	Personal                                                               bool
 }
 
 // ConnectionInput describes a managed integration connection and its credential-revision descriptor.

@@ -5,6 +5,7 @@ import { useRoute } from "vue-router";
 import ProviderAccountsWorkspace from "@/features/providers/ProviderAccountsWorkspace.vue";
 import ModelDiscoveryCatalog from "@/features/providers/ModelDiscoveryCatalog.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
+defineProps<{ personal?: boolean }>();
 const route = useRoute();
 const returnTo = computed(() => {
   const value = route.query.returnTo;
@@ -24,8 +25,10 @@ const returnTo = computed(() => {
 
 <template>
   <PageFrame
-    :title="$t('providers.title')"
-    :subtitle="$t('providers.subtitle')"
+    :title="$t(personal ? 'providers.personalTitle' : 'providers.title')"
+    :subtitle="
+      $t(personal ? 'providers.personalSubtitle' : 'providers.subtitle')
+    "
   >
     <template #actions
       ><RouterLink
@@ -36,7 +39,10 @@ const returnTo = computed(() => {
         :title="$t('vfs.back')"
         ><ArrowLeft :size="18" /></RouterLink
     ></template>
-    <ProviderAccountsWorkspace />
-    <ModelDiscoveryCatalog />
+    <ProviderAccountsWorkspace
+      :key="personal ? 'personal' : 'shared'"
+      :personal="personal"
+    />
+    <ModelDiscoveryCatalog v-if="!personal" />
   </PageFrame>
 </template>

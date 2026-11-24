@@ -15,7 +15,7 @@ func (server *Server) CreateProviderAccount(
 	ctx context.Context,
 	request *controlplanev1.CreateProviderAccountRequest,
 ) (*controlplanev1.CreateProviderAccountResponse, error) {
-	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_CreateProviderAccount_FullMethodName, command.CreateProviderAccount, request.GetMutation(), command.ProviderAccountInput{DefinitionKey: request.GetDefinitionKey(), Name: request.GetName()}, func(result command.Result) *controlplanev1.CreateProviderAccountResponse {
+	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_CreateProviderAccount_FullMethodName, command.CreateProviderAccount, request.GetMutation(), command.ProviderAccountInput{DefinitionKey: request.GetDefinitionKey(), Name: request.GetName(), Personal: request.GetPersonal()}, func(result command.Result) *controlplanev1.CreateProviderAccountResponse {
 		return &controlplanev1.CreateProviderAccountResponse{Account: castProviderAccount(*result.ProviderAccount)}
 	})
 }

@@ -11,6 +11,7 @@ LEFT JOIN control_plane.provider_accounts account
  AND account.ref = ANY($3::text[])
  AND account.state = 'AUTHORIZED'
  AND account.enabled
+ AND account.personal_owner_subject_id IS NULL
  AND account.current_credential_revision_id IS NOT NULL
 WHERE profile.stable_key = $2 AND profile.enabled
 GROUP BY profile.provider, profile.model, profile.runtime_revision;

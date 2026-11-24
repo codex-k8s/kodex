@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronDown, Languages, LogOut } from "@lucide/vue";
+import { ChevronDown, KeyRound, Languages, LogOut } from "@lucide/vue";
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 
@@ -92,6 +92,14 @@ const accessibleLabel = computed(() =>
             </button>
           </div>
         </fieldset>
+        <RouterLink
+          class="current-user-menu__action"
+          :to="{ name: 'personal-provider-accounts' }"
+          @click="close"
+        >
+          <KeyRound :size="16" aria-hidden="true" />
+          {{ $t("providers.personalTitle") }}
+        </RouterLink>
         <button
           v-if="canLogout"
           class="current-user-menu__action"

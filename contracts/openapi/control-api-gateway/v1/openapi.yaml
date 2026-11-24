@@ -1563,6 +1563,10 @@ paths:
         - { $ref: "#/components/parameters/ProviderUsageModel" }
         - { $ref: "#/components/parameters/ProviderUsageReasoningEffort" }
         - { $ref: "#/components/parameters/ProviderAccountStateQuery" }
+        - name: personal
+          in: query
+          description: Вернуть только личные аккаунты текущего пользователя.
+          schema: { type: boolean, default: false }
         - name: definitionKey
           in: query
           required: false
@@ -1578,7 +1582,7 @@ paths:
         - { $ref: "#/components/parameters/PageToken" }
       responses:
         "200":
-          description: Provider accounts текущей organization без credential values
+          description: Системные или личные аккаунты без значений ключей
           content:
             {
               application/json:
@@ -13603,11 +13607,11 @@ components:
       properties:
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         version: { type: integer, format: int64, minimum: 1 }
-        mode: { type: string, enum: [FIXED, LEAST_USED, WEIGHTED] }
+        mode: { type: string, enum: [FIXED, LEAST_USED, WEIGHTED, PERSONAL] }
         accountCandidates:
           {
             type: array,
-            minItems: 1,
+            minItems: 0,
             maxItems: 32,
             items: { $ref: "#/components/schemas/ProviderAccountCandidate" },
           }
@@ -13647,11 +13651,11 @@ components:
         runtimeProfileRef: { $ref: "#/components/schemas/OpaqueRef" }
         model: { type: string, minLength: 1, maxLength: 160 }
         providerPolicyMode:
-          { type: string, enum: [FIXED, LEAST_USED, WEIGHTED] }
+          { type: string, enum: [FIXED, LEAST_USED, WEIGHTED, PERSONAL] }
         providerAccounts:
           {
             type: array,
-            minItems: 1,
+            minItems: 0,
             maxItems: 32,
             items:
               { $ref: "#/components/schemas/ProviderAccountCandidateInput" },
@@ -20163,6 +20167,7 @@ components:
           updatedAt,
         ]
       properties:
+        personal: { type: boolean, default: false }
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         version: { type: integer, format: int64, minimum: 1 }
         definitionKey:
@@ -20672,6 +20677,7 @@ components:
       additionalProperties: false
       required: [definitionKey, name]
       properties:
+        personal: { type: boolean, default: false }
         definitionKey:
           {
             type: string,

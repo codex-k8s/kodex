@@ -24,7 +24,7 @@ vi.mock("@/shared/api/client", () => ({
   requestSignal: () => new AbortController().signal,
 }));
 
-import { useProvidersStore } from "./store";
+import { usePersonalProviderAccountsStore, useProvidersStore } from "./store";
 
 function account(overrides: Partial<ProviderAccount> = {}): ProviderAccount {
   return {
@@ -164,7 +164,33 @@ describe("providers store", () => {
       undefined,
       undefined,
       20,
+      false,
     );
+  });
+
+  it("держит личный список отдельно от общих аккаунтов", async () => {
+    const shared = useProvidersStore();
+    const personal = usePersonalProviderAccountsStore();
+    shared.applySnapshot([account()], "", []);
+    api.loadProviderAccounts.mockResolvedValue({
+      items: [account({ ref: "pacc_private", personal: true })],
+      nextPageToken: "",
+      nextActions: ["CREATE_CONNECTION"],
+    });
+
+    await personal.load();
+
+    expect(api.loadProviderAccounts).toHaveBeenLastCalledWith(
+      "",
+      undefined,
+      expect.any(AbortSignal),
+      undefined,
+      undefined,
+      20,
+      true,
+    );
+    expect(shared.accounts.map((item) => item.ref)).toEqual(["pacc_primary"]);
+    expect(personal.accounts.map((item) => item.ref)).toEqual(["pacc_private"]);
   });
 
   it("добавляет cursor-страницу definitions без дублей", async () => {

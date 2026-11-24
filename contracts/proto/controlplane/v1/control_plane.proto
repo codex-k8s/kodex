@@ -6867,6 +6867,7 @@ message ProviderAccount {
   ProviderAccountUsage usage = 14;
   ProviderFinancialSummary financial_summary = 18;
   bool financial_eligible = 19;
+  bool personal = 20;
   ProviderAccountDeletion deletion = 15;
   ProviderAccountVerification verification = 16;
   int32 maximum_concurrent_executions = 17;
@@ -7074,6 +7075,7 @@ message ListProviderAccountsRequest {
   ProviderAccountUsageContext usage_context = 5;
   // Полная protected финансовая summary; filters/page для этого режима запрещены.
   bool financial_summary_only = 6;
+  bool personal = 7;
 }
 message ListProviderAccountsResponse {
   ProviderFinancialOverview financial_summary = 4;
@@ -7092,6 +7094,7 @@ message CreateProviderAccountRequest {
   MutationContext mutation = 1;
   string name = 2;
   string definition_key = 3;
+  bool personal = 4;
 }
 message CreateProviderAccountResponse {
   ProviderAccount account = 1;

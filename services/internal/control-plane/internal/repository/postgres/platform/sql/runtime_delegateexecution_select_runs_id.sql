@@ -1,5 +1,5 @@
 -- name: runtime_delegateexecution_select_runs_id :one
-SELECT parent_run.initiated_by::text,
+SELECT root.initiated_by::text,
        parent_run.id::text,
        root.workflow_version_id IS NOT NULL,
        root.input,

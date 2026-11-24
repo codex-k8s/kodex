@@ -1684,7 +1684,10 @@ const ru = {
     modelHelp: "Проверяется сервером вместе с provider account policy",
     accountPolicy: "Политика учётных записей",
     accountPolicyHelp: "Выбор авторизованной записи для новых сессий",
+    personalAccountHelp:
+      "Для запуска сотрудника нужен личный аккаунт выбранного провайдера.",
     policy: {
+      PERSONAL: "Личный аккаунт инициатора",
       FIXED: "Фиксированная запись",
       LEAST_USED: "С наименьшей нагрузкой",
       WEIGHTED: "По весам",
@@ -3868,6 +3871,8 @@ const ru = {
     },
   },
   providers: {
+    personalTitle: "Мои аккаунты моделей",
+    personalSubtitle: "Личные ключи для запуска сотрудников от вашего имени",
     runtimePolicy: {
       title: "Контекст и кеш маршрута",
       enabled: "Включено",
@@ -6767,7 +6772,10 @@ const en = {
     modelHelp: "Validated by the server with the provider account policy",
     accountPolicy: "Account policy",
     accountPolicyHelp: "Selects an authorized account for new sessions",
+    personalAccountHelp:
+      "The person launching this agent needs a personal account with the selected provider.",
     policy: {
+      PERSONAL: "Initiator’s personal account",
       FIXED: "Fixed account",
       LEAST_USED: "Least used",
       WEIGHTED: "Weighted",
@@ -8816,6 +8824,9 @@ const en = {
   },
   providers: {
     ...ru.providers,
+    personalTitle: "My model accounts",
+    personalSubtitle:
+      "Personal API keys for running agents under your identity",
     runtimePolicy: {
       title: "Model context and cache",
       enabled: "Enabled",

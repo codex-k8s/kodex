@@ -17,12 +17,12 @@ type financialAccountScanFixture struct {
 	received *time.Time
 }
 
-// Scan requires the twenty-column account scan shape and fills synthetic account, raw observation
+// Scan requires the twenty-one-column account scan shape and fills synthetic account, raw observation
 // and receipt-time destinations.
-// Scan требует форму сканирования аккаунта из двадцати столбцов и заполняет назначения
+// Scan требует форму сканирования аккаунта из двадцати одного столбца и заполняет назначения
 // искусственного аккаунта, исходного наблюдения и времени получения.
 func (row financialAccountScanFixture) Scan(values ...any) error {
-	if len(values) != 20 {
+	if len(values) != 21 {
 		return errors.New("financial account fixture shape is invalid")
 	}
 	*values[0].(*string) = "pac_fixture_financial"

@@ -5,10 +5,16 @@ SELECT account.id::text, account.ref, config.ref, config.version_number,
 FROM control_plane.agents agent
 JOIN control_plane.agent_runtime_config_versions config ON config.id=agent.current_runtime_config_id
 JOIN control_plane.provider_account_policy_versions policy ON policy.id=config.provider_account_policy_id
-JOIN LATERAL jsonb_array_elements(policy.account_candidates) WITH ORDINALITY candidate(value, precedence) ON true
+LEFT JOIN LATERAL jsonb_array_elements(policy.account_candidates) WITH ORDINALITY candidate(value, precedence) ON policy.mode <> 'PERSONAL'
 JOIN control_plane.provider_accounts account ON account.organization_id=agent.organization_id
-  AND account.ref=candidate.value->>'accountRef' AND account.enabled AND account.state='AUTHORIZED'
-  AND account.current_credential_revision_id IS NOT NULL
+  AND account.enabled AND account.state='AUTHORIZED' AND account.current_credential_revision_id IS NOT NULL
+  AND (
+    (policy.mode <> 'PERSONAL' AND account.personal_owner_subject_id IS NULL AND account.ref=candidate.value->>'accountRef')
+    OR (policy.mode = 'PERSONAL' AND account.personal_owner_subject_id = NULLIF($3, '')::uuid
+      AND EXISTS (SELECT 1 FROM control_plane.subjects owner
+        WHERE owner.id = account.personal_owner_subject_id AND owner.organization_id = agent.organization_id
+          AND owner.kind = 'USER' AND owner.active))
+  )
 JOIN control_plane.runtime_profiles profile
   ON profile.stable_key=COALESCE(NULLIF(candidate.value->>'runtimeProfileRef',''), config.runtime_profile_key)
  AND profile.enabled

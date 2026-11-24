@@ -649,7 +649,7 @@ type ProviderAccount struct {
 	Verification                                                             *ProviderAccountVerification
 	Ref, DefinitionKey, Name, ExternalAccountMasked, State, SafeStatusReason string
 	Version                                                                  int64
-	Enabled, Ready                                                           bool
+	Enabled, Ready, Personal                                                 bool
 	Authorization                                                            *ProviderAuthorization
 	NextActions                                                              []string
 	CreatedAt, UpdatedAt                                                     time.Time

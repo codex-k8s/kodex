@@ -41,7 +41,7 @@ func (server *Server) ListProviderDefinitions(ctx context.Context, request *cont
 func (server *Server) ListProviderAccounts(ctx context.Context, request *controlplanev1.ListProviderAccountsRequest) (*controlplanev1.ListProviderAccountsResponse, error) {
 	return queryResponse(ctx, controlplanev1.PlatformQueryService_ListProviderAccounts_FullMethodName, func(p value.Principal) (*controlplanev1.ListProviderAccountsResponse, error) {
 		if request.GetFinancialSummaryOnly() {
-			if request.GetPage() != nil || request.GetQuery() != "" || request.GetState() != controlplanev1.ProviderAccountState_PROVIDER_ACCOUNT_STATE_UNSPECIFIED || request.GetDefinitionKey() != "" || request.GetUsageContext() != nil {
+			if request.GetPersonal() || request.GetPage() != nil || request.GetQuery() != "" || request.GetState() != controlplanev1.ProviderAccountState_PROVIDER_ACCOUNT_STATE_UNSPECIFIED || request.GetDefinitionKey() != "" || request.GetUsageContext() != nil {
 				return nil, errs.ErrInvalid
 			}
 			overview, err := server.service.GetProviderFinancialOverview(ctx, p)
@@ -64,7 +64,7 @@ func (server *Server) ListProviderAccounts(ctx context.Context, request *control
 			state = enumSuffix(request.GetState(), "PROVIDER_ACCOUNT_STATE_")
 		}
 		items, next, actions, err := server.service.ListProviderAccounts(ctx, p, query.Filter{
-			Query: request.GetQuery(), State: state, DefinitionKey: request.GetDefinitionKey(), Page: page(request.GetPage()), ProviderUsage: providerUsageContextInput(request.GetUsageContext()),
+			Query: request.GetQuery(), State: state, DefinitionKey: request.GetDefinitionKey(), PersonalProviderAccounts: request.GetPersonal(), Page: page(request.GetPage()), ProviderUsage: providerUsageContextInput(request.GetUsageContext()),
 		})
 		if err != nil {
 			return nil, err
@@ -182,7 +182,7 @@ func castModelCapability(value entity.ModelCapability) *controlplanev1.ModelCapa
 func castProviderAccount(value entity.ProviderAccount) *controlplanev1.ProviderAccount {
 	result := &controlplanev1.ProviderAccount{
 		Deletion: castProviderAccountDeletion(value.Deletion), Verification: castProviderAccountVerification(value.Verification),
-		FinancialEligible: value.FinancialEligible, Ref: value.Ref, Version: value.Version, DefinitionKey: value.DefinitionKey, Name: value.Name,
+		FinancialEligible: value.FinancialEligible, Personal: value.Personal, Ref: value.Ref, Version: value.Version, DefinitionKey: value.DefinitionKey, Name: value.Name,
 		ExternalAccountMasked: value.ExternalAccountMasked, State: providerAccountState(value.State),
 		Enabled: value.Enabled, Ready: value.Ready, MaximumConcurrentExecutions: value.MaximumConcurrentExecutions, NextActions: nextActions(value.NextActions),
 		CreatedAt: timestamp(value.CreatedAt), UpdatedAt: timestamp(value.UpdatedAt), SafeStatusReason: value.SafeStatusReason,

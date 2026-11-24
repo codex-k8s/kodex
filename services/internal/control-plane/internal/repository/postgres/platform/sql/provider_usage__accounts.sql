@@ -26,5 +26,6 @@ LEFT JOIN LATERAL (SELECT observation.content_digest,observation.models
  WHERE observation.provider_account_id=account.id AND observation.organization_id=account.organization_id AND observation.failure='NONE'
  ORDER BY observation.created_at DESC,observation.id DESC LIMIT 1) success ON true
 WHERE account.organization_id=@organization_id::uuid
+ AND (@personal_owner::text IS NULL OR COALESCE(account.personal_owner_subject_id::text,'')=@personal_owner)
  AND (cardinality(@account_refs::text[])=0 OR account.ref=ANY(@account_refs::text[]))
 ORDER BY account.ref LIMIT 4097;

@@ -143,9 +143,18 @@ func (repository *Repository) ReserveProviderAuthorization(ctx context.Context, 
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	target := entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "PROVIDER_ACCOUNT", ResourceRef: accountRef}
-	for _, permission := range []string{"provider.account.view", "provider.account.authorize"} {
-		if err := repository.requireAccess(ctx, tx, current, permission, target); err != nil {
-			return result, err
+	personal, err := personalModelAccount(ctx, tx, current, accountRef)
+	if err != nil {
+		return result, err
+	}
+	if personal && principal.CallerWorkload != "control-api-gateway" {
+		return result, errs.ErrNotFound
+	}
+	if !personal {
+		for _, permission := range []string{"provider.account.view", "provider.account.authorize"} {
+			if err := repository.requireAccess(ctx, tx, current, permission, target); err != nil {
+				return result, err
+			}
 		}
 	}
 	var accountID, state string

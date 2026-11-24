@@ -245,6 +245,12 @@ export const router = createRouter({
       component: lazyPage(() => import("@/pages/ProviderAccountsPage.vue")),
     },
     {
+      path: "/me/model-accounts",
+      name: "personal-provider-accounts",
+      component: lazyPage(() => import("@/pages/ProviderAccountsPage.vue")),
+      props: { personal: true },
+    },
+    {
       path: "/administration/audit",
       name: "audit",
       component: lazyPage(() => import("@/pages/AuditPage.vue")),

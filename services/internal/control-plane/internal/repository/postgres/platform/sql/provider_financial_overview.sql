@@ -5,5 +5,6 @@ SELECT account.ref, account.name,
        account.financial_received_at, account.version
 FROM control_plane.provider_accounts account
 WHERE account.organization_id = @organization_id::uuid
+  AND account.personal_owner_subject_id IS NULL
   AND account.definition_key = 'openai-codex' AND account.state <> 'DELETED'
 ORDER BY account.ref;

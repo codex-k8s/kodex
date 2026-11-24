@@ -63248,6 +63248,7 @@ type ProviderAccount struct {
 	Usage                       *ProviderAccountUsage        `protobuf:"bytes,14,opt,name=usage,proto3" json:"usage,omitempty"`
 	FinancialSummary            *ProviderFinancialSummary    `protobuf:"bytes,18,opt,name=financial_summary,json=financialSummary,proto3" json:"financial_summary,omitempty"`
 	FinancialEligible           bool                         `protobuf:"varint,19,opt,name=financial_eligible,json=financialEligible,proto3" json:"financial_eligible,omitempty"`
+	Personal                    bool                         `protobuf:"varint,20,opt,name=personal,proto3" json:"personal,omitempty"`
 	Deletion                    *ProviderAccountDeletion     `protobuf:"bytes,15,opt,name=deletion,proto3" json:"deletion,omitempty"`
 	Verification                *ProviderAccountVerification `protobuf:"bytes,16,opt,name=verification,proto3" json:"verification,omitempty"`
 	MaximumConcurrentExecutions int32                        `protobuf:"varint,17,opt,name=maximum_concurrent_executions,json=maximumConcurrentExecutions,proto3" json:"maximum_concurrent_executions,omitempty"`
@@ -63393,6 +63394,13 @@ func (x *ProviderAccount) GetFinancialSummary() *ProviderFinancialSummary {
 func (x *ProviderAccount) GetFinancialEligible() bool {
 	if x != nil {
 		return x.FinancialEligible
+	}
+	return false
+}
+
+func (x *ProviderAccount) GetPersonal() bool {
+	if x != nil {
+		return x.Personal
 	}
 	return false
 }
@@ -64305,6 +64313,7 @@ type ListProviderAccountsRequest struct {
 	UsageContext  *ProviderAccountUsageContext `protobuf:"bytes,5,opt,name=usage_context,json=usageContext,proto3" json:"usage_context,omitempty"`
 	// Полная protected финансовая summary; filters/page для этого режима запрещены.
 	FinancialSummaryOnly bool `protobuf:"varint,6,opt,name=financial_summary_only,json=financialSummaryOnly,proto3" json:"financial_summary_only,omitempty"`
+	Personal             bool `protobuf:"varint,7,opt,name=personal,proto3" json:"personal,omitempty"`
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
@@ -64377,6 +64386,13 @@ func (x *ListProviderAccountsRequest) GetUsageContext() *ProviderAccountUsageCon
 func (x *ListProviderAccountsRequest) GetFinancialSummaryOnly() bool {
 	if x != nil {
 		return x.FinancialSummaryOnly
+	}
+	return false
+}
+
+func (x *ListProviderAccountsRequest) GetPersonal() bool {
+	if x != nil {
+		return x.Personal
 	}
 	return false
 }
@@ -64550,6 +64566,7 @@ type CreateProviderAccountRequest struct {
 	Mutation      *MutationContext       `protobuf:"bytes,1,opt,name=mutation,proto3" json:"mutation,omitempty"`
 	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
 	DefinitionKey string                 `protobuf:"bytes,3,opt,name=definition_key,json=definitionKey,proto3" json:"definition_key,omitempty"`
+	Personal      bool                   `protobuf:"varint,4,opt,name=personal,proto3" json:"personal,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -64603,6 +64620,13 @@ func (x *CreateProviderAccountRequest) GetDefinitionKey() string {
 		return x.DefinitionKey
 	}
 	return ""
+}
+
+func (x *CreateProviderAccountRequest) GetPersonal() bool {
+	if x != nil {
+		return x.Personal
+	}
+	return false
 }
 
 type CreateProviderAccountResponse struct {
@@ -97715,7 +97739,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\tuser_code\x18\x05 \x01(\tR\buserCode\x129\n" +
 	"\n" +
 	"expires_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\x12*\n" +
-	"\x11safe_failure_code\x18\a \x01(\tR\x0fsafeFailureCode\"\xef\a\n" +
+	"\x11safe_failure_code\x18\a \x01(\tR\x0fsafeFailureCode\"\x8b\b\n" +
 	"\x0fProviderAccount\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x03R\aversion\x12%\n" +
@@ -97735,7 +97759,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x12safe_status_reason\x18\r \x01(\tR\x10safeStatusReason\x12;\n" +
 	"\x05usage\x18\x0e \x01(\v2%.controlplane.v1.ProviderAccountUsageR\x05usage\x12V\n" +
 	"\x11financial_summary\x18\x12 \x01(\v2).controlplane.v1.ProviderFinancialSummaryR\x10financialSummary\x12-\n" +
-	"\x12financial_eligible\x18\x13 \x01(\bR\x11financialEligible\x12D\n" +
+	"\x12financial_eligible\x18\x13 \x01(\bR\x11financialEligible\x12\x1a\n" +
+	"\bpersonal\x18\x14 \x01(\bR\bpersonal\x12D\n" +
 	"\bdeletion\x18\x0f \x01(\v2(.controlplane.v1.ProviderAccountDeletionR\bdeletion\x12P\n" +
 	"\fverification\x18\x10 \x01(\v2,.controlplane.v1.ProviderAccountVerificationR\fverification\x12B\n" +
 	"\x1dmaximum_concurrent_executions\x18\x11 \x01(\x05R\x1bmaximumConcurrentExecutions\"t\n" +
@@ -97826,14 +97851,15 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x16eligible_for_selection\x18\x16 \x01(\bR\x14eligibleForSelection\x12X\n" +
 	"\x15provider_health_scope\x18\x17 \x01(\x0e2$.controlplane.v1.ProviderHealthScopeR\x13providerHealthScope\x12Y\n" +
 	"\x1bprovider_health_observed_at\x18\x18 \x01(\v2\x1a.google.protobuf.TimestampR\x18providerHealthObservedAt\x12W\n" +
-	"\x1aprovider_health_expires_at\x18\x19 \x01(\v2\x1a.google.protobuf.TimestampR\x17providerHealthExpiresAt\"\xd2\x02\n" +
+	"\x1aprovider_health_expires_at\x18\x19 \x01(\v2\x1a.google.protobuf.TimestampR\x17providerHealthExpiresAt\"\xee\x02\n" +
 	"\x1bListProviderAccountsRequest\x120\n" +
 	"\x04page\x18\x01 \x01(\v2\x1c.controlplane.v1.PageRequestR\x04page\x12\x14\n" +
 	"\x05query\x18\x02 \x01(\tR\x05query\x12;\n" +
 	"\x05state\x18\x03 \x01(\x0e2%.controlplane.v1.ProviderAccountStateR\x05state\x12%\n" +
 	"\x0edefinition_key\x18\x04 \x01(\tR\rdefinitionKey\x12Q\n" +
 	"\rusage_context\x18\x05 \x01(\v2,.controlplane.v1.ProviderAccountUsageContextR\fusageContext\x124\n" +
-	"\x16financial_summary_only\x18\x06 \x01(\bR\x14financialSummaryOnly\"\xa4\x02\n" +
+	"\x16financial_summary_only\x18\x06 \x01(\bR\x14financialSummaryOnly\x12\x1a\n" +
+	"\bpersonal\x18\a \x01(\bR\bpersonal\"\xa4\x02\n" +
 	"\x1cListProviderAccountsResponse\x12W\n" +
 	"\x11financial_summary\x18\x04 \x01(\v2*.controlplane.v1.ProviderFinancialOverviewR\x10financialSummary\x12<\n" +
 	"\baccounts\x18\x01 \x03(\v2 .controlplane.v1.ProviderAccountR\baccounts\x12-\n" +
@@ -97844,11 +97870,12 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"accountRef\x12Q\n" +
 	"\rusage_context\x18\x02 \x01(\v2,.controlplane.v1.ProviderAccountUsageContextR\fusageContext\"X\n" +
 	"\x1aGetProviderAccountResponse\x12:\n" +
-	"\aaccount\x18\x01 \x01(\v2 .controlplane.v1.ProviderAccountR\aaccount\"\x97\x01\n" +
+	"\aaccount\x18\x01 \x01(\v2 .controlplane.v1.ProviderAccountR\aaccount\"\xb3\x01\n" +
 	"\x1cCreateProviderAccountRequest\x12<\n" +
 	"\bmutation\x18\x01 \x01(\v2 .controlplane.v1.MutationContextR\bmutation\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12%\n" +
-	"\x0edefinition_key\x18\x03 \x01(\tR\rdefinitionKey\"[\n" +
+	"\x0edefinition_key\x18\x03 \x01(\tR\rdefinitionKey\x12\x1a\n" +
+	"\bpersonal\x18\x04 \x01(\bR\bpersonal\"[\n" +
 	"\x1dCreateProviderAccountResponse\x12:\n" +
 	"\aaccount\x18\x01 \x01(\v2 .controlplane.v1.ProviderAccountR\aaccount\"\x8f\x01\n" +
 	".StartProviderAccountDeviceAuthorizationRequest\x12<\n" +
