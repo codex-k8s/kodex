@@ -258,9 +258,17 @@ test('target/source drift wrong digest and duplicate JSON cannot yield qualified
 });
 
 test('046 closed5 publisher сохраняет introduced0 proof и actual same published interaction image',()=>{
- for(const profile of ['telegram-notifications','telegram-notifications-backup']){
+ for(const [profile,registry] of [['telegram-notifications'],['telegram-notifications-backup'],['telegram-notifications-backup',promotedServicePullRegistry]]){
   const f=setup(profile);
   try{
+   if(registry){
+    f.config.pullRegistry=registry;
+    assert.throws(()=>validateComponentPublicationConfiguration(f.config),/PULL_REGISTRY_INVALID/);
+    const introduced=f.config.components.at(-1);
+    introduced.expectedImageRef=introduced.expectedImageRef.replace('registry.local.kodex',registry);
+    f.config.introducedReceiver.imageRef=introduced.expectedImageRef;
+    f.store(join(f.directory,'config.json'),f.config);
+   }
    assert.equal(f.run('prepare','prepared.json').code,0);
    const prepared=f.prepared();assert.deepEqual(prepared.publication.components.map(c=>c.component),['control-plane','control-api-gateway','staff-control-center','egress-gateway','interaction-gateway']);
    assert.deepEqual(prepared.publication.introducedReceiver,f.config.introducedReceiver);

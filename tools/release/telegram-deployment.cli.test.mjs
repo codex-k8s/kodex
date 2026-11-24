@@ -52,6 +52,11 @@ async function fixture(t,{narrow=false,successor=false,repair=false,backup=false
  for(const path of [...new Set([...tracked,'tools/release/telegram-cp-policy.mjs','tools/release/telegram-cp-policy.test.mjs'])]){
   mkdirSync(dirname(join(source,path)),{recursive:true,mode:0o755});copyFileSync(join(root,path),join(source,path));chmodSync(join(source,path),0o644);
  }
+ // Тест воспроизводит исходную смену 106→107 из исторического checkout.
+ // Текущий base публикует более новую policy и registry.
+ const authority=join(source,'deploy/k8s/base/internal-rpc-authority-publisher');
+ writeFileSync(join(authority,'authority-policy.json'),telegramPolicySource('desired').raw);
+ writeFileSync(join(authority,'key-delivery-targets.yaml'),telegramRegistrySource('desired').raw);
  for(const path of ['deploy/k8s/base/platform-state/postgresql.yaml','deploy/k8s/base/egress-gateway/deployment.yaml','deploy/k8s/base/egress-gateway/service.yaml','deploy/k8s/base/platform-state/ca-bundles.yaml','services/internal/control-plane/cmd/cli/migrations/20261114140000_telegram_project_subscriptions.sql',
   ...['telegram-notifications-migration-precondition.sql','telegram-notifications-migration-postcondition.sql','portable-component-migration-drain.sql'].map(name=>'tools/release/'+name)]){
   mkdirSync(dirname(join(source,path)),{recursive:true,mode:0o755});copyFileSync(join(root,path),join(source,path));chmodSync(join(source,path),0o644);

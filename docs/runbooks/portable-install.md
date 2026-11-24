@@ -822,8 +822,18 @@ canonical compact либо pretty JSON с LF; duplicate keys отклоняют�
 По умолчанию узлы проверяют образы по `registry.local.kodex/kodex`. Для
 установок с уже настроенным доступом узлов к Service добавьте в config
 `pullRegistry: kodex-image-registry-pull.kodex-system.svc.cluster.local`.
-Параметр доступен профилям обновления существующих Deployment. Он закрепляет
-внутренний Service для загрузки и CRI readback тех же опубликованных digest.
+Параметр закрепляет внутренний Service для загрузки и CRI readback опубликованных
+digest. Для нового `interaction-gateway` в Telegram-профиле задайте тот же
+`pullRegistry` в `kodex.telegram-resource-create-target/v2`. Доказательство
+создания фиксирует Service и digest фактического dormant Deployment. У его
+sidecars сохраняется exact immutable image действующего authority publisher.
+Если бинарники собраны из более ранней ревизии, повторяйте `--source-checkout`
+во всех фазах `telegram-resource-create.mjs`. Чистый checkout должен быть
+предком executor и соответствовать source SHA плана и публикации.
+Для профиля без Prometheus Operator задайте `monitoringResources: DISABLED`
+в том же target. В план и proof попадут восемь ресурсов, исключая только
+ServiceMonitor и PrometheusRule. Режим OpenTelemetry задаётся отдельно.
+
 `expectedImageRef` хранит точную текущую ссылку каждого Deployment, включая
 исходный registry и repository. `qualify` проверяет разрешённый Service,
 принадлежность узлов и точное совпадение digest. `readback` проверяет те же

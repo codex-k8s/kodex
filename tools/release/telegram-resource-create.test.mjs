@@ -1,4 +1,5 @@
 import {telegramPublisherRuntimeObservability} from './telegram-runtime-observability.mjs';
+import {promotedServicePullRegistry} from './component-node-qualification.mjs';
 import producerMetadata from './fixtures/telegram-producer-metadata.cjs';
 import {telegramIntroductionResources} from './telegram-introduction-inventory.mjs';
 import test from 'node:test';
@@ -16,14 +17,18 @@ import {telegramResourceCreateKeys,telegramResourceCreateHeader,telegramResource
 
 const uid=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const metadata=name=>({name,namespace:'kodex-system',labels:{'app.kubernetes.io/part-of':'kodex','kodex.dev/environment':'production','kodex.dev/profile':'web-only'}});
-function fixture(){
+function fixture(pullRegistry){
  const installation={apiVersion:'v1',kind:'ConfigMap',metadata:{...metadata('kodex-installation-profile'),uid:uid(3),labels:{...metadata('').labels,'app.kubernetes.io/managed-by':'kodex-install'}},data:{'source.sha':'a'.repeat(40)}};
  const target={schema:'kodex.telegram-resource-create-target/v2',sourceSHA:'b'.repeat(40),context:'k3d-kodex',clusterUID:uid(1),namespaceUID:uid(2),installationUID:uid(3),installationSHA256:fingerprint(installation.data),publisherUID:uid(4),authorityImage:'registry.local.kodex/kodex/internal-rpc-authority@sha256:'+'c'.repeat(64)};
+ if(pullRegistry){
+  target.pullRegistry=pullRegistry;
+  target.authorityImage='source.synthetic-infra.svc.cluster.local/releases/internal-rpc-authority@sha256:'+'c'.repeat(64);
+ }
  const publisher={apiVersion:'apps/v1',kind:'Deployment',metadata:{...metadata('internal-rpc-authority-publisher'),uid:uid(4)},spec:{template:{spec:{containers:[{name:'publisher',image:target.authorityImage}]}}}};
- target.runtimeObservability=telegramPublisherRuntimeObservability(publisher,'ENABLED');
+ target.runtimeObservability=telegramPublisherRuntimeObservability(publisher,'ENABLED',pullRegistry);
  const observed={context:target.context,clusterUID:target.clusterUID,namespaceUID:target.namespaceUID,namespace:{kind:'Namespace',metadata:{name:'kodex-system',uid:target.namespaceUID},status:{phase:'Active'}},installation,publisher};
  const resources=telegramCreateSourceFixture();
- const interactionImage='registry.local.kodex/kodex/interaction-gateway@sha256:'+'d'.repeat(64),stored=new Map(),state={effects:0,lostACK:false,extra:[],allocated:'10.43.1.2',gateDrift:false};
+ const interactionImage=`${pullRegistry??'registry.local.kodex'}/kodex/interaction-gateway@sha256:`+'d'.repeat(64),stored=new Map(),state={effects:0,lostACK:false,extra:[],allocated:'10.43.1.2',gateDrift:false};
  const key=r=>`${r.kind}/${r.metadata.name}`,get=r=>structuredClone(stored.get(key(r))??null);
  const dryRun=request=>{const r=structuredClone(request);r.metadata.uid=uid(800);r.metadata.resourceVersion='1';r.metadata.creationTimestamp='2026-11-14T00:00:00Z';
   if(r.kind==='Service')Object.assign(r.spec,{clusterIP:state.allocated,clusterIPs:[state.allocated],ipFamilies:['IPv4'],ipFamilyPolicy:'SingleStack'});
@@ -129,14 +134,17 @@ const statePath=path.join(base,'state.json'),state=JSON.parse(fs.readFileSync(st
 const save=()=>fs.writeFileSync(statePath,JSON.stringify(state));
 const output=value=>process.stdout.write(JSON.stringify(value)+'\n');
 if(path.basename(process.argv[1])==='git'){
- if(args.join(' ')==='rev-parse HEAD'){console.log('b'.repeat(40));process.exit(0);}
+ if(args.join(' ')==='rev-parse HEAD'){console.log((state.checkout&&process.cwd()!==state.checkout?'a':'b').repeat(40));process.exit(0);}
+ if(args.join(' ')==='rev-parse --show-toplevel'&&process.cwd()===state.checkout){console.log(state.checkout);process.exit(0);}
+ if(args.join(' ')==='merge-base --is-ancestor '+'b'.repeat(40)+' HEAD'&&process.cwd()!==state.checkout)process.exit(state.unrelated?1:0);
  if(args.join(' ')==='status --porcelain --untracked-files=normal'){if(state.dirty)console.log(' M changed');process.exit(0);}
  throw Error('unexpected git call');
 }
 if(args[0]!=='--kubeconfig'||args[1]!==path.join(base,'kubeconfig')||args[2]!=='--context'||args[3]!=='k3d-kodex')throw Error('implicit target');
 const command=args.slice(5);
 if(command[0]==='kustomize'){
- if(command[1]!=='deploy/k8s/profiles/web-only')throw Error('foreign source');
+ const expected=state.checkout?path.join(state.checkout,'deploy/k8s/profiles/web-only'):'deploy/k8s/profiles/web-only';
+ if(command[1]!==expected)throw Error('foreign source');
  console.log(state.resources.map(r=>JSON.stringify(r)).join('\n---\n'));process.exit(0);
 }
 if(command[0]==='get'&&command[1]==='namespace'){
@@ -163,10 +171,11 @@ if(call[0]==='create'){
 throw Error('unrecognized operation');
 `;
 
-async function cliFixture(mode='ENABLED'){
- const f=fixture();
+async function cliFixture(mode='ENABLED',pullRegistry,monitoringResources){
+ const f=fixture(pullRegistry);
+ if(monitoringResources)f.target.monitoringResources=monitoringResources;
  if(mode==='DISABLED')f.observed.publisher.spec.template.spec.containers[0].env=[{name:'OTEL_SDK_DISABLED',value:'true'}];
- f.target.runtimeObservability=telegramPublisherRuntimeObservability(f.observed.publisher,mode);
+ f.target.runtimeObservability=telegramPublisherRuntimeObservability(f.observed.publisher,mode,pullRegistry);
  const directory=await mkdtemp(join(tmpdir(),'kodex-telegram-create-cli-'));
  const bin=join(directory,'bin');await mkdir(bin,{mode:0o700});
  for(const name of ['git','kubectl'])await writeFile(join(bin,name),backend,{mode:0o700});
@@ -223,6 +232,31 @@ test('real CLI disabled profile создаёт10objects и readback сохран
  }finally{await rm(f.directory,{recursive:true,force:true});}
 });
 
+test('real CLI применяет план из исторического checkout к точному образу через внутренний Service',async()=>{
+ const f=await cliFixture('DISABLED',promotedServicePullRegistry,'DISABLED');
+ try{
+  f.state.checkout=join(f.directory,'source');await mkdir(f.state.checkout);
+  const sourceArgs=['--source-checkout',f.state.checkout];
+  f.state.unrelated=true;await f.save();
+  assert.notEqual(f.run('plan',sourceArgs).status,0);
+  assert.equal(JSON.parse(await readFile(f.statePath,'utf8')).effects,0);
+  f.state.unrelated=false;await f.save();
+  const planned=f.run('plan',sourceArgs);assert.equal(planned.status,0,planned.output);
+  const plan=JSON.parse(await readFile(f.planPath,'utf8'));
+  assert.equal(plan.interactionImage,`${promotedServicePullRegistry}/kodex/interaction-gateway@sha256:${'d'.repeat(64)}`);
+  assert.equal(plan.objects.length,8);
+  assert.ok(plan.objects.every(part=>!part.request.apiVersion.startsWith('monitoring.coreos.com/')));
+  const approval=['--approved-plan-sha',fingerprint(plan)];
+  assert.notEqual(f.run('apply',approval).status,0);
+  assert.equal(JSON.parse(await readFile(f.statePath,'utf8')).effects,0);
+  const result=f.run('apply',[...approval,...sourceArgs]);assert.equal(result.status,0,result.output);
+  assert.equal(JSON.parse(result.output).state,'CREATED_DORMANT');
+  const observed=f.run('status',sourceArgs);assert.equal(observed.status,0,observed.output);
+  assert.equal(JSON.parse(observed.output).state,'CREATED_DORMANT');
+  assert.equal(JSON.parse(await readFile(f.statePath,'utf8')).effects,8);
+ }finally{await rm(f.directory,{recursive:true,force:true});}
+});
+
 test('real CLI отказывает wrong publication target, dirty source, orphan и duplicate private JSON без create',async()=>{
  for(const scenario of ['publication-target','dirty','orphan','duplicate']){
   const f=await cliFixture();
@@ -268,10 +302,16 @@ test('deprecated serviceAccount допускает только непустую
 
 // 107 admission перечитывает actual objects и private create/publication lineage;
 // завершённый create остаётся PENDING_AUTHORITY до отдельного key delivery.
-for(const mode of ['ENABLED','DISABLED'])test('107 introduction связывает source/publication,10actualUID и dormant0 без effects: '+mode,async()=>{
- const f=fixture();
+for(const [mode,registry] of [['ENABLED'],['DISABLED'],['DISABLED',promotedServicePullRegistry]])test('107 introduction связывает source/publication,10actualUID и dormant0 без effects: '+(registry?'internal Service':mode),async()=>{
+ const f=fixture(registry);
  if(mode==='DISABLED')f.observed.publisher.spec.template.spec.containers[0].env=[{name:'OTEL_SDK_DISABLED',value:'true'}];
- f.target.runtimeObservability=telegramPublisherRuntimeObservability(f.observed.publisher,mode);
+ f.target.runtimeObservability=telegramPublisherRuntimeObservability(f.observed.publisher,mode,registry);
+ if(registry){
+  f.target.monitoringResources='DISABLED';
+  assert.throws(()=>telegramResourceCreateRequests(f.resources,f.target,uid(5),f.interactionImage.replace(registry,'registry.local.kodex')),/SOURCE_INVALID/);
+  assert.throws(()=>telegramResourceCreateRequests(f.resources,f.target,uid(5),f.interactionImage.replace(registry,'foreign.example.invalid')),/SOURCE_INVALID/);
+  assert.throws(()=>telegramPublisherRuntimeObservability({...f.observed.publisher,spec:{template:{spec:{containers:[{name:'publisher',image:f.target.authorityImage.replace('source.synthetic-infra.svc.cluster.local','foreign.example.invalid')}]}}}},'ENABLED',registry),/REJECTED/);
+ }
  const directory=await mkdtemp(join(tmpdir(),'kodex-telegram-introduction-'));
  try{
   const plan=f.plan();plan.planPath=join(directory,'plan.json');plan.evidencePath=join(directory,'evidence.jsonl');
@@ -295,9 +335,18 @@ for(const mode of ['ENABLED','DISABLED'])test('107 introduction связывае
    const value=[...f.stored.values()].find(r=>r.kind.toLowerCase()===kind&&r.metadata.name===name);return value?JSON.stringify(value):'';
   };
   const read=(extra={},resources=f.resources)=>readTelegramIntroducedReceiver({...input,...extra},kube,()=>resources);
-  const proof=await read();assert.equal(proof.state,'PENDING_AUTHORITY');assert.equal(proof.intendedReplicas,3);assert.equal(proof.resources.length,10);
+  const expectedResources=registry?8:10;
+  const proof=await read();assert.equal(proof.state,'PENDING_AUTHORITY');assert.equal(proof.intendedReplicas,3);assert.equal(proof.resources.length,expectedResources);
+  assert.equal(proof.monitoringResources,registry?'DISABLED':undefined);
+  if(registry){const changed=structuredClone(proof);delete changed.monitoringResources;assert.throws(()=>verifyTelegramIntroducedReceiver(proof,changed),/PROOF_INVALID/);}
   assert.equal(proof.deploymentUID,f.stored.get('Deployment/interaction-gateway').metadata.uid);
-  verifyTelegramIntroducedReceiver(proof,await read());assert.equal(f.state.effects,10);assert.ok(calls.length>10);
+  assert.equal(proof.imageRef,f.interactionImage);
+  if(registry){
+   const dormantPod=f.stored.get('Deployment/interaction-gateway').spec.template.spec;
+   for(const container of [...dormantPod.containers,...dormantPod.initContainers])
+    assert.equal(container.image,container.name==='interaction-gateway'?f.interactionImage:f.target.authorityImage);
+  }
+  verifyTelegramIntroducedReceiver(proof,await read());assert.equal(f.state.effects,expectedResources);assert.ok(calls.length>10);
   await assert.rejects(read({sourceSHA:'e'.repeat(40)}),/SOURCE_OR_TARGET_CHANGED/);
   const altered=structuredClone(f.resources);altered[0].metadata.labels.injected='foreign';
   await assert.rejects(read({},altered),/SOURCE_OR_PUBLICATION_CHANGED/);
@@ -306,7 +355,7 @@ for(const mode of ['ENABLED','DISABLED'])test('107 introduction связывае
   dp.metadata.uid=uid(999);await assert.rejects(read(),/UID_OR_ALLOCATION_CHANGED/);Object.assign(dp,structuredClone(original));
   const changed=structuredClone(proof);changed.resources[0].uid=uid(999);assert.throws(()=>verifyTelegramIntroducedReceiver(proof,changed),/INTRODUCTION_CHANGED/);
   publication.publicationPlan.namespaceUID=uid(999);await writeFile(publicationPath,JSON.stringify(publication)+'\n',{mode:0o600});
-  await assert.rejects(read());assert.equal(f.state.effects,10);
+  await assert.rejects(read());assert.equal(f.state.effects,expectedResources);
  }finally{await rm(directory,{recursive:true,force:true});}
 });
 
