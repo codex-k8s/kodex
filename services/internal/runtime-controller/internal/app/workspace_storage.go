@@ -16,16 +16,18 @@ import (
 const workspaceUnboundInputInvalid = "runtime workspace unbound input is invalid"
 
 // reconcileWorkspaceStorage commits exact stopped writers before releasing their retained Pod finalizer.
-// The existing poll owns cancellation and one request budget; this never starts another worker or model.
+// The existing poll owns cancellation; bounded inspection and acknowledgement use separate request budgets.
 // reconcileWorkspaceStorage фиксирует exact stopped writer до снятия retained Pod finalizer.
-// Existing poll владеет cancellation и request budget; отдельный worker или model не запускается.
+// Текущий poll владеет отменой, а чтение и подтверждение получают отдельные ограниченные бюджеты.
 func (runtime *runtime) reconcileWorkspaceStorage(ctx context.Context) error {
-	ctx, cancel := context.WithTimeout(ctx, runtime.config.RequestTimeout)
-	defer cancel()
-	values, err := runtime.manager.PendingWorkspaceQuiescence(ctx)
+	inspection, cancelInspection := context.WithTimeout(ctx, runtime.config.RequestTimeout)
+	values, err := runtime.manager.PendingWorkspaceQuiescence(inspection)
+	cancelInspection()
 	if err != nil {
 		return err
 	}
+	ctx, cancel := context.WithTimeout(ctx, runtime.config.RequestTimeout)
+	defer cancel()
 	for _, value := range values {
 		if ctx.Err() != nil {
 			return ctx.Err()

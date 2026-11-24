@@ -13,9 +13,11 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-// workspaceObservationPageSize bounds one poll's decoded tickets without discarding continuation progress.
-// workspaceObservationPageSize ограничивает decoded tickets одного poll, сохраняя continuation progress.
-const workspaceObservationPageSize int64 = 32
+// workspaceObservationPageSize leaves room in the poll deadline for both the Kubernetes
+// reads and the owner acknowledgement and release after each observation page.
+// workspaceObservationPageSize оставляет время и на чтение из Kubernetes, и на квитанцию
+// владельца и освобождение Pod после каждой страницы наблюдений.
+const workspaceObservationPageSize int64 = 4
 
 // WorkspaceQuiescenceObservation carries authenticated frozen input and a current owned terminal witness.
 // No field is a new execution grant; consumers commit the past fact before releasing retained resources.
