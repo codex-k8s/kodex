@@ -5,9 +5,10 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {publisherImageSource,readPublisherImageNodes,planPublisherImage,publisherImageStep,verifyPublisherReadbackExecutor,main} from './authority-publisher-image.mjs';
 import {fingerprint} from './scoped-release.mjs';
+import {promotedServicePullRegistry} from './component-node-qualification.mjs';
 import {fixture,prepareAdmission,uid} from './fixtures/authority-catalog-synthetic.mjs';
 
-function imageFixture(t){
+function imageFixture(t,pullRegistry){
  const f=fixture();f.directory=mkdtempSync(join(tmpdir(),'authority-image-'));t.after(()=>rmSync(f.directory,{recursive:true,force:true}));
  f.revision='a'.repeat(40);f.profile.context='k3d-synthetic';
  const digest='sha256:'+'e'.repeat(64),build={schema:'kodex.stable-local-build/v1',component:'internal-rpc-authority',sourceSHA:f.revision,
@@ -18,7 +19,7 @@ function imageFixture(t){
   clusterUID:f.profile.clusterUID,namespaceUID:f.profile.namespaceUID,receipt:build,archiveSHA256:build.archiveSHA256,image};
  const evidence={publicationPlan,publicationEvidence:[{schema:'kodex.stable-image-publication-attempt/v1',status:'INTENT',mode:'apply',planSHA256:fingerprint(publicationPlan),component:build.component,digest},
   {status:'PASS',phase:'REGISTRY_PUBLICATION_ONLY',nodePull:'NOT_RUN'}]};
- const source=publisherImageSource(f.revision,evidence,build,build.contextSHA256);
+ const source=publisherImageSource(f.revision,evidence,build,build.contextSHA256,pullRegistry);
  const nodes=[0,1].map(index=>({apiVersion:'v1',kind:'Node',metadata:{name:`k3d-synthetic-agent-${index}`,uid:uid(200+index)},
   status:{conditions:[{type:'Ready',status:'True'},{type:'DiskPressure',status:'False'}]}}));
  const containers=nodes.map((node,index)=>({Id:String(index+1).repeat(64),Image:'sha256:'+'d'.repeat(64),Name:'/'+node.metadata.name,State:{Running:true},
@@ -72,6 +73,18 @@ test('publisher image requires authentic publication/source/canonical Dockerfile
   const evidence=structuredClone(f.evidence);mutate(evidence);assert.throws(()=>publisherImageSource(f.revision,evidence,f.build,f.build.contextSHA256));
  }
  assert.throws(()=>publisherImageSource(f.revision,f.evidence,f.build,'0'.repeat(64)),/SOURCE_REJECTED/);
+});
+
+test('publisher via internal Service retains registry and exact CRI proof across image CAS',async t=>{
+ const f=imageFixture(t,promotedServicePullRegistry);
+ assert.equal(f.source.pullRegistry,promotedServicePullRegistry);
+ assert.ok(f.source.imageRef.startsWith(`${promotedServicePullRegistry}/kodex/internal-rpc-authority@sha256:`));
+ assert.throws(()=>publisherImageSource(f.revision,f.evidence,f.build,f.build.contextSHA256,'foreign.example.invalid'),/PULL_REGISTRY_REJECTED/);
+ const oldRegistry=structuredClone(f.plan);delete oldRegistry.source.pullRegistry;
+ await assert.rejects(publisherImageStep({phase:'status',plan:oldRegistry}),/PLAN_REJECTED/);
+ const noPull=await f.step('apply');assert.equal(noPull.state,'CONVERGING');
+ f.ready();assert.equal((await f.step('status')).state,'READY');
+ assert.equal(f.state.effects,1);assert.equal(f.state.calls.some(call=>call.includes('pull')),false);
 });
 
 test('node proof uses actual NodeUID/containerUID/CRI repoDigest readback and never pulls',t=>{
@@ -133,13 +146,13 @@ test('successor readback требует exact clean predecessor и подтве�
  assert.equal(joins,1);
 });
 
-test('public image CLI consumes authentic receipts, re-reads nodes and preserves READY after Service reopens',async t=>{
- const f=imageFixture(t),path=name=>join(f.directory,name),write=(name,value)=>writeFileSync(path(name),JSON.stringify(value),{mode:0o600});
+for(const pullRegistry of [undefined,promotedServicePullRegistry])test('public image CLI validates publication and READY via '+(pullRegistry?'internal Service':'logical registry'),async t=>{
+ const f=imageFixture(t,pullRegistry),path=name=>join(f.directory,name),write=(name,value)=>writeFileSync(path(name),JSON.stringify(value),{mode:0o600});
  write('publication.json',f.evidence.publicationPlan);writeFileSync(path('publication.jsonl'),f.evidence.publicationEvidence.map(row=>JSON.stringify(row)+'\n').join(''),{mode:0o600});
  write('build.json',f.build);write('target.json',f.profile);writeFileSync(path('config'),'synthetic-unused-kubeconfig',{mode:0o600});
  const source=new URL('../..',import.meta.url).pathname.replace(/\/$/,'');
  const common=['--kubeconfig',path('config'),'--context',f.profile.context];
- const sourceFlags=['--source',source,'--revision',f.revision,'--publication-plan',path('publication.json'),'--publication-evidence',path('publication.jsonl'),'--build',path('build.json'),'--target',path('target.json')];
+ const sourceFlags=['--source',source,'--revision',f.revision,'--publication-plan',path('publication.json'),'--publication-evidence',path('publication.jsonl'),'--build',path('build.json'),'--target',path('target.json'),...(pullRegistry?['--pull-registry',pullRegistry]:[])];
  const io={inspectSource:()=>({revision:f.revision}),sourceArchiveHash:async()=>f.build.contextSHA256,execFileSync:(program,args,options)=>{
   if(program==='docker')return f.execute(program,args);
   assert.equal(program,'kubectl');assert.deepEqual(args.slice(0,5),[...common,'--request-timeout=25s']);
@@ -159,6 +172,8 @@ test('public image CLI consumes authentic receipts, re-reads nodes and preserves
  const stored=JSON.parse(readFileSync(path('nodes.json'),'utf8'));assert.deepEqual(stored,f.nodeProof);
  await main(['plan',...common,...sourceFlags,...f.admission.flags,'--node-proof',path('nodes.json'),'--plan',path('plan.json')],io);
  const plan=JSON.parse(readFileSync(path('plan.json'),'utf8'));
+ assert.equal(plan.source.pullRegistry,pullRegistry);
+ if(pullRegistry)await assert.rejects(main(['apply',...common,'--plan',path('plan.json'),'--evidence',path('forbidden-override.jsonl'),'--approved-plan-sha',fingerprint(plan),'--pull-registry',pullRegistry],io),/ARGUMENTS_REJECTED/);
  for(const phase of ['apply','plan','nodes'])await assert.rejects(main([phase,...common,'--predecessor-executor-sha',f.revision],io),/ARGUMENTS_REJECTED/);
  const changedIO={...io,inspectSource:path=>({revision:path===plan.executorSource.path?'d'.repeat(40):f.revision})};
  await assert.rejects(main(['apply',...common,'--plan',path('plan.json'),'--evidence',path('wrong-executor.jsonl'),'--approved-plan-sha',fingerprint(plan)],changedIO),/EXECUTOR_SOURCE_CHANGED/);
