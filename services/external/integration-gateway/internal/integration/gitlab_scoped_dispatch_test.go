@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"slices"
@@ -13,6 +14,84 @@ import (
 
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 )
+
+// TestGitLabScopedProjectListLargePage verifies the ordinary selector page even when unrelated provider fields exceed the general body limit.
+// It also checks that invalid scope and responses above the bounded list limit fail as a whole, without projecting a partial catalog.
+// TestGitLabScopedProjectListLargePage проверяет обычную страницу списка, когда посторонние поля ответа превышают общий лимит тела.
+// Проекты вне области и ответы сверх лимита списка отклоняются целиком, без частичной выдачи.
+func TestGitLabScopedProjectListLargePage(t *testing.T) {
+	const pageSize = 20
+	for _, scenario := range []struct {
+		name             string
+		lastNamespace    string
+		descriptionBytes int
+		allowed          bool
+	}{
+		{name: "group page", lastNamespace: "team", descriptionBytes: 4096, allowed: true},
+		{name: "foreign namespace", lastNamespace: "other", descriptionBytes: 4096},
+		{name: "body exceeds list limit", lastNamespace: "team", descriptionBytes: maximumTypedListWireBytes / pageSize},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			adapter := testAdapter(t)
+			request := scopedGitLabTestRequest(t, adapter, "gitlab.project.list", map[string]string{
+				"base_url": "https://git.example.invalid", "scope_kind": "GROUP", "group_path": "team",
+			}, map[string]any{})
+
+			projects := make([]string, 0, pageSize)
+			description := strings.Repeat("x", scenario.descriptionBytes)
+			for i := range pageSize {
+				namespace := "team"
+				if i == pageSize-1 {
+					namespace = scenario.lastNamespace
+				}
+				projects = append(projects, fmt.Sprintf(`{"id":%d,"path_with_namespace":"%s/service-%d","namespace":{"id":10,"full_path":"%s","kind":"group"},"description":"%s"}`,
+					i+20, namespace, i, namespace, description))
+			}
+			rawPage := "[" + strings.Join(projects, ",") + "]"
+			if len(rawPage) <= maximumResponseBytes {
+				t.Fatal("fixture does not exceed the general body limit")
+			}
+			adapter.nativeHTTPClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				header := http.Header{}
+				body := `{"id":10,"full_path":"team"}`
+				switch r.URL.Path {
+				case "/api/v4/groups/team":
+				case "/api/v4/groups/10/projects":
+					query := r.URL.Query()
+					if query.Get("with_shared") != "false" || query.Get("include_subgroups") != "false" || query.Get("per_page") != "20" || query.Get("page") != "1" {
+						t.Fatal("project listing changed the configured scope or pagination")
+					}
+					body = rawPage
+					header.Set("X-Next-Page", "2")
+				default:
+					t.Fatalf("unexpected provider path: %s", r.URL.Path)
+				}
+				return &http.Response{StatusCode: http.StatusOK, Header: header, Body: io.NopCloser(strings.NewReader(body)), Request: r}, nil
+			})}
+
+			result, err := adapter.Execute(t.Context(), request)
+			if !scenario.allowed {
+				var safe *SafeError
+				if !errors.As(err, &safe) || safe.Code != "INTEGRATION_RESPONSE_INVALID" || result.Summary != "" || result.Receipt.EffectKey != "" {
+					t.Fatal("invalid page returned a projection or receipt", err)
+				}
+				return
+			}
+
+			var page struct {
+				Items string `json:"items"`
+				Count int    `json:"count"`
+				Next  int    `json:"next_cursor"`
+			}
+			if err != nil || json.Unmarshal([]byte(result.Summary), &page) != nil || page.Count != pageSize || page.Next != 2 || result.Receipt.EffectKey == "" {
+				t.Fatal("the project list did not return a complete, attested page", err)
+			}
+			if strings.Contains(page.Items, "description") || len(page.Items) >= maximumResponseBytes {
+				t.Fatal("unprojected provider metadata escaped the read boundary")
+			}
+		})
+	}
+}
 
 // scopedGitLabTestRequest creates a synthetic exact current-version claim; changed test inputs/configuration receive fresh digests rather than weakening production pin checks.
 // scopedGitLabTestRequest создаёт synthetic exact current-version claim; изменённые test inputs/configuration получают свежие digests без ослабления production pin checks.
