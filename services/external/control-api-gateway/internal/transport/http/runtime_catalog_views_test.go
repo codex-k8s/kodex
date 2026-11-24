@@ -87,6 +87,8 @@ func TestRuntimeCatalogPublishExactPins(t *testing.T) {
 		"mismatch":              strings.Replace(runtimePublishFixture, `"catalogDigest":"a`, `"catalogDigest":"b`, 1),
 		"self assigned default": strings.Replace(runtimePublishFixture, `"weight":1`, `"weight":1,"defaultReasoningEffort":"high"`, 1),
 		"weight overflow":       strings.Replace(runtimePublishFixture, `"weight":1`, `"weight":2147483648`, 1),
+		"partial route":         strings.Replace(runtimePublishFixture, `"weight":1`, `"weight":1,"model":"test-model"`, 1),
+		"invalid route profile": strings.Replace(runtimePublishFixture, `"weight":1`, `"weight":1,"model":"test-model","runtimeProfileRef":"https://example.invalid/"`, 1),
 	} {
 		t.Run(name, func(t *testing.T) {
 			client := &contextRPCRecorder{}

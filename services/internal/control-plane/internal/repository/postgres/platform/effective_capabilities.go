@@ -203,25 +203,37 @@ func capabilityCatalogReady(ctx context.Context, tx pgx.Tx, current scope, confi
 	if len(configuration.ProviderPolicy.AccountCandidates) == 0 {
 		return false, nil
 	}
+	alternative := hasAlternativeModelRoute(configuration)
 	for _, candidate := range configuration.ProviderPolicy.AccountCandidates {
-		catalog, err := readModelCatalogTx(ctx, tx, current, configuration.Provider, candidate.AccountRef)
+		provider, selectedModel, _ := configuredModelRoute(configuration, candidate)
+		catalog, err := readModelCatalogTx(ctx, tx, current, provider, candidate.AccountRef)
 		if errors.Is(err, errs.ErrNotFound) {
+			if alternative {
+				continue
+			}
 			return false, nil
 		}
 		if err != nil {
 			return false, err
 		}
 		if !validRuntimeCatalogPin(candidate) || candidate.ModelCapabilityDigest == "" && (catalog.Digest != candidate.CatalogDigest || catalog.Revision != candidate.CatalogRevision) {
+			if alternative {
+				continue
+			}
 			return false, nil
 		}
-		if !slices.ContainsFunc(catalog.Models, func(model entity.ModelCapability) bool {
-			return model.ID == configuration.Model && model.Available && slices.Contains(model.EligibleProviderAccountRefs, candidate.AccountRef) &&
-				(candidate.ModelCapabilityDigest == "" || candidate.ModelCapabilityDigest == modelcatalog.CapabilityDigest(configuration.Provider, candidate.AccountRef, model.ID, model.ReasoningEfforts, model.DefaultReasoningEffort, model.IsDefault))
-		}) {
+		ready := slices.ContainsFunc(catalog.Models, func(model entity.ModelCapability) bool {
+			return model.ID == selectedModel && model.Available && slices.Contains(model.EligibleProviderAccountRefs, candidate.AccountRef) &&
+				(candidate.ModelCapabilityDigest == "" || candidate.ModelCapabilityDigest == modelcatalog.CapabilityDigest(provider, candidate.AccountRef, model.ID, model.ReasoningEfforts, model.DefaultReasoningEffort, model.IsDefault))
+		})
+		if alternative && ready {
+			return true, nil
+		}
+		if !alternative && !ready {
 			return false, nil
 		}
 	}
-	return true, nil
+	return !alternative, nil
 }
 
 // effectiveWorkflowCapabilities For an optional workflow context, requires same-project

@@ -2004,7 +2004,7 @@ func (repository *Repository) launchRunWithAttachmentPolicy(ctx context.Context,
 	var sessionID string
 	if sessionRef == "" {
 		sessionRef, _ = newRef("ses")
-		providerAccountID, err := repository.selectProviderAccountForAgent(ctx, tx, scope.organizationID, targetAgentRefs[0])
+		providerAccountID, err := repository.selectReadyProviderAccountForAgent(ctx, tx, scope.organizationID, targetAgentRefs[0])
 		if err != nil {
 			return commandOutcome{}, err
 		}

@@ -308,6 +308,7 @@ func castProviderPolicy(value entity.ProviderAccountPolicyVersion) *controlplane
 	for _, candidate := range value.AccountCandidates {
 		result.AccountCandidates = append(result.AccountCandidates, &controlplanev1.ProviderAccountCandidate{AccountRef: candidate.AccountRef, Weight: candidate.Weight,
 			CatalogRevision: candidate.CatalogRevision, CatalogDigest: candidate.CatalogDigest,
+			RuntimeProfileRef: candidate.RuntimeProfileRef, Model: candidate.Model,
 			ProviderDefinitionKey: candidate.ProviderDefinitionKey, DefaultReasoningEffort: candidate.DefaultReasoningEffort})
 	}
 	return result

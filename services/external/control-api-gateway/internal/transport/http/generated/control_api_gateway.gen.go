@@ -17462,21 +17462,29 @@ type ProviderAccountBlockerPage struct {
 
 // ProviderAccountCandidate defines model for ProviderAccountCandidate.
 type ProviderAccountCandidate struct {
-	AccountRef             OpaqueRef `json:"accountRef"`
-	CatalogDigest          *string   `json:"catalogDigest,omitempty"`
-	CatalogRevision        *string   `json:"catalogRevision,omitempty"`
-	DefaultReasoningEffort string    `json:"defaultReasoningEffort"`
-	ProviderDefinitionKey  *string   `json:"providerDefinitionKey,omitempty"`
-	Weight                 int       `json:"weight"`
+	AccountRef             OpaqueRef  `json:"accountRef"`
+	CatalogDigest          *string    `json:"catalogDigest,omitempty"`
+	CatalogRevision        *string    `json:"catalogRevision,omitempty"`
+	DefaultReasoningEffort string     `json:"defaultReasoningEffort"`
+	Model                  *string    `json:"model,omitempty"`
+	ProviderDefinitionKey  *string    `json:"providerDefinitionKey,omitempty"`
+	RuntimeProfileRef      *OpaqueRef `json:"runtimeProfileRef,omitempty"`
+	Weight                 int        `json:"weight"`
 }
 
 // ProviderAccountCandidateInput defines model for ProviderAccountCandidateInput.
 type ProviderAccountCandidateInput struct {
-	AccountRef            OpaqueRef `json:"accountRef"`
-	CatalogDigest         string    `json:"catalogDigest"`
-	CatalogRevision       string    `json:"catalogRevision"`
-	ProviderDefinitionKey string    `json:"providerDefinitionKey"`
-	Weight                int       `json:"weight"`
+	AccountRef      OpaqueRef `json:"accountRef"`
+	CatalogDigest   string    `json:"catalogDigest"`
+	CatalogRevision string    `json:"catalogRevision"`
+
+	// Model Модель альтернативного профиля. Задаётся вместе с runtimeProfileRef.
+	Model                 *string `json:"model,omitempty"`
+	ProviderDefinitionKey string  `json:"providerDefinitionKey"`
+
+	// RuntimeProfileRef Отдельный профиль второго аккаунта в политике FIXED.
+	RuntimeProfileRef *OpaqueRef `json:"runtimeProfileRef,omitempty"`
+	Weight            int        `json:"weight"`
 }
 
 // ProviderAccountConcurrencyInput defines model for ProviderAccountConcurrencyInput.

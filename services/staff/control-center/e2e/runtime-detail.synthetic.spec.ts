@@ -537,6 +537,13 @@ for (const width of [1440, 390, 2900]) {
       exact: true,
     });
     await expect(saveRuntime).toBeEnabled();
+    await page.getByRole("button", { name: "Добавить альтернативу" }).click();
+    await expect(
+      page.getByRole("combobox", { name: "Профиль и провайдер" }),
+    ).toBeVisible();
+    await expect(saveRuntime).toBeDisabled();
+    await page.getByRole("button", { name: "Убрать альтернативу" }).click();
+    await expect(saveRuntime).toBeEnabled();
     const selectedUsage = page.locator(
       ".provider-selector__selected .provider-usage",
     );

@@ -1470,6 +1470,8 @@ export type ProviderAccountCandidate = {
     catalogDigest?: string;
     providerDefinitionKey?: string;
     defaultReasoningEffort: string;
+    runtimeProfileRef?: OpaqueRef;
+    model?: string;
 };
 
 export type ProviderAccountCandidateInput = {
@@ -1478,6 +1480,14 @@ export type ProviderAccountCandidateInput = {
     catalogRevision: string;
     catalogDigest: string;
     providerDefinitionKey: string;
+    /**
+     * Отдельный профиль второго аккаунта в политике FIXED.
+     */
+    runtimeProfileRef?: OpaqueRef;
+    /**
+     * Модель альтернативного профиля. Задаётся вместе с runtimeProfileRef.
+     */
+    model?: string;
 };
 
 export type ProviderAccountPolicyVersion = {

@@ -139,6 +139,7 @@ func (server *Server) PublishAgentRuntimeConfiguration(ctx context.Context, requ
 	for _, item := range request.GetProviderAccounts() {
 		accounts = append(accounts, entity.ProviderAccountCandidate{AccountRef: item.GetAccountRef(), Weight: item.GetWeight(),
 			CatalogRevision: item.GetCatalogRevision(), CatalogDigest: item.GetCatalogDigest(),
+			RuntimeProfileRef: item.GetRuntimeProfileRef(), Model: item.GetModel(),
 			ProviderDefinitionKey: item.GetProviderDefinitionKey(), DefaultReasoningEffort: item.GetDefaultReasoningEffort()})
 	}
 	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_PublishAgentRuntimeConfiguration_FullMethodName, command.PublishAgentRuntimeConfig, request.GetMutation(), command.AgentRuntimeConfigurationInput{AgentRef: request.GetAgentRef(), RuntimeProfileRef: request.GetRuntimeProfileRef(), Model: request.GetModel(), ProviderPolicyMode: request.GetProviderPolicyMode(), ProviderAccounts: accounts}, func(result command.Result) *controlplanev1.PublishAgentRuntimeConfigurationResponse {

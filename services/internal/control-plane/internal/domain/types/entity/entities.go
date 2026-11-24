@@ -112,6 +112,8 @@ type RuntimeSelection struct {
 type ProviderAccountCandidate struct {
 	AccountRef             string `json:"accountRef"`
 	Weight                 int32  `json:"weight"`
+	RuntimeProfileRef      string `json:"runtimeProfileRef,omitempty"`
+	Model                  string `json:"model,omitempty"`
 	CatalogRevision        string `json:"catalogRevision,omitempty"`
 	CatalogDigest          string `json:"catalogDigest,omitempty"`
 	ModelCapabilityDigest  string `json:"modelCapabilityDigest,omitempty"`

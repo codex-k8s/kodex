@@ -259,7 +259,15 @@ func providerAccountCandidates(input []generated.ProviderAccountCandidateInput) 
 			return nil, false
 		}
 		seen[item.AccountRef] = true
-		result = append(result, &controlplanev1.ProviderAccountCandidate{AccountRef: item.AccountRef, Weight: int32(item.Weight), CatalogRevision: item.CatalogRevision, CatalogDigest: item.CatalogDigest, ProviderDefinitionKey: item.ProviderDefinitionKey})
+		candidate := &controlplanev1.ProviderAccountCandidate{AccountRef: item.AccountRef, Weight: int32(item.Weight), CatalogRevision: item.CatalogRevision, CatalogDigest: item.CatalogDigest, ProviderDefinitionKey: item.ProviderDefinitionKey}
+		if item.RuntimeProfileRef != nil || item.Model != nil {
+			if item.RuntimeProfileRef == nil || item.Model == nil || !opaqueHTTPReference.MatchString(*item.RuntimeProfileRef) ||
+				len(*item.Model) < 1 || len(*item.Model) > 128 {
+				return nil, false
+			}
+			candidate.RuntimeProfileRef, candidate.Model = *item.RuntimeProfileRef, *item.Model
+		}
+		result = append(result, candidate)
 	}
 	return result, len(input) > 0 && len(input) <= 32
 }

@@ -43,13 +43,14 @@ func runtimeOverlaySchema(ctx context.Context, tx pgx.Tx, current scope, config 
 	efforts := []string{}
 	defaultEffort := ""
 	for index, candidate := range config.ProviderPolicy.AccountCandidates {
-		catalog, err := readModelCatalogTx(ctx, tx, current, config.Provider, candidate.AccountRef)
+		provider, selectedModel, _ := configuredModelRoute(config, candidate)
+		catalog, err := readModelCatalogTx(ctx, tx, current, provider, candidate.AccountRef)
 		if err != nil {
 			return runtimecontract.ConfigOverlaySchema{}, err
 		}
 		var available []string
 		for _, model := range catalog.Models {
-			if model.ID == config.Model && model.Available {
+			if model.ID == selectedModel && model.Available {
 				available = model.ReasoningEfforts
 				if index == 0 {
 					defaultEffort = model.DefaultReasoningEffort

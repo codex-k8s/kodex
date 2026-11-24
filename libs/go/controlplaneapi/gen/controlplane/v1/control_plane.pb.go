@@ -58130,8 +58130,11 @@ type ProviderAccountCandidate struct {
 	ProviderDefinitionKey string                 `protobuf:"bytes,5,opt,name=provider_definition_key,json=providerDefinitionKey,proto3" json:"provider_definition_key,omitempty"`
 	// Назначаемый сервером default выбранной модели из exact catalog snapshot.
 	DefaultReasoningEffort string `protobuf:"bytes,6,opt,name=default_reasoning_effort,json=defaultReasoningEffort,proto3" json:"default_reasoning_effort,omitempty"`
-	unknownFields          protoimpl.UnknownFields
-	sizeCache              protoimpl.SizeCache
+	// Отдельный профиль и модель альтернативного аккаунта в политике FIXED.
+	RuntimeProfileRef string `protobuf:"bytes,7,opt,name=runtime_profile_ref,json=runtimeProfileRef,proto3" json:"runtime_profile_ref,omitempty"`
+	Model             string `protobuf:"bytes,8,opt,name=model,proto3" json:"model,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *ProviderAccountCandidate) Reset() {
@@ -58202,6 +58205,20 @@ func (x *ProviderAccountCandidate) GetProviderDefinitionKey() string {
 func (x *ProviderAccountCandidate) GetDefaultReasoningEffort() string {
 	if x != nil {
 		return x.DefaultReasoningEffort
+	}
+	return ""
+}
+
+func (x *ProviderAccountCandidate) GetRuntimeProfileRef() string {
+	if x != nil {
+		return x.RuntimeProfileRef
+	}
+	return ""
+}
+
+func (x *ProviderAccountCandidate) GetModel() string {
+	if x != nil {
+		return x.Model
 	}
 	return ""
 }
@@ -97233,7 +97250,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"versionRef\x12I\n" +
 	"\tconsumers\x18\x04 \x03(\v2+.controlplane.v1.RuntimeEnvironmentConsumerR\tconsumers\"o\n" +
 	" RebindRuntimeEnvironmentResponse\x12K\n" +
-	"\bbindings\x18\x01 \x03(\v2/.controlplane.v1.AgentRuntimeEnvironmentBindingR\bbindings\"\x97\x02\n" +
+	"\bbindings\x18\x01 \x03(\v2/.controlplane.v1.AgentRuntimeEnvironmentBindingR\bbindings\"\xdd\x02\n" +
 	"\x18ProviderAccountCandidate\x12\x1f\n" +
 	"\vaccount_ref\x18\x01 \x01(\tR\n" +
 	"accountRef\x12\x16\n" +
@@ -97241,7 +97258,9 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x10catalog_revision\x18\x03 \x01(\tR\x0fcatalogRevision\x12%\n" +
 	"\x0ecatalog_digest\x18\x04 \x01(\tR\rcatalogDigest\x126\n" +
 	"\x17provider_definition_key\x18\x05 \x01(\tR\x15providerDefinitionKey\x128\n" +
-	"\x18default_reasoning_effort\x18\x06 \x01(\tR\x16defaultReasoningEffort\"\x8b\x02\n" +
+	"\x18default_reasoning_effort\x18\x06 \x01(\tR\x16defaultReasoningEffort\x12.\n" +
+	"\x13runtime_profile_ref\x18\a \x01(\tR\x11runtimeProfileRef\x12\x14\n" +
+	"\x05model\x18\b \x01(\tR\x05model\"\x8b\x02\n" +
 	"\x1cProviderAccountPolicyVersion\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x03R\aversion\x12\x12\n" +

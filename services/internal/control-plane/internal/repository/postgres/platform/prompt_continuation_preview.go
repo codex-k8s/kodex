@@ -126,8 +126,9 @@ func (repository *Repository) promptContinuationPreviewForActorTx(ctx context.Co
 	if effort == "" {
 		mode = runtimecontract.ReasoningUnsupported
 	}
-	_, modelProvider, err := repository.runtimeProviderSelection(view.Configuration.Provider, view.Configuration.Model)
-	if err != nil || modelProvider.ValidateRuntimePreferences(view.Configuration.Model, view.PublishedOverlay.Content, effort, mode) != nil {
+	provider, model, _ := configuredModelRoute(view.Configuration, candidate)
+	_, modelProvider, err := repository.runtimeProviderSelection(provider, model)
+	if err != nil || modelProvider.ValidateRuntimePreferences(model, view.PublishedOverlay.Content, effort, mode) != nil {
 		return entity.PromptMaterializationSnapshot{}, errs.ErrConflict
 	}
 	if input.AttachmentSetRef != "" {
@@ -182,7 +183,7 @@ func (repository *Repository) promptContinuationPreviewForActorTx(ctx context.Co
 	}
 	next := map[string]any{"promptTemplateRef": snapshot.TemplateRef, "promptTemplateDigest": snapshot.TemplateDigest,
 		"promptServiceTemplateRevision": materialized.ServiceTemplateRevision, "promptServiceTemplateDigest": materialized.ServiceTemplateDigest, "promptSnapshot": snapshot,
-		"runtimeProvider": view.Configuration.Provider, "runtimeModel": view.Configuration.Model, "reasoningMode": mode, "effectiveReasoningEffort": effort,
+		"runtimeProvider": provider, "runtimeModel": model, "reasoningMode": mode, "effectiveReasoningEffort": effort,
 		"imageManifestDigest":   view.Environment.CurrentVersion.Image.Digest,
 		"runtimeEnvironmentRef": view.Environment.CurrentVersion.Ref, "runtimeEnvironmentVersion": view.Environment.CurrentVersion.Revision, "runtimeEnvironmentDigest": view.Environment.CurrentVersion.Digest,
 		"environmentBindingRef": view.EnvironmentBinding.Ref, "environmentBindingVersion": view.EnvironmentBinding.Version, "environmentBindingDigest": view.EnvironmentBinding.Digest,
