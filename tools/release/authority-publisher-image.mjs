@@ -5,7 +5,8 @@ import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {validatedStablePublication,sourceArchiveHash} from './stable-image-publication.mjs';
-import {validateNodeContainer} from './stable-node-registry-model.mjs';
+import {logicalRegistryHost,validateNodeContainer} from './stable-node-registry-model.mjs';
+import {promotedServicePullRegistry} from './component-node-qualification.mjs';
 import {inspectSource} from './application-source.mjs';
 import {fingerprint,withPrivatePatchFile} from './scoped-release.mjs';
 import {privateJournal} from '../dev/role-image-acceptance.mjs';
@@ -19,6 +20,12 @@ const requireValue=(ok,code)=>{if(!ok)throw Error(code);};
 const same=(a,b)=>fingerprint(a)===fingerprint(b);
 const uuid=value=>/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value??'');
 const sha=value=>/^[a-f0-9]{64}$/.test(value??'');
+const selectedPullRegistry=value=>value===undefined||value===promotedServicePullRegistry;
+const publisherImageInRegistry=({imageRef,pullRegistry})=>{
+ const prefix=`${pullRegistry??logicalRegistryHost}/kodex/internal-rpc-authority@sha256:`;
+ return selectedPullRegistry(pullRegistry)&&typeof imageRef==='string'&&imageRef.startsWith(prefix)&&
+  sha(imageRef.slice(prefix.length))&&!imageRef.endsWith('0'.repeat(64));
+};
 const header=plan=>({schema:'kodex.authority-publisher-image-evidence/v1',planSHA256:fingerprint(plan),imageUpdateID:plan.imageUpdateID});
 const sameAnnotations=(actual,expected)=>{
  const strip=value=>{const copy={...(value??{})};delete copy['deployment.kubernetes.io/revision'];return copy;};
@@ -27,11 +34,13 @@ const sameAnnotations=(actual,expected)=>{
 
 // Publication связывается с canonical Dockerfile и exact public source; build
 // archive/node pull не заменяются строкой --image или caller-owned boolean.
-export function publisherImageSource(sourceSHA,evidence,build,contextSHA256){
- const imageRef=validatedStablePublication(sourceSHA,evidence,'internal-rpc-authority');
+export function publisherImageSource(sourceSHA,evidence,build,contextSHA256,pullRegistry){
+ requireValue(selectedPullRegistry(pullRegistry),'AUTHORITY_IMAGE_PULL_REGISTRY_REJECTED');
+ const imageRef=validatedStablePublication(sourceSHA,evidence,'internal-rpc-authority',pullRegistry);
  requireValue(same(build,evidence.publicationPlan.receipt)&&build.dockerfile==='services/internal/internal-rpc-authority/Dockerfile'&&
   build.contextSHA256===contextSHA256&&evidence.publicationPlan.source===sourceSHA,'AUTHORITY_IMAGE_SOURCE_REJECTED');
- return {imageRef,sourceSHA,publicationSHA256:fingerprint(evidence),buildSHA256:fingerprint(build),contextSHA256};
+ return {imageRef,sourceSHA,publicationSHA256:fingerprint(evidence),buildSHA256:fingerprint(build),contextSHA256,
+  ...(pullRegistry===undefined?{}:{pullRegistry})};
 }
 
 // Readback использует существующие k3d node/container identity checks и только
@@ -92,7 +101,7 @@ export function validatePublisherImagePlan(plan){
   typeof plan.executorSource?.path==='string'&&resolve(plan.executorSource.path)===plan.executorSource.path&&/^[a-f0-9]{40}$/.test(plan.executorSource.revision??'')&&
   /^[0-9]+$/.test(plan.beforeResourceVersion??'')&&/^[a-f0-9]{40}$/.test(plan.source?.sourceSHA??'')&&
   ['publicationSHA256','buildSHA256','contextSHA256'].every(key=>sha(plan.source[key]))&&
-  /^registry\.local\.kodex\/kodex\/internal-rpc-authority@sha256:[a-f0-9]{64}$/.test(plan.source.imageRef??'')&&
+  publisherImageInRegistry(plan.source)&&
   Number.isInteger(plan.beforeSpec?.replicas)&&plan.beforeSpec.replicas>0&&plan.beforeSpec.paused!==true,
   'AUTHORITY_IMAGE_PLAN_REJECTED');
  const mains=plan.beforeSpec.template?.spec?.containers?.filter(container=>container.name==='publisher');
@@ -157,7 +166,7 @@ export function verifyPublisherReadbackExecutor(current,previous,predecessorSHA,
 export async function main(args,io={}){
  const [phase,...raw]=args,options={};
  for(let i=0;i<raw.length;i++){const key=raw[i];requireValue(['--source','--revision','--publication-plan','--publication-evidence','--build','--target','--node-proof','--maintenance-plan','--maintenance-evidence',
-  '--traffic-plan','--traffic-evidence','--kubeconfig','--context','--plan','--evidence','--output','--approved-plan-sha','--predecessor-executor-sha'].includes(key)&&!Object.hasOwn(options,key)&&raw[i+1],
+  '--traffic-plan','--traffic-evidence','--kubeconfig','--context','--plan','--evidence','--output','--approved-plan-sha','--predecessor-executor-sha','--pull-registry'].includes(key)&&!Object.hasOwn(options,key)&&raw[i+1],
   'AUTHORITY_IMAGE_ARGUMENTS_REJECTED');options[key]=raw[++i];}
  requireValue(['nodes','plan','apply','status'].includes(phase),'AUTHORITY_IMAGE_ARGUMENTS_REJECTED');
  const common=['--kubeconfig','--context'];
@@ -167,7 +176,11 @@ export async function main(args,io={}){
   [...common,'--plan','--evidence',...(phase==='apply'?['--approved-plan-sha']:[])];
  const predecessorSHA=options['--predecessor-executor-sha'];
  requireValue(predecessorSHA===undefined||phase==='status'&&/^[a-f0-9]{40}$/.test(predecessorSHA),'AUTHORITY_IMAGE_ARGUMENTS_REJECTED');
- requireValue(required.every(key=>typeof options[key]==='string')&&Object.keys(options).every(key=>required.includes(key)||key==='--predecessor-executor-sha'),'AUTHORITY_IMAGE_ARGUMENTS_REJECTED');
+ const registryFlag=options['--pull-registry'];
+ const selectingRegistry=phase==='nodes'||phase==='plan';
+ requireValue((registryFlag===undefined||selectingRegistry&&selectedPullRegistry(registryFlag))&&
+  required.every(key=>typeof options[key]==='string')&&Object.keys(options).every(key=>
+   required.includes(key)||key==='--predecessor-executor-sha'||key==='--pull-registry'),'AUTHORITY_IMAGE_ARGUMENTS_REJECTED');
  const execute=(program,argv,input)=>{
   try{return (io.execFileSync??execFileSync)(program,argv,{input,encoding:'utf8',timeout:35000,maxBuffer:8<<20,stdio:['pipe','pipe','pipe'],
    env:Object.fromEntries(['HOME','PATH','LANG'].filter(key=>process.env[key]).map(key=>[key,process.env[key]]))});}
@@ -192,9 +205,12 @@ export async function main(args,io={}){
  const publicationPlanPath=retained?.publicationPlanPath??options['--publication-plan'],publicationEvidencePath=retained?.publicationEvidencePath??options['--publication-evidence'],buildPath=retained?.buildPath??options['--build'];
  const evidence={publicationPlan:readAuthorityPrivateJSON(publicationPlanPath),publicationEvidence:readAuthorityPrivateText(publicationEvidencePath).split('\n').filter(Boolean).map(parseAuthorityPrivateJSON)},build=readAuthorityPrivateJSON(buildPath);
  const contextHash=await (io.sourceArchiveHash??sourceArchiveHash)(sourceSHA,sourcePath);
- const source={...publisherImageSource(sourceSHA,evidence,build,contextHash),path:sourcePath,
+ const source={...publisherImageSource(sourceSHA,evidence,build,contextHash,retained?.source?.pullRegistry??registryFlag),path:sourcePath,
   dockerfileSHA256:createHash('sha256').update(readFileSync(`${sourcePath}/services/internal/internal-rpc-authority/Dockerfile`)).digest('hex')};
  const profile=retained?.targetProfile??readAuthorityPrivateJSON(options['--target']);
+ const published=evidence.publicationPlan;
+ requireValue(published.context===context&&published.clusterUID===profile.clusterUID&&published.namespaceUID===profile.namespaceUID,
+  'AUTHORITY_IMAGE_PUBLICATION_TARGET_CHANGED');
  const target=readCatalogTarget(profile,context,get);
  const freshNodes=()=>readPublisherImageNodes({source,imageRef:source.imageRef,targetProfile:profile,context},kube,execute);
  if(phase==='nodes'){

@@ -220,6 +220,10 @@ template/status/CRI digest и scheduling на квалифицированный
 `INTENT/PASS` evidence вместе с canonical `build.json`. Перед plan/apply заново
 проверяются public source archive и actual NodeUID/containerUID/CRI repoDigest.
 Readonly `nodes` не выполняет pull; root/operator отдельно квалифицирует image.
+Для внутреннего Service укажите `--pull-registry
+kodex-image-registry-pull.kodex-system.svc.cluster.local` в `nodes` и `plan`.
+`apply` и `status` читают адрес из закреплённого плана и сверяют exact CRI
+repo digest на каждом узле.
 CLI image не выбирается свободным override: последующие authority Jobs
 используют exact image обслуживаемого publisher.
 
