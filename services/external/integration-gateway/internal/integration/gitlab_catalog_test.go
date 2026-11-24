@@ -130,6 +130,9 @@ func gitLabExtendedResponse(t *testing.T, operation string, r *http.Request) (st
 		// The nested provider fields can exceed 64 KiB even though the typed projection is small.
 		// Вложенные поля провайдера могут превышать 64 КиБ, хотя типизированная проекция мала.
 		return list("/merge_requests", strings.TrimSuffix(mr, "}")+`,"metadata":{"description":"`+strings.Repeat("x", 96<<10)+`"}}`)
+	case "gitlab.merge_request.approval.read":
+		check("GET", "/merge_requests/3/approvals")
+		return `{"iid":3,"project_id":1,"approved":true,"approvals_required":0,"approvals_left":0,"approved_by":[]}`, true
 	case "gitlab.merge_request.update":
 		check("PUT", "/merge_requests/3")
 		return mr, true

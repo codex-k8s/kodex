@@ -2,6 +2,7 @@ package integrationpackage
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 )
 
@@ -16,6 +17,37 @@ func legacyGitLabPackage(t *testing.T) Package {
 	return previous
 }
 
+// TestGitLabGroupPredecessorKeepsExactCapabilities pins the SQL-compatible projection of 2.1.0 onto the previous group contract.
+// TestGitLabGroupPredecessorKeepsExactCapabilities закрепляет совместимую с SQL проекцию 2.1.0 на прежний групповой контракт.
+func TestGitLabGroupPredecessorKeepsExactCapabilities(t *testing.T) {
+	definitions, err := LoadShipped()
+	if err != nil {
+		t.Fatal(err)
+	}
+	current := definitions["gitlab"]
+	previous, ok := ResolveShippedRevision(current, "2.0.0", "ce63966754a8575e0139b7f2887a6d0e4a8516e7fcfc0e4c4d888f134c51499e")
+	if !ok || ValidateExecutableRevision(previous, current) != nil {
+		t.Fatal("previous scoped release lost its pinned execution")
+	}
+	const approvalRead = "gitlab.merge_request.approval.read"
+	approval, ok := current.Capability(approvalRead)
+	if !ok || approval.Risk != "READ" || current.Digest != "ce4be39772c9051cedf9ec4f5ed41d38d0ded0e5352befa3e79576558ba07bbb" {
+		t.Fatal("current digest or approval-read classification changed")
+	}
+	retained := make([]Capability, 0, len(previous.Spec.Capabilities))
+	for _, entry := range current.Spec.Capabilities {
+		if entry.Key != approvalRead {
+			retained = append(retained, entry)
+		}
+	}
+	if !reflect.DeepEqual(retained, previous.Spec.Capabilities) {
+		t.Fatal("removing the new read operation must reproduce the previous capabilities exactly")
+	}
+	if _, ok := ResolveShippedRevision(current, "2.0.0", current.Digest); ok {
+		t.Fatal("previous version accepted successor authority")
+	}
+}
+
 // TestGitLabHistoricalRevisionDoesNotInheritScopes preserves single-project pins and rejects synthetic old versions paired with new permission authority.
 // TestGitLabHistoricalRevisionDoesNotInheritScopes сохраняет single-project pins и отклоняет synthetic old versions с новыми полномочиями.
 func TestGitLabHistoricalRevisionDoesNotInheritScopes(t *testing.T) {
@@ -25,7 +57,7 @@ func TestGitLabHistoricalRevisionDoesNotInheritScopes(t *testing.T) {
 	}
 	current := definitions["gitlab"]
 	previous, err := Parse(gitLabOneTwoOneCompatibility)
-	if err != nil || current.Metadata.Version != "2.0.0" || previous.Metadata.Version != "1.2.1" {
+	if err != nil || current.Metadata.Version != "2.1.0" || previous.Metadata.Version != "1.2.1" {
 		t.Fatal("GitLab exact compatibility fixture unavailable")
 	}
 	resolved, ok := ResolveShippedRevision(current, previous.Metadata.Version, previous.Digest)

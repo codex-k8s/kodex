@@ -2,7 +2,7 @@ apiVersion: integrations.kodex.io/v1
 kind: IntegrationPackage
 metadata:
   key: gitlab
-  version: 2.0.0
+  version: 2.1.0
   origin: SHIPPED
 spec:
   name: GitLab
@@ -890,6 +890,33 @@ spec:
           maxAttempts: 3,
           retryBackoffMilliseconds: 250,
         }
+    - key: gitlab.merge_request.approval.read
+      name: Прочитать согласования merge request
+      description: Возвращает состояние и счётчики согласований по GitLab для одного MR. Число одобрений и готовность к слиянию требуют раздельной проверки.
+      operation: gitlab.merge_request.approval.read
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        kind: GITLAB_SCOPE
+        connectionFields: [base_url, scope_kind, project_path, group_path, include_subgroups]
+      approvalScope:
+        name: Merge request
+        requiredInputPaths: [/project_id, /project_path, /merge_request_iid]
+        limits: { durationSeconds: 604800, maxEffects: 10000 }
+        allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE]
+      inputFields:
+        - { key: project_path, type: STRING, format: IDENTIFIER, required: true, maximumLength: 255 }
+        - { key: project_id, type: INTEGER, required: true, minimum: 1, maximum: 9007199254740991 }
+        - { key: merge_request_iid, type: INTEGER, required: true, minimum: 1, maximum: 2147483647 }
+      outputFields:
+        - { key: project_id, type: INTEGER, required: true, minimum: 1, maximum: 9007199254740991 }
+        - { key: merge_request_iid, type: INTEGER, required: true, minimum: 1, maximum: 2147483647 }
+        - { key: approved, type: BOOLEAN, required: true }
+        - { key: approvals_required, type: INTEGER, minimum: 0, maximum: 2147483647 }
+        - { key: approvals_left, type: INTEGER, minimum: 0, maximum: 2147483647 }
+        - { key: approver_count, type: INTEGER, minimum: 0, maximum: 2147483647 }
+      execution: { idempotency: READ_ONLY, timeoutSeconds: 20, maxAttempts: 3, retryBackoffMilliseconds: 250 }
     - key: gitlab.merge_request.discussion.create
       name: Добавить комментарий к merge request
       description: Публикует один идемпотентный комментарий с настроенным режимом подтверждения.

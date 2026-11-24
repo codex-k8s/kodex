@@ -181,6 +181,8 @@ func (adapter *Adapter) executeGitLab(
 		return adapter.createGitLabIssue(ctx, request, capability, configuration, canonicalInput, projectPath)
 	case "gitlab.merge_request.read", "gitlab.merge_request.create":
 		return adapter.gitLabMergeRequestOperation(ctx, request, capability, configuration, canonicalInput, projectPath)
+	case "gitlab.merge_request.approval.read":
+		return adapter.readGitLabMergeRequestApprovals(ctx, request, capability, configuration, canonicalInput, projectPath)
 	case "gitlab.merge_request.discussion.create":
 		return adapter.createGitLabDiscussion(ctx, request, capability, configuration, canonicalInput, projectPath)
 	case "gitlab.branch.create":
@@ -463,6 +465,52 @@ func (adapter *Adapter) createGitLabDiscussion(ctx context.Context, request Requ
 	return providerResult(request, "gitlab-note:"+strconv.FormatInt(provider.ID, 10), map[string]any{
 		"note_id": provider.ID, "merge_request_iid": input.MergeRequestIID,
 	})
+}
+
+// readGitLabMergeRequestApprovals reads the status of one resolved project and MR.
+// It preserves unknown counters and omits the provider's user details.
+// readGitLabMergeRequestApprovals читает состояние согласований одного проверенного проекта и MR.
+// Неизвестные счётчики остаются неизвестными, сведения о пользователях не выдаются.
+func (adapter *Adapter) readGitLabMergeRequestApprovals(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string, raw []byte, projectPath string) (Result, error) {
+	var input struct {
+		IID int64 `json:"merge_request_iid"`
+	}
+	projectID, err := strconv.ParseInt(configuration[gitLabResolvedProjectKey], 10, 64)
+	if err != nil || projectID < 1 || decodeProviderJSON(raw, &input) != nil || input.IID < 1 {
+		return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+	}
+	iid := strconv.FormatInt(input.IID, 10)
+	body, err := adapter.gitLabJSON(ctx, request, capability, configuration, http.MethodGet, projectPath+"/merge_requests/"+iid+"/approvals", nil, nil, "")
+	if err != nil {
+		return Result{}, err
+	}
+	var provider struct {
+		IID               int64       `json:"iid"`
+		ProjectID         int64       `json:"project_id"`
+		Approved          *bool       `json:"approved"`
+		ApprovalsRequired *int64      `json:"approvals_required"`
+		ApprovalsLeft     *int64      `json:"approvals_left"`
+		ApprovedBy        []*struct{} `json:"approved_by"`
+	}
+	if decodeProviderJSON(body, &provider) != nil || provider.IID != input.IID || provider.ProjectID != projectID || provider.Approved == nil {
+		return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+	}
+	output := map[string]any{"project_id": projectID, "merge_request_iid": input.IID, "approved": *provider.Approved}
+	if provider.ApprovalsRequired != nil {
+		output["approvals_required"] = *provider.ApprovalsRequired
+	}
+	if provider.ApprovalsLeft != nil {
+		output["approvals_left"] = *provider.ApprovalsLeft
+	}
+	if provider.ApprovedBy != nil {
+		for _, approver := range provider.ApprovedBy {
+			if approver == nil {
+				return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+			}
+		}
+		output["approver_count"] = len(provider.ApprovedBy)
+	}
+	return providerResult(request, "gitlab-mr-approvals:"+strconv.FormatInt(projectID, 10)+":"+iid, output)
 }
 
 // gitLabJSON forwards the selected method, scoped path, query, payload and effect key through the common bearer-authenticated provider boundary using the supplied capability.

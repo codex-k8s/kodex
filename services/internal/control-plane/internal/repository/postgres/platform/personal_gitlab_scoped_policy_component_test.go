@@ -17,7 +17,7 @@ import (
 // TestPersonalGitLabScopedPolicyComponent proves each resource mode and selected policy through owner verification, launch, immutable personal pin, optional human gate, claim and one-time Begin; provider effects remain synthetic and unexecuted.
 // TestPersonalGitLabScopedPolicyComponent проверяет каждый resource mode и selected policy через owner verification, launch, immutable personal pin, optional human gate, claim и one-time Begin; provider effects остаются synthetic и не исполняются.
 func TestPersonalGitLabScopedPolicyComponent(t *testing.T) {
-	for _, scenario := range []struct{ kind, policy, change string }{{"PROJECT", "NONE", ""}, {"GROUP", "HUMAN_EACH_EFFECT", ""}, {"INSTANCE", "HUMAN_SCOPED", ""}, {"GROUP", "HUMAN_EACH_EFFECT", "REVOKE"}, {"GROUP", "HUMAN_EACH_EFFECT", "ROTATE"}} {
+	for _, scenario := range []struct{ kind, policy, change string }{{"PROJECT", "NONE", ""}, {"GROUP", "NONE", ""}, {"GROUP", "HUMAN_EACH_EFFECT", ""}, {"INSTANCE", "HUMAN_SCOPED", ""}, {"GROUP", "HUMAN_EACH_EFFECT", "REVOKE"}, {"GROUP", "HUMAN_EACH_EFFECT", "ROTATE"}} {
 		t.Run(scenario.kind+"/"+scenario.policy+"/"+scenario.change, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
 			defer cancel()
@@ -81,7 +81,16 @@ func TestPersonalGitLabScopedPolicyComponent(t *testing.T) {
 				paths = capability.ApprovalScope.RequiredInputPaths
 			}
 			connection = execute(command.ChangeIntegrationGrant, owner, "grant", &connection.Version, command.IntegrationGrantInput{ConnectionRef: connection.Ref, AgentRef: agent.Ref, CapabilityKey: operation, ApprovalPolicy: scenario.policy, ApprovalScopePaths: paths, Enabled: true}).Connection
-			readCapability, _ := repository.integrationDefinitions["gitlab"].Capability("gitlab.project.metadata.read")
+			readOperation := "gitlab.project.metadata.read"
+			readInput := map[string]any{"project_path": "fixture/project", "project_id": 7}
+			if scenario.kind == "GROUP" && scenario.policy == "NONE" {
+				readOperation = "gitlab.merge_request.approval.read"
+				readInput["merge_request_iid"] = 12
+			}
+			readCapability, ok := repository.integrationDefinitions["gitlab"].Capability(readOperation)
+			if !ok {
+				t.Fatal("scoped read capability is unavailable")
+			}
 			readPaths := []string{}
 			if scenario.policy == "HUMAN_SCOPED" {
 				readPaths = readCapability.ApprovalScope.RequiredInputPaths
@@ -164,7 +173,7 @@ func TestPersonalGitLabScopedPolicyComponent(t *testing.T) {
 			if repeated, err := rpc.BeginPersonalIntegrationInvocation(personalRuntimeRPCContext(ctx), request); err == nil && repeated.GetAdmitted() {
 				t.Fatal("scoped personal Begin repeated admission")
 			}
-			readInvocation, err := service.ResolveIntegrationInvocation(ctx, runtimeWorker, map[string]string{"run_ref": run.Ref, "node_ref": stringMap(runtime[0], "nodeRef"), "connection_ref": connection.Ref, "capability_key": readCapability.Key, "idempotency_key": "scoped-personal-read"}, map[string]any{"project_path": "fixture/project", "project_id": 7})
+			readInvocation, err := service.ResolveIntegrationInvocation(ctx, runtimeWorker, map[string]string{"run_ref": run.Ref, "node_ref": stringMap(runtime[0], "nodeRef"), "connection_ref": connection.Ref, "capability_key": readCapability.Key, "idempotency_key": "scoped-personal-read"}, readInput)
 			if err != nil || stringMap(readInvocation, "state") != expected {
 				t.Fatal("READ selected human policy ignored or rejected", err)
 			}

@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: 'GitLab Self-Managed: ограниченный REST API v4'
-  version: 1.2.0
+  version: 1.3.0
   description: Самостоятельно описанный subset по официальным docs/source v19.2.9.
     Только необходимые поля и операции; это не официальный полный OpenAPI и не grant.
 servers:
@@ -23,12 +23,27 @@ x-provenance:
   - https://github.com/gitlabhq/gitlabhq/blob/v19.2.9/lib/api/entities/personal_access_token.rb
   - https://github.com/gitlabhq/gitlabhq/blob/v19.2.9/doc/api/issues.md
   - https://github.com/gitlabhq/gitlabhq/blob/v19.2.9/doc/api/merge_requests.md
+  - https://github.com/gitlabhq/gitlabhq/blob/v19.2.9/doc/api/merge_request_approvals.md
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
   schemas:
+    MergeRequestApprovals:
+      type: object
+      required: [project_id, iid, approved]
+      additionalProperties: true
+      properties:
+        project_id: {type: integer, format: int64, minimum: 1, maximum: 9007199254740991}
+        iid: {type: integer, format: int64, minimum: 1, maximum: 2147483647}
+        approved: {type: boolean}
+        approvals_required: {type: integer, format: int64, minimum: 0, maximum: 2147483647, nullable: true}
+        approvals_left: {type: integer, format: int64, minimum: 0, maximum: 2147483647, nullable: true}
+        approved_by:
+          type: array
+          nullable: true
+          items: {type: object, additionalProperties: true}
     Version:
       type: object
       properties:
@@ -961,6 +976,22 @@ paths:
               schema:
                 type: object
                 additionalProperties: true
+  /projects/{project}/merge_requests/{merge_request_iid}/approvals:
+    get:
+      operationId: gitlab.merge_request.approval.read
+      description: Читает согласования одного MR после проверки числового ID проекта и IID. Имена из approved_by остаются у провайдера.
+      parameters:
+      - $ref: '#/components/parameters/Project'
+      - $ref: '#/components/parameters/MergeRequestIID'
+      responses:
+        '200':
+          description: Наблюдаемое состояние согласований по правилам редакции GitLab.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MergeRequestApprovals'
+        default:
+          description: Ошибка или недостаточно прав для чтения согласований.
   /projects/{project}/pipelines/{pipeline_id}:
     get:
       operationId: gitlab.pipeline.read

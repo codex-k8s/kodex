@@ -192,7 +192,7 @@ func TestPersonalCredentialProcessResumeChild(t *testing.T) {
 	repository := newSyntheticRuntimeComponentRepository(t, ctx, pool, func(r *Repository) {
 		if state.GitLabDefinitionVersion == "1.2.1" {
 			r.integrationDefinitions["gitlab"] = historicalGitLabPersonalFixture(t, r.integrationDefinitions["gitlab"])
-		} else if state.GitLabDefinitionVersion != "2.0.0" {
+		} else if state.GitLabDefinitionVersion != r.integrationDefinitions["gitlab"].Metadata.Version {
 			t.Fatal("unknown process fixture GitLab version")
 		}
 	})
