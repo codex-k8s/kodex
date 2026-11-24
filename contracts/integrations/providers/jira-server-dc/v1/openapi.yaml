@@ -94,6 +94,14 @@ components:
               - key
             summary:
               type: string
+            assignee:
+              type: object
+              nullable: true
+              properties:
+                name:
+                  type: string
+              required: [name]
+              additionalProperties: true
             description:
               type: string
               nullable: true
@@ -504,6 +512,7 @@ paths:
   /rest/api/2/search:
     get:
       operationId: jira.issue.search
+      description: Шлюз закрепляет проект в JQL и при необходимости добавляет фильтры по тексту и логину исполнителя.
       parameters:
       - name: jql
         in: query

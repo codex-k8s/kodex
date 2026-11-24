@@ -237,3 +237,22 @@ func TestAtlassianServerAllDeclaredOperations(t *testing.T) {
 		t.Run(key, func(t *testing.T) { testAtlassianServerCapabilities(t, key) })
 	}
 }
+
+// TestConfluenceServerListsSpaceWithoutTitle verifies that the configured space is mandatory while a title is optional.
+// TestConfluenceServerListsSpaceWithoutTitle проверяет обязательную область пространства при отсутствии фильтра заголовка.
+func TestConfluenceServerListsSpaceWithoutTitle(t *testing.T) {
+	adapter := testAdapter(t)
+	credential := testCredential(t, adapter, "synthetic-server-token")
+	operation := "confluence.page.search"
+	request := atlassianServerInvocation(t, adapter, confluenceServerDefinition, operation, map[string]any{"limit": 2}, credential)
+	adapter.providerHTTPClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		query := r.URL.Query()
+		if query.Has("title") || query.Get("spaceKey") != "DEMO" || query.Get("type") != "page" || query.Get("status") != "current" {
+			t.Fatalf("unexpected space selectors: %v", query)
+		}
+		return atlassianServerResponse(t, request, r), nil
+	})}
+	if _, err := adapter.Execute(t.Context(), request); err != nil {
+		t.Fatal(err)
+	}
+}

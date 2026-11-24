@@ -2,7 +2,7 @@ apiVersion: integrations.kodex.io/v1
 kind: IntegrationPackage
 metadata:
   key: jira-server-dc
-  version: 1.2.0
+  version: 1.3.0
   origin: SHIPPED
 spec:
   name: Jira Server / Data Center
@@ -149,7 +149,7 @@ spec:
       retryBackoffMilliseconds: 250
   - key: jira.issue.search
     name: Найти задачи
-    description: Поиск по тексту только в одном настроенном проекте; raw JQL не принимается.
+    description: Постраничный список задач настроенного проекта с необязательными фильтрами по тексту и логину исполнителя Jira. Произвольный JQL не принимается.
     operation: jira.issue.search
     risk: READ
     approvalPolicy: NONE
@@ -169,8 +169,13 @@ spec:
     - key: text
       type: STRING
       format: PLAIN
-      required: true
+      required: false
       maximumLength: 1024
+    - key: assignee_username
+      type: STRING
+      format: PLAIN
+      required: false
+      maximumLength: 255
     - key: limit
       type: INTEGER
       required: false

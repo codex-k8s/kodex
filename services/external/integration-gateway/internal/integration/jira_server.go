@@ -22,6 +22,7 @@ type jiraServerIssue struct {
 		Labels      []string
 		Project     struct{ Key string }
 		Status      struct{ Name string }
+		Assignee    *struct{ Name string }
 	}
 }
 
@@ -112,8 +113,8 @@ func (adapter *Adapter) readJiraServerIssue(ctx context.Context, request Request
 
 // jiraServerSearch fetches one explicitly bounded v2 page and verifies provider metadata and every returned project.
 // jiraServerSearch получает одну ограниченную v2 страницу и проверяет metadata и проект каждой задачи.
-func (adapter *Adapter) jiraServerSearch(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string, jql string, offset, limit int) (jiraServerSearchPage, string, error) {
-	query := url.Values{"jql": {jql}, "startAt": {strconv.Itoa(offset)}, "maxResults": {strconv.Itoa(limit)}, "fields": {"project,summary,status,description,labels"}}
+func (adapter *Adapter) jiraServerSearch(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string, jql, fields string, offset, limit int) (jiraServerSearchPage, string, error) {
+	query := url.Values{"jql": {jql}, "startAt": {strconv.Itoa(offset)}, "maxResults": {strconv.Itoa(limit)}, "fields": {fields}}
 	body, err := adapter.jiraServerJSON(ctx, request, capability, configuration, http.MethodGet, "/search", query, nil, "")
 	if err != nil {
 		return jiraServerSearchPage{}, "", err
@@ -162,8 +163,9 @@ func (adapter *Adapter) executeJiraServer(ctx context.Context, request Request, 
 		return providerResult(request, "jira-project:"+value["id"].(string), value)
 	case "jira.issue.search":
 		var value struct {
-			Text, Cursor string
-			Limit        int
+			Text, Cursor     string
+			AssigneeUsername string `json:"assignee_username"`
+			Limit            int
 		}
 		if decodeProviderJSON(input, &value) != nil {
 			return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
@@ -176,14 +178,27 @@ func (adapter *Adapter) executeJiraServer(ctx context.Context, request Request, 
 		if err != nil || !valid || value.Limit < 1 || value.Limit > 50 {
 			return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
 		}
-		jql := fmt.Sprintf(`project = "%s" AND text ~ "%s" ORDER BY key ASC`, configuration["project_key"], text)
-		page, next, err := adapter.jiraServerSearch(ctx, request, capability, configuration, jql, offset, value.Limit)
+		jql := fmt.Sprintf(`project = "%s"`, configuration["project_key"])
+		if text != "" {
+			jql += fmt.Sprintf(` AND text ~ "%s"`, text)
+		}
+		fields := "project,summary,status"
+		if value.AssigneeUsername != "" {
+			assignee, valid := jiraServerLiteral(value.AssigneeUsername)
+			if !valid || strings.TrimSpace(value.AssigneeUsername) == "" || len(value.AssigneeUsername) > 255 {
+				return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+			}
+			jql += fmt.Sprintf(` AND assignee = "%s"`, assignee)
+			fields += ",assignee"
+		}
+		page, next, err := adapter.jiraServerSearch(ctx, request, capability, configuration, jql+" ORDER BY key ASC", fields, offset, value.Limit)
 		if err != nil {
 			return Result{}, err
 		}
 		issues := make([]map[string]string, 0, len(page.Issues))
 		for _, issue := range page.Issues {
-			if issue.Fields.Summary == "" || issue.Fields.Status.Name == "" {
+			if issue.Fields.Summary == "" || issue.Fields.Status.Name == "" || value.AssigneeUsername != "" &&
+				(issue.Fields.Assignee == nil || !strings.EqualFold(issue.Fields.Assignee.Name, value.AssigneeUsername)) {
 				return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
 			}
 			issues = append(issues, map[string]string{"key": issue.Key, "summary": issue.Fields.Summary, "status": issue.Fields.Status.Name})
@@ -258,7 +273,7 @@ func (adapter *Adapter) createJiraServerIssue(ctx context.Context, request Reque
 		return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
 	}
 	jql := fmt.Sprintf(`project = "%s" AND labels = "%s"`, configuration["project_key"], escaped)
-	page, _, err := adapter.jiraServerSearch(ctx, request, capability, configuration, jql, 0, 2)
+	page, _, err := adapter.jiraServerSearch(ctx, request, capability, configuration, jql, "project,summary,status,description,labels", 0, 2)
 	if err != nil {
 		return Result{}, err
 	}

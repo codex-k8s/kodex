@@ -74,7 +74,9 @@ func TestPersonalProbeFiniteAdmissionKeepsOriginalAndFreshMinimum(t *testing.T) 
 		}
 		fixture.verifyContext = func(ctx context.Context) {
 			deadline, ok := ctx.Deadline()
-			if !ok || deadline.After(short) || ctx.Err() != nil {
+			// The lease arrives as a protobuf wall-clock timestamp, independent of local monotonic sampling.
+			// Срок аренды приходит как wall-clock timestamp, независимо от локальных монотонных замеров.
+			if !ok || deadline.Round(0).After(short.Round(0)) || ctx.Err() != nil {
 				t.Fatal("probe context lost the original/fresh finite minimum", restored, deadline)
 			}
 		}

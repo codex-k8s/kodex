@@ -195,7 +195,10 @@ func (adapter *Adapter) searchConfluenceServerPages(ctx context.Context, request
 		expand += ",history"
 	}
 	query := url.Values{"spaceKey": {configuration["space_key"]}, "type": {"page"}, "status": {"current"},
-		"title": {title}, "start": {strconv.Itoa(offset)}, "limit": {strconv.Itoa(limit)}, "expand": {expand}}
+		"start": {strconv.Itoa(offset)}, "limit": {strconv.Itoa(limit)}, "expand": {expand}}
+	if title != "" {
+		query.Set("title", title)
+	}
 	body, err := adapter.confluenceServerJSON(ctx, request, capability, configuration, http.MethodGet, "/content", query, nil, "")
 	if err != nil {
 		return confluenceServerPages{}, "", err
