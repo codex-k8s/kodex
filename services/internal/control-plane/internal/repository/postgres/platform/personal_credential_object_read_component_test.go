@@ -16,10 +16,10 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// assertPersonalObjectReadPermissions exercises all nine minimal object READs through native
+// assertPersonalObjectReadPermissions exercises registered object READs through native
 // verification, launch, DB profile guard, worker claim and Begin RPC. Metadata proofs remain
 // metadata-only; synthetic object refusals create no effect receipt or global permission proof.
-// assertPersonalObjectReadPermissions проверяет девять минимальных object READ через native
+// assertPersonalObjectReadPermissions проверяет зарегистрированные object READ через native
 // verification, launch, DB profile guard, worker claim и Begin RPC. Metadata proofs остаются
 // metadata-only; synthetic отказы объекта не создают effect receipt или глобальное право.
 func assertPersonalObjectReadPermissions(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, owner value.Principal) {
@@ -40,11 +40,21 @@ func assertPersonalObjectReadPermissions(t *testing.T, ctx context.Context, repo
 			proofs := []string{"gitlab.project.metadata.read"}
 			if definition == "jira-server-dc" {
 				configuration = map[string]any{"base_url": "https://issues.example.invalid", "context_path": "/tracker", "project_key": "DEMO", "issue_type": "Task", "auth_scheme": "BEARER"}
-				inputs = map[string]map[string]any{"jira.issue.search": {"text": "fixture"}, "jira.issue.read": {"issue_key": "DEMO-1"}, "jira.issue.transition.list": {"issue_key": "DEMO-1"}}
+				inputs = map[string]map[string]any{
+					"jira.issue.search":          {"text": "fixture"},
+					"jira.issue.read":            {"issue_key": "DEMO-1"},
+					"jira.issue.transition.list": {"issue_key": "DEMO-1"},
+					"jira.issue.comment.list":    {"issue_key": "DEMO-1"},
+					"jira.issue.comment.read":    {"issue_key": "DEMO-1", "comment_id": "100"},
+				}
 				proofs = []string{"jira.project.read", "jira.identity.read"}
 			} else if definition == "confluence-server-dc" {
 				configuration = map[string]any{"base_url": "https://docs.example.invalid", "context_path": "/docs", "space_key": "DEMO", "auth_scheme": "BEARER"}
-				inputs = map[string]map[string]any{"confluence.page.search": {"title": "Fixture"}, "confluence.page.read": {"page_id": "101"}}
+				inputs = map[string]map[string]any{
+					"confluence.page.search":       {"title": "Fixture"},
+					"confluence.page.read":         {"page_id": "101"},
+					"confluence.page.comment.list": {"page_id": "101"},
+				}
 				proofs = []string{"confluence.space.read", "confluence.identity.read"}
 			}
 			connection := execute(command.CreateConnection, owner, "connection", nil, command.ConnectionInput{DefinitionKey: definition, Name: "Synthetic personal object reader " + definition, PublicConfiguration: configuration}).Connection
@@ -89,7 +99,11 @@ func assertPersonalObjectReadPermissions(t *testing.T, ctx context.Context, repo
 			}
 			slices.Sort(operations)
 			for _, operation := range operations {
-				connection = execute(command.ChangeIntegrationGrant, owner, "grant-"+operation, &connection.Version, command.IntegrationGrantInput{ConnectionRef: connection.Ref, AgentRef: agent.Ref, CapabilityKey: operation, ApprovalPolicy: "NONE", Enabled: true}).Connection
+				policy := "NONE"
+				if operation == "jira.issue.comment.read" {
+					policy = "HUMAN_EACH_EFFECT"
+				}
+				connection = execute(command.ChangeIntegrationGrant, owner, "grant-"+operation, &connection.Version, command.IntegrationGrantInput{ConnectionRef: connection.Ref, AgentRef: agent.Ref, CapabilityKey: operation, ApprovalPolicy: policy, Enabled: true}).Connection
 			}
 			run := execute(command.LaunchRun, owner, "launch", nil, command.LaunchRunInput{ProjectRef: project.Ref, Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref}, Task: "Read only selected synthetic objects"}).Run
 			worker := resolvedTestPrincipal(t, ctx, repository, port.ProofPrincipalInput{ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation", CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.claim"}, "runtime-controller")
@@ -102,7 +116,21 @@ func assertPersonalObjectReadPermissions(t *testing.T, ctx context.Context, repo
 			for _, operation := range operations {
 				contract, _ := integrationpackage.CredentialResourcePermissionContractFor(definition, operation)
 				invocation, err := service.ResolveIntegrationInvocation(ctx, worker, map[string]string{"run_ref": run.Ref, "node_ref": stringMap(leases[0], "nodeRef"), "connection_ref": connection.Ref, "capability_key": operation, "idempotency_key": prefix + operation}, inputs[operation])
-				if err != nil || stringMap(invocation, "state") != "READY" || stringMap(invocation, "gateRef") != "" {
+				if err != nil {
+					t.Fatal("object reader invocation was rejected", operation, err)
+				}
+				if operation == "jira.issue.comment.read" {
+					gateRef := stringMap(invocation, "gateRef")
+					unapproved, err := service.ClaimIntegrationInvocations(ctx, gateway, prefix+"gateway", 1)
+					if gateRef == "" || err != nil || len(unapproved) != 0 {
+						t.Fatal("configured comment read approval was bypassed", err)
+					}
+					gate, err := service.GetOwnerGate(ctx, owner, gateRef)
+					if err != nil {
+						t.Fatal("read comment gate", err)
+					}
+					execute(command.ResolveOwnerGate, owner, "approve-comment-read", &gate.Version, command.GateResolutionInput{GateRef: gate.Ref, Decision: "APPROVE"})
+				} else if stringMap(invocation, "state") != "READY" || stringMap(invocation, "gateRef") != "" {
 					t.Fatal("object reader did not retain READ/NONE admission", err)
 				}
 				for _, wrong := range []string{"", integrationpackage.CredentialResourcePermissionConfluencePageUpdateV1} {

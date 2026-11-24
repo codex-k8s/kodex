@@ -13,7 +13,7 @@ func TestCredentialObjectReadContracts(t *testing.T) {
 	}
 	for key, operations := range map[string][]string{
 		"gitlab":               {"gitlab.repository.file.read", "gitlab.issue.read", "gitlab.merge_request.read", "gitlab.pipeline.read"},
-		"jira-server-dc":       {"jira.issue.search", "jira.issue.read", "jira.issue.transition.list"},
+		"jira-server-dc":       {"jira.issue.search", "jira.issue.read", "jira.issue.transition.list", "jira.issue.comment.list", "jira.issue.comment.read"},
 		"confluence-server-dc": {"confluence.page.search", "confluence.page.read"},
 	} {
 		definition := definitions[key]

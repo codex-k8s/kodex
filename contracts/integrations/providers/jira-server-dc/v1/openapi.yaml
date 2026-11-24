@@ -815,9 +815,8 @@ paths:
               required:
               - body
     get:
-      operationId: jira.recovery.comments.read
-      description: Только internal recovery prerequisite; в Definition capabilities
-        не публикуется.
+      operationId: jira.issue.comment.list
+      description: Видимые комментарии к задаче в настроенном проекте. Этот маршрут также используется для сверки эффекта записи.
       parameters:
       - name: issueKey
         in: path
@@ -969,8 +968,8 @@ paths:
               - transition
   /rest/api/2/issue/{issueKey}/comment/{commentId}:
     get:
-      operationId: jira.recovery.comment.read
-      description: Только internal addressed recovery read.
+      operationId: jira.issue.comment.read
+      description: Видимый комментарий по ключу задачи и ID комментария. Используется также для адресной сверки эффекта.
       parameters:
       - name: issueKey
         in: path

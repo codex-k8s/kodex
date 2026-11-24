@@ -7,6 +7,9 @@ package integrationpackage
 const CredentialResourcePermissionConfluencePageUpdateV1 = "CONFLUENCE_SERVER_PAGE_UPDATE_V1"
 
 const (
+	// CredentialResourcePermissionConfluenceContentCreateV1 confines creation to the configured space and verifies any supplied parent. Confluence decides write permissions on POST.
+	// CredentialResourcePermissionConfluenceContentCreateV1 ограничивает создание заданным пространством и проверяет родителя, если он задан. Право записи определяет Confluence при POST.
+	CredentialResourcePermissionConfluenceContentCreateV1 = "CONFLUENCE_SERVER_CONTENT_CREATE_V1"
 	// CredentialResourcePermissionGitLabIssueCreateV1 requires current token/project checks before
 	// one approved issue POST, without converting metadata into a reusable global WRITE proof.
 	// CredentialResourcePermissionGitLabIssueCreateV1 требует текущие token/project checks перед
@@ -75,6 +78,10 @@ func CredentialResourcePermissionContractFor(definitionKey, capabilityKey string
 	}
 	if definitionKey == "confluence-server-dc" && capabilityKey == "confluence.page.update" {
 		return CredentialResourcePermissionContract{Profile: CredentialResourcePermissionConfluencePageUpdateV1,
+			Operation: capabilityKey, ResourceKind: "CONFLUENCE_SPACE", Risk: "WRITE", ApprovalPolicy: "HUMAN_EACH_EFFECT", ReadCapabilities: []string{"confluence.space.read", "confluence.identity.read"}}, true
+	}
+	if definitionKey == "confluence-server-dc" && (capabilityKey == "confluence.page.comment.create" || capabilityKey == "confluence.page.create") {
+		return CredentialResourcePermissionContract{Profile: CredentialResourcePermissionConfluenceContentCreateV1,
 			Operation: capabilityKey, ResourceKind: "CONFLUENCE_SPACE", Risk: "WRITE", ApprovalPolicy: "HUMAN_EACH_EFFECT", ReadCapabilities: []string{"confluence.space.read", "confluence.identity.read"}}, true
 	}
 	if definitionKey == "jira-server-dc" {

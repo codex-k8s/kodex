@@ -18,6 +18,10 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 )
 
+// maximumTypedListWireBytes bounds opted-in native list bodies independently of their final JSON projection.
+// maximumTypedListWireBytes ограничивает явно выбранные native-списки до проекции итогового JSON.
+const maximumTypedListWireBytes = 512 << 10
+
 // providerCall contains the validated provider binding, projected credential reference and bounded payload selected by a typed adapter, not an arbitrary external URL command.
 // RU: providerCall содержит проверенную provider-привязку, ссылку credential и ограниченный payload типизированного адаптера, а не произвольную внешнюю URL-команду.
 // JSON and multipart bodies are mutually exclusive; Client optionally selects an already configured specialized transport.
@@ -31,7 +35,10 @@ type providerCall struct {
 	lokiRulerYAML []byte
 	// tenantHeader/tenantID carry only server-selected routing context, never evidence of tenant isolation.
 	// tenantHeader/tenantID содержат только выбранный сервером routing context, не доказательство tenant isolation.
-	tenantHeader, tenantID                                                                string
+	tenantHeader, tenantID string
+	// responseBodyLimit is a fixed opt-in budget for a typed adapter's GET before output projection.
+	// responseBodyLimit — явный фиксированный бюджет типизированного GET до проекции результата.
+	responseBodyLimit                                                                     int
 	permissionEffect                                                                      *permissionEffectObservation
 	BaseURL, Method, Path, AuthScheme, AuthHeader, Username, EffectKey, IdempotencyHeader string
 	Query                                                                                 url.Values
@@ -78,6 +85,14 @@ func (adapter *Adapter) callProviderResponse(ctx context.Context, call providerC
 		(call.AuthScheme != binding.AuthScheme || call.AuthHeader != binding.AuthHeader ||
 			call.IdempotencyHeader != binding.IdempotencyHeader) {
 		return nil, &SafeError{Code: providerConfigurationInvalidCode}
+	}
+	responseLimit := maximumResponseBytes
+	if call.responseBodyLimit != 0 {
+		if call.Method != http.MethodGet || call.Capability.Risk != "READ" || call.Capability.OpenAPI != nil ||
+			call.responseBodyLimit < maximumResponseBytes || call.responseBodyLimit > maximumTypedListWireBytes {
+			return nil, &SafeError{Code: providerConfigurationInvalidCode}
+		}
+		responseLimit = call.responseBodyLimit
 	}
 	var credential []byte
 	if call.AuthScheme == "NONE" {
@@ -229,7 +244,7 @@ func (adapter *Adapter) callProviderResponse(ctx context.Context, call providerC
 			}
 			return nil, &SafeError{Code: providerUnavailableCode}
 		}
-		responseBody, readErr := readBoundedResponse(response.Body)
+		responseBody, readErr := readBoundedResponse(response.Body, responseLimit)
 		_ = response.Body.Close()
 		cancel()
 		if readErr != nil {

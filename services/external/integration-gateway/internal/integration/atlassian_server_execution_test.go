@@ -24,6 +24,10 @@ func atlassianServerInput(operation string) map[string]any {
 		return map[string]any{"summary": "Fixture", "description": "body"}
 	case "jira.issue.comment.write":
 		return map[string]any{"issue_key": "DEMO-1", "body": "Comment"}
+	case "jira.issue.comment.list":
+		return map[string]any{"issue_key": "DEMO-1", "limit": 2}
+	case "jira.issue.comment.read":
+		return map[string]any{"issue_key": "DEMO-1", "comment_id": "3"}
 	case "jira.issue.transition.apply":
 		return map[string]any{"issue_key": "DEMO-1", "transition_id": "11"}
 	case "confluence.page.search":
@@ -34,6 +38,10 @@ func atlassianServerInput(operation string) map[string]any {
 		return map[string]any{"title": "New fixture", "body": "<p>body</p>"}
 	case "confluence.page.update":
 		return map[string]any{"page_id": "101", "expected_version": 2, "title": "Updated fixture", "body": "<p>new</p>"}
+	case "confluence.page.comment.list":
+		return map[string]any{"page_id": "101", "limit": 2}
+	case "confluence.page.comment.create":
+		return map[string]any{"page_id": "101", "body": "Comment <not markup>"}
 	default:
 		return map[string]any{}
 	}
@@ -140,6 +148,10 @@ func atlassianServerResponse(t *testing.T, invocation Request, request *http.Req
 				t.Fatal("Server comment body/effect changed")
 			}
 			value, status = map[string]string{"id": "3"}, http.StatusCreated
+		case request.Method == http.MethodGet && path == "/issue/DEMO-1/comment":
+			value = map[string]any{"startAt": 0, "maxResults": 2, "total": 3, "comments": []any{jiraServerCommentFixture("3")}}
+		case request.Method == http.MethodGet && path == "/issue/DEMO-1/comment/3":
+			value = jiraServerCommentFixture("3")
 		case request.Method == http.MethodGet && path == "/issue/DEMO-1/transitions":
 			value = map[string]any{"transitions": []any{map[string]any{"id": "11", "name": "Close", "fields": map[string]any{}}}}
 		case request.Method == http.MethodPost && path == "/issue/DEMO-1/transitions":
@@ -163,6 +175,9 @@ func atlassianServerResponse(t *testing.T, invocation Request, request *http.Req
 			value = map[string]any{"id": 42, "key": "DEMO", "name": "Fixture"}
 		case request.Method == http.MethodGet && path == "/content/101":
 			value = confluenceServerPageFixture("101", "Fixture", 2)
+		case request.Method == http.MethodGet && path == "/content/101/child/comment":
+			value = map[string]any{"start": 0, "limit": 2, "size": 1,
+				"results": []any{confluenceServerCommentFixture("103", "101", "<p>Existing</p>")}}
 		case request.Method == http.MethodGet && path == "/content":
 			if request.URL.Query().Get("spaceKey") != "DEMO" || request.URL.Query().Get("start") != "0" {
 				t.Fatal("Server search lost space/offset")
@@ -172,6 +187,13 @@ func atlassianServerResponse(t *testing.T, invocation Request, request *http.Req
 				pages = []any{}
 			}
 			value = map[string]any{"start": 0, "limit": 2, "size": len(pages), "results": pages, "_links": map[string]any{}}
+		case request.Method == http.MethodPost && path == "/content" && invocation.Operation == "confluence.page.comment.create":
+			var payload confluenceServerFooterComment
+			if json.NewDecoder(request.Body).Decode(&payload) != nil || payload.Type != "comment" || payload.Container.ID != "101" || payload.Container.Type != "page" ||
+				payload.Body.Storage.Representation != "storage" || payload.Body.Storage.Value != "<p>Comment &lt;not markup&gt;</p>\n"+confluenceServerMarker(invocation) {
+				t.Fatal("Server comment lost its exact parent, escaped text or effect marker")
+			}
+			value, status = confluenceServerCommentFixture("104", "101", payload.Body.Storage.Value), http.StatusCreated
 		case request.Method == http.MethodPost && path == "/content", request.Method == http.MethodPut && path == "/content/101":
 			var payload confluenceServerPage
 			if json.NewDecoder(request.Body).Decode(&payload) != nil || payload.Type != "page" || payload.Body.Storage.Representation != "storage" ||
@@ -200,6 +222,21 @@ func atlassianServerResponse(t *testing.T, invocation Request, request *http.Req
 	response := &http.Response{StatusCode: status, Header: http.Header{"Content-Type": {"application/json"}}, Body: io.NopCloser(strings.NewReader(string(raw))), Request: request}
 	validateAtlassianWireResponse(t, contractRequest, response)
 	return response
+}
+
+// jiraServerCommentFixture carries synthetic provider attribution that the ordinary tool result must omit.
+// jiraServerCommentFixture содержит синтетические данные автора, которые исключаются из обычного ответа инструмента.
+func jiraServerCommentFixture(id string) map[string]any {
+	return map[string]any{"id": id, "body": "Fixture body", "author": map[string]string{"key": "synthetic-author"},
+		"updateAuthor": map[string]string{"key": "synthetic-author"}}
+}
+
+// confluenceServerCommentFixture represents one synthetic Server/DC footer comment and its exact page container.
+// confluenceServerCommentFixture представляет синтетический комментарий Server/DC и его точный контейнер-страницу.
+func confluenceServerCommentFixture(id, pageID, storage string) map[string]any {
+	return map[string]any{"id": id, "type": "comment", "status": "current",
+		"container": map[string]string{"id": pageID, "type": "page"}, "version": map[string]int{"number": 1},
+		"body": map[string]any{"storage": map[string]string{"value": storage, "representation": "storage"}}}
 }
 
 // testAtlassianServerCapabilities executes every advertised operation through normal package/scope/credential validation.

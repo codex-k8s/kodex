@@ -18,6 +18,7 @@ func TestPersonalResourcePermissionClaimCaster(t *testing.T) {
 	}{
 		{"", 0},
 		{integrationpackage.CredentialResourcePermissionConfluencePageUpdateV1, cp.IntegrationCredentialResourcePermissionProfile_INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_CONFLUENCE_SERVER_PAGE_UPDATE_V1},
+		{integrationpackage.CredentialResourcePermissionConfluenceContentCreateV1, cp.IntegrationCredentialResourcePermissionProfile_INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_CONFLUENCE_SERVER_CONTENT_CREATE_V1},
 		{"UNKNOWN", -1},
 		{"UNSPECIFIED", -1},
 	} {

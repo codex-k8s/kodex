@@ -70,7 +70,9 @@ func gitLabExtendedResponse(t *testing.T, operation string, r *http.Request) (st
 		check("DELETE", "/issues/3/notes/4")
 		return `{}`, true
 	case "gitlab.merge_request.list":
-		return list("/merge_requests", mr)
+		// The nested provider fields can exceed 64 KiB even though the typed projection is small.
+		// Вложенные поля провайдера могут превышать 64 КиБ, хотя типизированная проекция мала.
+		return list("/merge_requests", strings.TrimSuffix(mr, "}")+`,"metadata":{"description":"`+strings.Repeat("x", 96<<10)+`"}}`)
 	case "gitlab.merge_request.update":
 		check("PUT", "/merge_requests/3")
 		return mr, true

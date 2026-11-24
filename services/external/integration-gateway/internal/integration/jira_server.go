@@ -229,6 +229,8 @@ func (adapter *Adapter) executeJiraServer(ctx context.Context, request Request, 
 		return providerResult(request, "jira-issue:"+issue.Key, output)
 	case "jira.issue.create":
 		return adapter.createJiraServerIssue(ctx, request, capability, configuration, input)
+	case "jira.issue.comment.list", "jira.issue.comment.read":
+		return adapter.readJiraServerComments(ctx, request, capability, configuration, input)
 	case "jira.issue.comment.write":
 		var value struct {
 			IssueKey string `json:"issue_key"`

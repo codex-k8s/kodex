@@ -4,15 +4,15 @@ title: Опциональные Server/DC-профили Jira и Confluence
 type: operations
 status: approved
 owner: backend
-version: 1.1.1
-updated: 2026-11-09
+version: 1.2.0
+updated: 2026-11-25
 ---
 
 # Опциональный Server/DC
 
 Источник: [#2029](https://github.com/codex-k8s/kodex/issues/2029), в составе
 приёмки [#1830](https://github.com/codex-k8s/kodex/issues/1830).
-`jira-server-dc@1.1.0` и `confluence-server-dc@1.0.0` — отдельные определения
+`jira-server-dc@1.4.0` и `confluence-server-dc@1.3.0` — отдельные определения
 ограниченной первой вертикали. Существующие `jira` и `confluence` используют
 Cloud API и сохраняют прежние версии, digests и поведение. Тип размещения
 выбирает владелец подключения; ошибочный endpoint не переключает его молча.
@@ -37,8 +37,8 @@ scope, risk, Human Gate, output и retry policy; shipped registry генерир
 
 | Definition | Операции и provider endpoints |
 | --- | --- |
-| `jira-server-dc` | `identity.read`: GET `/rest/api/2/myself`; `project.read`: GET `/rest/api/2/project/{key}`; `issue.search`: GET `/rest/api/2/search`; `issue.read`: GET `/rest/api/2/issue/{key}`; `issue.create`: POST `/rest/api/2/issue`; `issue.comment.write`: POST `/rest/api/2/issue/{key}/comment`; `issue.transition.list/apply`: GET/POST `/rest/api/2/issue/{key}/transitions` |
-| `confluence-server-dc` | `identity.read`: GET `/rest/api/user/current`; `space.read`: GET `/rest/api/space/{key}`; `page.search`: GET `/rest/api/content`; `page.read`: GET `/rest/api/content/{id}`; `page.create`: POST `/rest/api/content`; `page.update`: PUT `/rest/api/content/{id}` |
+| `jira-server-dc` | `identity.read`: GET `/rest/api/2/myself`; `project.read`: GET `/rest/api/2/project/{key}`; `issue.search`: GET `/rest/api/2/search`; `issue.read`: GET `/rest/api/2/issue/{key}`; `issue.create`: POST `/rest/api/2/issue`; `issue.comment.list/write`: GET/POST `/rest/api/2/issue/{key}/comment`; `issue.comment.read`: GET `/rest/api/2/issue/{key}/comment/{id}`; `issue.transition.list/apply`: GET/POST `/rest/api/2/issue/{key}/transitions` |
+| `confluence-server-dc` | `identity.read`: GET `/rest/api/user/current`; `space.read`: GET `/rest/api/space/{key}`; `page.search`: GET `/rest/api/content`; `page.read`: GET `/rest/api/content/{id}`; `page.create` и `page.comment.create`: POST `/rest/api/content` с типизированными вариантами; `page.update`: PUT `/rest/api/content/{id}`; `page.comment.list`: GET `/rest/api/content/{id}/child/comment` |
 
 Все operation keys имеют соответствующий префикс `jira.` либо `confluence.`.
 Вызов может включать несколько фиксированных GET для проверки scope или
@@ -100,14 +100,18 @@ claim → gateway проверяет exact definition/version/digest, scope и i
 чтения credential → фиксированный provider API → bounded typed output и
 receipt → owner completion/audit → исходный сотрудник.
 Ключи из prompt, OpenAPI и provider response не назначают authority.
-Новых RPC, таблиц, миграций, событий и event consumers нет. Авторитетные
-состояние invocation, журнал, receipts и recovery остаются у control-plane.
+Авторитетные состояние invocation, журнал, квитанции и recovery принадлежат
+control-plane. Миграция `20261125000100` добавляет точные операции к проверке
+персональных credentials. Создание страницы и комментария ограничено
+настроенным пространством и действующей политикой подтверждения.
 
 | Сценарий | Поведение |
 | --- | --- |
 | Чтение | Bounded retries только прежних временных transport/429/502/503/504; 401/403/404 и неверный ответ не повторяются как временная недоступность |
-| Pagination | `limit` 1–50, default 20; canonical decimal offset 0–10000. Неполные/противоречивые metadata и выход за поддержанный cursor отклоняются; snapshot между страницами не обещается |
-| Jira search | Пользовательский `text` экранируется как literal внутри фиксированного JQL с exact project; Cloud cursor и сырой JQL не принимаются |
+| Пагинация | `limit` 1–50 для поиска, 1–20 для комментариев. `cursor` — каноническое смещение 0–10000. Шлюз отклоняет противоречивые метаданные; каждый запрос страницы читает текущий ответ провайдера |
+| Jira search | Можно перечислить задачи проекта или задать `text`, `assignee_username` либо оба фильтра. Шлюз экранирует значения и фиксирует проект в JQL |
+| Confluence search | Можно перечислить страницы пространства или передать точный `title` |
+| Комментарии | Jira выдаёт видимые комментарии задачи. Confluence выдаёт комментарии верхнего уровня под текущей страницей и принимает обычный текст при создании. При неполной квитанции Confluence дополнительный GET проверяет ID, страницу и маркер эффекта |
 | Scope | Jira проверяет фактический project issue перед записью. Confluence проверяет metadata до storage fetch, затем повторно проверяет space/current/version в body response |
 | Jira transition | Только ID из текущего доступного списка, без дополнительных обязательных полей; иначе отказ до POST |
 | Jira create | Поиск exact effect label, project и прежнего summary/description; совпавший эффект возвращается без POST, неоднозначный результат закрыто отклоняется |
@@ -115,7 +119,7 @@ receipt → owner completion/audit → исходный сотрудник.
 | Confluence update | Exact page space, `expected_version` и следующая версия; совпавший body/title/marker на следующей версии читается без PUT; конфликт закрывается до PUT либо provider 409 |
 | Неопределённая запись | Не более одной mutation attempt, без HTTP transport replay. Потеря ответа, timeout/cancel после отправки, 5xx или неверный success остаются UNKNOWN; успешный эффект задним числом не отменяется |
 | Cancel/revoke/delegation | Прежние owner lifecycle и root initiator; preflight не заменяет повторную проверку перед вызовом и не продлевает grant |
-| `RECOVER_READ_ONLY` | Для новых Server/DC операций автоматический adapter recovery не объявлен: остаётся UNKNOWN без повторного внешнего запроса. Проверки rejoin через `Execute` не являются доказательством автоматического recovery |
+| `RECOVER_READ_ONLY` | Jira create/comment и Confluence page create/update поддерживают адресную сверку. Для комментария Confluence без подтверждённой квитанции сохраняется UNKNOWN; оператор сверяет комментарии страницы перед дальнейшим решением |
 
 Create-marker — дополнительная проверка при допустимом исполнении, а не
 внешняя атомарная idempotency гарантия. Она не разрешает перевод UNKNOWN в

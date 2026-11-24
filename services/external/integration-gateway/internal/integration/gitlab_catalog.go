@@ -227,6 +227,9 @@ func (adapter *Adapter) executeGitLabCatalog(ctx context.Context, request Reques
 		call.Method = http.MethodDelete
 	case "gitlab.merge_request.list":
 		call.Path += "/merge_requests"
+		// Keep the existing projection budget after receiving GitLab's nested metadata.
+		// Сохраняем прежний бюджет проекции после получения вложенных метаданных GitLab.
+		call.responseBodyLimit = maximumTypedListWireBytes
 		page()
 		if in.State != "" {
 			call.Query.Set("state", in.State)

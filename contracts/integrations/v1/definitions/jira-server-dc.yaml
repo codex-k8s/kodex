@@ -2,7 +2,7 @@ apiVersion: integrations.kodex.io/v1
 kind: IntegrationPackage
 metadata:
   key: jira-server-dc
-  version: 1.3.0
+  version: 1.4.0
   origin: SHIPPED
 spec:
   name: Jira Server / Data Center
@@ -315,7 +315,7 @@ spec:
       retryBackoffMilliseconds: 500
   - key: jira.issue.comment.write
     name: Добавить комментарий
-    description: Добавляет один ADF-комментарий с effect marker после Human Gate.
+    description: Добавляет один текстовый комментарий к задаче в настроенном проекте.
     operation: jira.issue.comment.write
     risk: WRITE
     approvalPolicy: HUMAN_EACH_EFFECT
@@ -358,6 +358,49 @@ spec:
       timeoutSeconds: 30
       maxAttempts: 1
       retryBackoffMilliseconds: 500
+  - key: jira.issue.comment.list
+    name: Найти комментарии к задаче
+    description: Возвращает видимые текущему аккаунту комментарии задачи настроенного проекта с пагинацией.
+    operation: jira.issue.comment.list
+    risk: READ
+    approvalPolicy: NONE
+    allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+    approvalScope:
+      name: "Задача"
+      requiredInputPaths: ["/issue_key"]
+      limits: {durationSeconds: 604800, maxEffects: 10000}
+      allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
+    resourceScope: {kind: JIRA_PROJECT, connectionFields: [base_url, context_path, project_key]}
+    inputFields:
+    - {key: issue_key, type: STRING, format: IDENTIFIER, required: true, maximumLength: 80}
+    - {key: limit, type: INTEGER, minimum: 1, maximum: 20}
+    - {key: cursor, type: STRING, format: PLAIN, maximumLength: 5}
+    outputFields:
+    - {key: count, type: INTEGER, required: true, minimum: 0, maximum: 20}
+    - {key: comments, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+    - {key: next_cursor, type: STRING, format: PLAIN, maximumLength: 5}
+    execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 300}
+  - key: jira.issue.comment.read
+    name: Прочитать комментарий к задаче
+    description: Читает один видимый комментарий по ключу задачи настроенного проекта и ID комментария.
+    operation: jira.issue.comment.read
+    risk: READ
+    approvalPolicy: NONE
+    allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+    approvalScope:
+      name: "Комментарий к задаче"
+      requiredInputPaths: ["/issue_key", "/comment_id"]
+      limits: {durationSeconds: 604800, maxEffects: 10000}
+      allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
+    resourceScope: {kind: JIRA_PROJECT, connectionFields: [base_url, context_path, project_key]}
+    inputFields:
+    - {key: issue_key, type: STRING, format: IDENTIFIER, required: true, maximumLength: 80}
+    - {key: comment_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 26}
+    outputFields:
+    - {key: comment_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 26}
+    - {key: issue_key, type: STRING, format: IDENTIFIER, required: true, maximumLength: 80}
+    - {key: body, type: STRING, format: PLAIN, required: true, allowEmpty: true, maximumLength: 65536}
+    execution: {idempotency: READ_ONLY, timeoutSeconds: 20, maxAttempts: 3, retryBackoffMilliseconds: 250}
   - key: jira.issue.transition.list
     name: Получить доступные переходы issue
     description: Получить доступные переходы issue в одном разрешённом проекте с ограниченным

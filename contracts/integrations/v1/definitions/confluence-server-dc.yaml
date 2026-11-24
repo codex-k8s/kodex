@@ -2,7 +2,7 @@ apiVersion: integrations.kodex.io/v1
 kind: IntegrationPackage
 metadata:
   key: confluence-server-dc
-  version: 1.2.0
+  version: 1.3.0
   origin: SHIPPED
 spec:
   name: Confluence Server / Data Center
@@ -56,6 +56,47 @@ spec:
     timeoutSeconds: 15
     maxAttempts: 3
   capabilities:
+  - key: confluence.page.comment.list
+    name: Прочитать комментарии под страницей
+    description: Читает одну страницу комментариев под текущей страницей в заданном пространстве. Возвращает ID, версию и текст комментария.
+    operation: confluence.page.comment.list
+    risk: READ
+    approvalPolicy: NONE
+    allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+    approvalScope:
+      name: Страница
+      requiredInputPaths: [/page_id]
+      limits: {durationSeconds: 604800, maxEffects: 10000}
+    resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, context_path, space_key]}
+    inputFields:
+    - {key: page_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 64}
+    - {key: limit, type: INTEGER, required: false, minimum: 1, maximum: 20}
+    - {key: cursor, type: STRING, format: PLAIN, required: false, maximumLength: 16}
+    outputFields:
+    - {key: count, type: INTEGER, required: true, minimum: 0, maximum: 20}
+    - {key: comments, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+    - {key: next_cursor, type: STRING, format: PLAIN, required: false, maximumLength: 16}
+    execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 500}
+  - key: confluence.page.comment.create
+    name: Добавить комментарий под страницей
+    description: Добавляет один текстовый комментарий к текущей странице в заданном пространстве. Права записи проверяет Confluence. После неизвестного результата прочитайте комментарии перед новым действием.
+    operation: confluence.page.comment.create
+    risk: WRITE
+    approvalPolicy: HUMAN_EACH_EFFECT
+    allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+    approvalScope:
+      name: Страница
+      requiredInputPaths: [/page_id]
+      limits: {durationSeconds: 604800, maxEffects: 10000}
+    resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, context_path, space_key]}
+    inputFields:
+    - {key: page_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 64}
+    - {key: body, type: STRING, format: PLAIN, required: true, maximumLength: 8192}
+    outputFields:
+    - {key: id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 64}
+    - {key: page_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 64}
+    - {key: version, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
+    execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 500}
   - key: confluence.identity.read
     name: Проверить текущую учётную запись
     description: Возвращает ограниченную identity текущей credential без выдачи новых
@@ -250,8 +291,8 @@ spec:
       maxAttempts: 3
       retryBackoffMilliseconds: 300
   - key: confluence.page.create
-    name: Создать черновик страницы
-    description: Создаёт черновик с effect marker в configured space после Human Gate.
+    name: Создать страницу
+    description: Публикует текущую страницу в настроенном пространстве. Если задана родительская страница, проверяет её принадлежность тому же пространству.
     operation: confluence.page.create
     risk: WRITE
     approvalPolicy: HUMAN_EACH_EFFECT

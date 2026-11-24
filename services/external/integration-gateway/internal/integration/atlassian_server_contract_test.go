@@ -40,7 +40,7 @@ func documentedProviderContract(t *testing.T, key string) ([]byte, *openapi3.T) 
 func TestAtlassianProviderContractsMatchDefinitions(t *testing.T) {
 	for _, key := range []string{jiraServerDefinition, confluenceServerDefinition} {
 		t.Run(key, func(t *testing.T) {
-			raw, _ := documentedProviderContract(t, key)
+			raw, document := documentedProviderContract(t, key)
 			inspection, err := integrationpackage.InspectOpenAPI(t.Context(), raw)
 			if err != nil {
 				t.Fatal(err)
@@ -48,9 +48,21 @@ func TestAtlassianProviderContractsMatchDefinitions(t *testing.T) {
 			definition := serverDefinitionFixture(t, key)
 			internalPrerequisites := 0
 			if key == jiraServerDefinition {
-				internalPrerequisites = 4
+				internalPrerequisites = 2
 			}
-			if len(inspection.Operations) != len(definition.Spec.Capabilities)+internalPrerequisites {
+			variants := 0
+			if key == confluenceServerDefinition {
+				post := document.Paths.Value("/rest/api/content").Post
+				declared, ok := post.Extensions["x-kodex-variant-operation-ids"].([]any)
+				if !ok || len(declared) != 1 || declared[0] != "confluence.page.comment.create" {
+					t.Fatal("comment POST variant is not documented")
+				}
+				if _, found := definition.Capability("confluence.page.comment.create"); !found {
+					t.Fatal("documented comment POST variant has no package capability")
+				}
+				variants = 1
+			}
+			if len(inspection.Operations)+variants != len(definition.Spec.Capabilities)+internalPrerequisites {
 				t.Fatal("provider/package operation coverage differs")
 			}
 			for _, operation := range inspection.Operations {
@@ -63,12 +75,6 @@ func TestAtlassianProviderContractsMatchDefinitions(t *testing.T) {
 				if key == jiraServerDefinition && operation.ID == "jira.permissions.read" && operation.Method == "GET" && operation.Path == "/rest/api/2/mypermissions" {
 					if _, exposed := definition.Capability(operation.ID); exposed {
 						t.Fatal("internal permission prerequisite became a user tool")
-					}
-					continue
-				}
-				if key == jiraServerDefinition && ((operation.ID == "jira.recovery.comments.read" && operation.Path == "/rest/api/2/issue/{issueKey}/comment") || (operation.ID == "jira.recovery.comment.read" && operation.Path == "/rest/api/2/issue/{issueKey}/comment/{commentId}")) && operation.Method == "GET" {
-					if _, exposed := definition.Capability(operation.ID); exposed {
-						t.Fatal("recovery prerequisite became an agent tool")
 					}
 					continue
 				}

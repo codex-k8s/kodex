@@ -35,13 +35,13 @@ func credentialObjectReadContract(definitionKey, capabilityKey string) (Credenti
 		}
 	case "jira-server-dc":
 		switch capabilityKey {
-		case "jira.issue.search", "jira.issue.read", "jira.issue.transition.list":
+		case "jira.issue.search", "jira.issue.read", "jira.issue.transition.list", "jira.issue.comment.list", "jira.issue.comment.read":
 			contract.Profile, contract.ResourceKind = CredentialResourcePermissionJiraObjectReadV1, "JIRA_PROJECT"
 			contract.ReadCapabilities = []string{"jira.project.read", "jira.identity.read"}
 		}
 	case "confluence-server-dc":
 		switch capabilityKey {
-		case "confluence.page.search", "confluence.page.read":
+		case "confluence.page.search", "confluence.page.read", "confluence.page.comment.list":
 			contract.Profile, contract.ResourceKind = CredentialResourcePermissionConfluenceObjectReadV1, "CONFLUENCE_SPACE"
 			contract.ReadCapabilities = []string{"confluence.space.read", "confluence.identity.read"}
 		}

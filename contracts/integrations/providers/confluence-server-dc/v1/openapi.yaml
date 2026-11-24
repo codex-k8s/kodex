@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  version: 1.1.0
+  version: 1.2.0
   description: Самостоятельно описанный ограниченный контракт по официальной документации;
     это не полный официальный OpenAPI и не grant.
   title: Confluence Server / Data Center — ограниченный REST v1
@@ -16,6 +16,107 @@ components:
       type: http
       scheme: basic
   schemas:
+    PageCreate:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+          - page
+        status:
+          type: string
+          enum:
+          - current
+        title:
+          type: string
+          maxLength: 512
+        body:
+          type: object
+          properties:
+            storage:
+              $ref: '#/components/schemas/Storage'
+          additionalProperties: false
+          required:
+          - storage
+        space:
+          type: object
+          properties:
+            key:
+              type: string
+          additionalProperties: false
+          required:
+          - key
+        ancestors:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                minLength: 1
+                maxLength: 64
+            additionalProperties: false
+            required:
+            - id
+      additionalProperties: false
+      required:
+      - type
+      - status
+      - title
+      - space
+      - body
+    PlainFooterCommentCreate:
+      type: object
+      additionalProperties: false
+      required: [type, container, body]
+      properties:
+        type: {type: string, enum: [comment]}
+        container:
+          type: object
+          additionalProperties: false
+          required: [id, type]
+          properties:
+            id: {type: string, pattern: '^[1-9][0-9]*$', maxLength: 64}
+            type: {type: string, enum: [page]}
+        body:
+          type: object
+          required: [storage]
+          properties:
+            storage:
+              type: object
+              required: [representation, value]
+              properties:
+                representation: {type: string, enum: [storage]}
+                value: {type: string, maxLength: 65536}
+    FooterComment:
+      type: object
+      additionalProperties: true
+      required: [id, type, status, container, version, body]
+      properties:
+        id: {type: string, pattern: '^[1-9][0-9]*$', maxLength: 64}
+        type: {type: string, enum: [comment]}
+        status: {type: string, enum: [current]}
+        container:
+          type: object
+          required: [id, type]
+          properties:
+            id: {type: string, pattern: '^[1-9][0-9]*$', maxLength: 64}
+            type: {type: string, enum: [page]}
+        version:
+          type: object
+          required: [number]
+          properties:
+            number: {type: integer, minimum: 1}
+        body:
+          type: object
+          required: [storage]
+          properties:
+            storage:
+              type: object
+              required: [representation, value]
+              properties:
+                representation: {type: string, enum: [storage]}
+                value: {type: string, maxLength: 65536}
     Identity:
       type: object
       properties:
@@ -470,6 +571,7 @@ paths:
             повтор неизвестного write.
     post:
       operationId: confluence.page.create
+      x-kodex-variant-operation-ids: [confluence.page.comment.create]
       parameters:
       - name: expand
         in: query
@@ -482,7 +584,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Page'
+                oneOf:
+                  - {$ref: '#/components/schemas/Page'}
+                  - {$ref: '#/components/schemas/FooterComment'}
         '400':
           description: Закрытый отказ; ошибочное тело не выдаёт полномочия и не разрешает
             повтор неизвестного write.
@@ -518,54 +622,37 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                type:
-                  type: string
-                  enum:
-                  - page
-                status:
-                  type: string
-                  enum:
-                  - current
-                title:
-                  type: string
-                  maxLength: 512
-                body:
-                  type: object
-                  properties:
-                    storage:
-                      $ref: '#/components/schemas/Storage'
-                  additionalProperties: false
-                  required:
-                  - storage
-                space:
-                  type: object
-                  properties:
-                    key:
-                      type: string
-                  additionalProperties: false
-                  required:
-                  - key
-                ancestors:
-                  type: array
-                  items:
-                    type: object
-                    properties:
-                      id:
-                        type: string
-                        minLength: 1
-                        maxLength: 64
-                    additionalProperties: false
-                    required:
-                    - id
-              additionalProperties: false
-              required:
-              - type
-              - status
-              - title
-              - space
-              - body
+              oneOf:
+                - {$ref: '#/components/schemas/PageCreate'}
+                - {$ref: '#/components/schemas/PlainFooterCommentCreate'}
+  /rest/api/content/{pageId}/child/comment:
+    get:
+      operationId: confluence.page.comment.list
+      parameters:
+        - {name: pageId, in: path, required: true, schema: {type: string, pattern: '^[1-9][0-9]*$'}}
+        - {name: expand, in: query, required: true, schema: {type: string, enum: ['container,version,body.storage']}}
+        - {name: location, in: query, required: true, schema: {type: string, enum: [footer]}}
+        - {name: start, in: query, required: true, schema: {type: integer, minimum: 0}}
+        - {name: limit, in: query, required: true, schema: {type: integer, minimum: 1, maximum: 20}}
+      responses:
+        '200':
+          description: Ограниченная страница комментариев под заданной страницей.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [start, limit, size, results]
+                properties:
+                  start: {type: integer, minimum: 0}
+                  limit: {type: integer, minimum: 1, maximum: 20}
+                  size: {type: integer, minimum: 0, maximum: 20}
+                  results:
+                    type: array
+                    maxItems: 20
+                    items: {$ref: '#/components/schemas/FooterComment'}
+                  _links: {type: object}
+        default:
+          description: Запрос отклонён или временно недоступен.
   /rest/api/content/{pageId}:
     get:
       operationId: confluence.page.read
