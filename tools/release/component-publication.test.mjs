@@ -11,6 +11,7 @@ import {fingerprint} from './stable-inventory.mjs';
 import {componentMigrationConfiguration,componentMigrationPublication,componentImageLockBudget,componentImageLockMaxBytes,componentImageLockMaxBase64,componentPublicationMaxBytes} from './portable-component-migration.mjs';
 import {validateStableReceipt} from './stable-image-publication.mjs';
 import {createComponentImageLock,validateComponentPublicationConfiguration} from './component-publication.mjs';
+import {promotedServicePullRegistry} from './component-node-qualification.mjs';
 const sha=x=>createHash('sha256').update(x).digest('hex'),revision='a'.repeat(40),uid=n=>`10000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const cli=fileURLToPath(new URL('./component-publication.mjs',import.meta.url));
 function fixture(profile='github-repository-scope'){
@@ -59,6 +60,30 @@ test('configuration rejects broader component target node and schema sets',()=>{
     const bad=structuredClone(f.config);change(bad);assert.throws(()=>validateComponentPublicationConfiguration(bad));
   }
 });
+
+test('выбранный in-cluster Service закрепляется в receipt и проверяется CRI на тех же узлах',()=>{
+  const f=setup('github-repository-scope-backup');
+  try{
+    f.config.pullRegistry=promotedServicePullRegistry;
+    for(const component of f.config.components)
+      component.expectedImageRef=`source.example.invalid/retained/${component.name}@sha256:${'f'.repeat(64)}`;
+    assert.throws(()=>validateComponentPublicationConfiguration({...f.config,pullRegistry:'foreign.example.invalid'}));
+    assert.throws(()=>validateComponentPublicationConfiguration({...f.config,pullRegistry:undefined}));
+    f.store(join(f.directory,'config.json'),f.config);
+    const prepared=f.run('prepare','prepared.json');assert.equal(prepared.code,0,prepared.out);
+    const qualification=f.run('qualify','publication.json',['--approved-plan-sha',fingerprint(f.prepared())]);
+    assert.equal(qualification.code,0,qualification.out);
+    const publication=JSON.parse(readFileSync(join(f.directory,'publication.json')));
+    assert.equal(publication.registry,promotedServicePullRegistry);
+    const cohort=componentMigrationPublication(publication,{revision},f.config.profile);
+    assert.ok(cohort.components.every(v=>v.imageRef.startsWith(promotedServicePullRegistry+'/kodex/')&&
+      v.expectedImageRef.startsWith('source.example.invalid/retained/')));
+    assert.deepEqual(f.state().images,cohort.components.map(v=>v.imageRef));
+    assert.equal(f.run('readback','readback.json').code,0);
+    assert.equal(f.state().pulls,cohort.components.length);
+  }finally{rmSync(f.directory,{recursive:true,force:true});}
+});
+
 const mock=`#!${process.execPath}
 const fs=require('node:fs'),path=require('node:path'),base=path.join(__dirname,'..'),a=process.argv.slice(2),program=path.basename(process.argv[1]);
 const p=path.join(base,'state.json'),s=JSON.parse(fs.readFileSync(p)),c=JSON.parse(fs.readFileSync(path.join(base,'config.json')));
