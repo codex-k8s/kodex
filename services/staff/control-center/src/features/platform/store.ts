@@ -51,6 +51,7 @@ import {
   getOverview,
   getProject,
   getRoleImageRecipe,
+  getRun,
   getRunGraph,
   getSystemAssistant,
   getWorkflow,
@@ -888,6 +889,44 @@ export const usePlatformStore = defineStore("platform", () => {
       if (!ownerSignal.aborted && runReadGeneration.get(ref) === current)
         runLoading[ref] = false;
     }
+  }
+
+  // Читаем метаданные только запуска, показанного в проверенном графе.
+  // История и граф уже загружены маршрутом, повторно их запрашивать не нужно.
+  async function loadGraphRunMetadata(
+    ref: string,
+    anchorRef: string,
+    signal: AbortSignal,
+  ): Promise<void> {
+    const organizationRef = requireRuntimeOrganizationRef(
+      bootstrap.value?.organizationRef,
+    );
+    const anchor = runs[anchorRef];
+    const graph = anchor ? graphs[anchor.rootRunRef] : undefined;
+    if (
+      !anchor ||
+      !graph ||
+      graph.runRef !== anchor.rootRunRef ||
+      (ref !== graph.runRef && !graph.nodes.some((node) => node.runRef === ref))
+    )
+      throw new Error("Run metadata is outside the current graph");
+    assertRunOwner(anchor, organizationRef);
+    const readSignal = AbortSignal.any([ownerRequestSignal(), signal]);
+    const { data } = await unwrap(
+      getRun({ path: { runRef: ref }, signal: requestSignal(readSignal) }),
+    );
+    assertOwnerRequest(readSignal);
+    assertRunOwner(data, organizationRef);
+    if (
+      bootstrap.value?.organizationRef !== organizationRef ||
+      runs[anchorRef]?.projectRef !== anchor.projectRef ||
+      runs[anchorRef]?.rootRunRef !== anchor.rootRunRef ||
+      data.ref !== ref ||
+      data.rootRunRef !== anchor.rootRunRef ||
+      data.projectRef !== anchor.projectRef
+    )
+      throw new Error("Related run metadata identity mismatch");
+    if (data.version >= (runs[ref]?.version ?? 0)) upsert(runs, [data]);
   }
 
   function runTranscriptSequence(ref: string): number {
@@ -3246,6 +3285,7 @@ export const usePlatformStore = defineStore("platform", () => {
     loadRuns,
     loadRun,
     loadRunTranscript,
+    loadGraphRunMetadata,
     runTranscriptSequence,
     runTranscriptProblems,
     loadGates,

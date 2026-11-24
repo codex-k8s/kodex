@@ -307,11 +307,17 @@ const selectedAgent = computed(() =>
     ? platform.agents[selectedNode.value.agentRef]
     : undefined,
 );
-const selectedRun = computed(() =>
-  selectedNode.value
-    ? (platform.runs[selectedNode.value.runRef] ?? run.value)
-    : run.value,
-);
+const selectedRun = computed(() => {
+  const ref = selectedNode.value?.runRef;
+  const candidate = ref ? platform.runs[ref] : undefined;
+  if (
+    !candidate ||
+    candidate.rootRunRef !== graph.value?.runRef ||
+    candidate.projectRef !== run.value?.projectRef
+  )
+    return undefined;
+  return candidate;
+});
 const futureNodeRefs = computed(() =>
   (sessionGraph.value?.nodes ?? [])
     .filter(
@@ -397,6 +403,26 @@ const activityNodeRef = ref<string>();
 const activityDrawer = ref<HTMLElement>();
 const nodeInspectorOpen = ref(false);
 const nodeDetailsOpen = ref(false);
+const nodeRunProblem = ref<AppProblem>();
+watch(
+  [
+    nodeDetailsOpen,
+    () => selectedNode.value?.runRef,
+    runRef,
+    () => graph.value?.runRef,
+  ],
+  async ([open, ref, anchorRef, rootRef], _, onCleanup) => {
+    nodeRunProblem.value = undefined;
+    if (!open || !ref || !rootRef || selectedRun.value) return;
+    const controller = new AbortController();
+    onCleanup(() => controller.abort());
+    try {
+      await platform.loadGraphRunMetadata(ref, anchorRef, controller.signal);
+    } catch (error) {
+      if (!controller.signal.aborted) nodeRunProblem.value = asProblem(error);
+    }
+  },
+);
 const transcriptReadProblem = ref<AppProblem>();
 const transcriptProblem = computed(() =>
   activityOpen.value || nodeDetailsOpen.value
@@ -442,7 +468,7 @@ function refreshTranscriptHistory(): void {
     closeTranscriptRead();
     transcriptScope = nextScope;
   }
-  if (!nextScope || !snapshot) return;
+  if (!nextScope || !snapshot || !current) return;
   const sequence = snapshot.sequence;
   if (
     !Number.isSafeInteger(sequence) ||
@@ -460,8 +486,13 @@ function refreshTranscriptHistory(): void {
   transcriptReading = true;
   transcriptAttemptedSequence = sequence;
   transcriptReadProblem.value = undefined;
-  void platform
-    .loadRunTranscript(snapshot.runRef, signal)
+  const readHistory = () => platform.loadRunTranscript(snapshot.runRef, signal);
+  const historyRead = platform.runs[snapshot.runRef]
+    ? readHistory()
+    : platform
+        .loadGraphRunMetadata(snapshot.runRef, current.ref, signal)
+        .then(readHistory);
+  void historyRead
     .catch((error: unknown) => {
       if (!signal.aborted && transcriptController === controller)
         transcriptReadProblem.value = asProblem(error);
@@ -1355,8 +1386,8 @@ onBeforeUnmount(() => {
           </RunActivityDrawer>
         </aside>
         <RunSessionDetailsDialog
-          v-if="selectedNode && nodeDetailsOpen"
-          :run="selectedRun ?? run"
+          v-if="selectedNode && nodeDetailsOpen && selectedRun"
+          :run="selectedRun"
           :viewed-run="run"
           :node="selectedNode"
           :nodes="allRunNodes"
@@ -1368,6 +1399,14 @@ onBeforeUnmount(() => {
           @close="nodeDetailsOpen = false"
           @download="downloadArtifact"
         />
+        <ModalDialog
+          v-else-if="selectedNode && nodeDetailsOpen"
+          :title="selectedNode.displayName"
+          size="xl"
+          @close="nodeDetailsOpen = false"
+        >
+          <AsyncState :loading="!nodeRunProblem" :problem="nodeRunProblem" />
+        </ModalDialog>
       </div>
       <section v-else class="run-empty-state">
         <p>{{ $t("common.empty") }}</p>

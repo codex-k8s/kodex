@@ -310,8 +310,15 @@ describe("RunPage runtime presentation", () => {
       (ref: string, signal: AbortSignal) =>
         new Promise<void>((resolve) => pending.push({ ref, signal, resolve })),
     );
+    const runs: Record<string, typeof run.value> = { run_fixture: run.value };
+    const loadGraphRunMetadata = vi.fn((ref: string) => {
+      runs[ref] = { ...run.value, ref };
+      return Promise.resolve();
+    });
     const platform = {
       bootstrap: { organizationRef: "org_fixture" },
+      runs,
+      loadGraphRunMetadata,
       runTranscriptSequence: (ref: string) => history[ref] ?? 0,
       loadRunTranscript,
     };
@@ -364,6 +371,25 @@ describe("RunPage runtime presentation", () => {
     expect(state.loadRunTranscript).toHaveBeenCalledTimes(1);
     expect(state.source).toContain(':history-problem="transcriptProblem"');
     expect(state.source).toContain("closeTranscriptRead();");
+  });
+
+  it("на дочернем маршруте привязывает историю к метаданным корневого запуска", async () => {
+    const state = transcriptReader();
+    state.run.value = { ...state.run.value, ref: "run_child" };
+    delete state.platform.runs.run_fixture;
+    state.nodeDetailsOpen.value = true;
+    state.api.refreshTranscriptHistory();
+
+    expect(state.platform.loadGraphRunMetadata).toHaveBeenCalledWith(
+      "run_fixture",
+      "run_child",
+      expect.any(AbortSignal),
+    );
+    expect(state.loadRunTranscript).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(state.pending[0]?.ref).toBe("run_fixture"));
+    state.history.run_fixture = 13;
+    state.pending[0]?.resolve();
+    state.api.closeTranscriptRead();
   });
 
   it("объединяет graph cursor изменения в один inflight и дочитывает последний cursor", async () => {
