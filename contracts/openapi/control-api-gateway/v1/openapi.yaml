@@ -13568,6 +13568,8 @@ components:
         providerDefinitionKey:
           { type: string, pattern: "^[a-z][a-z0-9_-]{0,79}$" }
         defaultReasoningEffort: { type: string, maxLength: 64 }
+        runtimeProfileRef: { $ref: "#/components/schemas/OpaqueRef" }
+        model: { type: string, minLength: 1, maxLength: 128 }
     ProviderAccountCandidateInput:
       type: object
       additionalProperties: false
@@ -13586,6 +13588,14 @@ components:
         catalogDigest: { type: string, pattern: "^[a-f0-9]{64}$" }
         providerDefinitionKey:
           { type: string, pattern: "^[a-z][a-z0-9_-]{0,79}$" }
+        runtimeProfileRef:
+          description: Отдельный профиль второго аккаунта в политике FIXED.
+          allOf: [{ $ref: "#/components/schemas/OpaqueRef" }]
+        model:
+          description: Модель альтернативного профиля. Задаётся вместе с runtimeProfileRef.
+          type: string
+          minLength: 1
+          maxLength: 128
     ProviderAccountPolicyVersion:
       type: object
       additionalProperties: false

@@ -697,13 +697,14 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			if err != nil {
 				return commandOutcome{}, err
 			}
-			if configuration.Model != candidate.model {
-				return commandOutcome{}, errs.ErrConflict
-			}
 			eligibilityStage = "session_catalog"
 			verifiedCandidate, retainedPolicy, err := checkedSessionModelCatalog(ctx, tx, scope.organizationID, candidate.sessionID, candidate.providerAccountRef, configuration, candidate.configOverlay)
 			if err != nil {
 				return commandOutcome{}, err
+			}
+			provider, model, _ := configuredModelRoute(configuration, verifiedCandidate)
+			if model != candidate.model || provider != candidate.provider {
+				return commandOutcome{}, errs.ErrConflict
 			}
 			if retainedPolicy != nil {
 				candidate.providerPolicyID, candidate.providerPolicyRef, candidate.providerPolicyVersion, candidate.providerPolicyDigest = retainedPolicy.PolicyID, retainedPolicy.PolicyRef, retainedPolicy.PolicyVersion, retainedPolicy.PolicyDigest
@@ -729,7 +730,8 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			nodeID, nodeRef, runID, runRef := candidate.nodeID, candidate.nodeRef, candidate.runID, candidate.runRef
 			rootRunID, projectID, projectRef := candidate.rootRunID, candidate.projectID, candidate.projectRef
 			sessionID, sessionRef, task, agentRef := candidate.sessionID, candidate.sessionRef, candidate.task, candidate.agentRef
-			runtimeKey, runtimeRevision, provider, model := candidate.runtimeKey, candidate.runtimeRevision, runtimeProvider, candidate.model
+			runtimeKey, runtimeRevision := candidate.runtimeKey, candidate.runtimeRevision
+			provider = runtimeProvider
 			providerAccountID, providerAccountRef := candidate.providerAccountID, candidate.providerAccountRef
 			providerCredentialID, providerCredentialRef := candidate.providerCredentialID, candidate.providerCredentialRef
 			providerCredentialRevisionNumber := candidate.providerCredentialRevisionNumber
@@ -2557,7 +2559,7 @@ func (repository *Repository) delegateExecution(ctx context.Context, tx pgx.Tx, 
 			return commandOutcome{}, err
 		}
 	}
-	providerAccountID, err := repository.selectProviderAccountForAgent(ctx, tx, scope.organizationID, payload.TargetAgentRef)
+	providerAccountID, err := repository.selectReadyProviderAccountForAgent(ctx, tx, scope.organizationID, payload.TargetAgentRef)
 	if err != nil {
 		return commandOutcome{}, err
 	}

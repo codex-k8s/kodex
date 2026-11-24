@@ -11,7 +11,13 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
+	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/providercredentialclient"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // TestModelProviderBootstrapComponent proves optional Git-owned registration and restart affinity in disposable PostgreSQL.
@@ -193,13 +199,10 @@ func TestModelCatalogBootstrapMethodComponent(t *testing.T) {
 	}
 }
 
-// TestModelProviderCatalogComponent proves independent registration, exact native selection and catalog grants for two accounts sharing a model alias; removing one route revokes only its pending work.
-// TestModelProviderCatalogComponent проверяет независимую регистрацию, точный native selection и catalog grants двух accounts с общим alias; удаление маршрута отзывает только его pending work.
-func TestModelProviderCatalogComponent(t *testing.T) {
-	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
-	defer cancel()
-	pool := newIsolatedAssistantComponentPool(t, ctx)
-	defer pool.Close()
+// newTwoRouteProviderFixture registers two synthetic OpenCode providers and an authorized account for each.
+// newTwoRouteProviderFixture регистрирует два синтетических провайдера OpenCode и авторизованный аккаунт для каждого.
+func newTwoRouteProviderFixture(t *testing.T, ctx context.Context, pool *pgxpool.Pool, alternativeModel string) (*Repository, runtimecontract.ModelProviderCatalog) {
+	t.Helper()
 	repository, err := New(pool, "opencode-test-gateway", "vendor/model-v1", objectstoragetest.New())
 	if err != nil {
 		t.Fatal(err)
@@ -214,25 +217,13 @@ func TestModelProviderCatalogComponent(t *testing.T) {
 	second.ProviderID = "second-gateway"
 	second.BaseURL = "https://second.example.invalid/v1"
 	second.AddressCIDRs = []string{"192.0.2.5/32"}
+	second.Models[0].ID = alternativeModel
 	catalog := runtimecontract.ModelProviderCatalog{Schema: runtimecontract.ModelProviderCatalogSchema, ManagedBy: "git", SourceRevision: first.SourceRevision, DefaultProvider: first.DefinitionKey(), DefaultModel: first.Models[0].ID, Providers: []runtimecontract.ModelProviderConfiguration{first, second}}
 	if err := repository.ConfigureModelProviderCatalog(catalog); err != nil {
 		t.Fatal(err)
 	}
 	if err := repository.Bootstrap(ctx); err != nil {
 		t.Fatal(err)
-	}
-	for _, provider := range catalog.Providers {
-		engine, selected, err := repository.runtimeProviderSelection(provider.DefinitionKey(), "vendor/model-v1")
-		if err != nil || engine != "opencode" || selected.BaseURL != provider.BaseURL {
-			t.Fatal("exact route selection failed", err)
-		}
-		var registered int
-		if err := pool.QueryRow(ctx, `SELECT count(*) FROM control_plane.runtime_profiles WHERE provider=$1 AND model=$2 AND stable_key=$3`, provider.DefinitionKey(), "vendor/model-v1", modelProviderProfileKey(provider, "vendor/model-v1")).Scan(&registered); err != nil || registered != 1 {
-			t.Fatal("independent profile registration failed", err)
-		}
-	}
-	if _, _, err := repository.runtimeProviderSelection("vendor/model-v1", "vendor/model-v1"); !errors.Is(err, errs.ErrConflict) {
-		t.Fatal("model alias selected a route")
 	}
 	// Only fixture setup inserts synthetic credential metadata; no secret value or remote reachability is claimed.
 	// Только fixture setup вставляет synthetic credential metadata; secret value или remote reachability не предполагаются.
@@ -246,6 +237,31 @@ func TestModelProviderCatalogComponent(t *testing.T) {
 	}
 	if _, err := pool.Exec(ctx, `UPDATE control_plane.provider_accounts SET current_credential_revision_id=(SELECT id FROM control_plane.provider_credential_revisions WHERE ref='pcred_secondcatalog') WHERE ref='pacc_secondcatalog'`); err != nil {
 		t.Fatal(err)
+	}
+	return repository, catalog
+}
+
+// TestModelProviderCatalogComponent proves independent registration, exact native selection and catalog grants for two accounts sharing a model alias; removing one route revokes only its pending work.
+// TestModelProviderCatalogComponent проверяет независимую регистрацию, точный native selection и catalog grants двух accounts с общим alias; удаление маршрута отзывает только его pending work.
+func TestModelProviderCatalogComponent(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
+	defer cancel()
+	pool := newIsolatedAssistantComponentPool(t, ctx)
+	defer pool.Close()
+	repository, catalog := newTwoRouteProviderFixture(t, ctx, pool, "vendor/model-v1")
+	first, second := catalog.Providers[0], catalog.Providers[1]
+	for _, provider := range catalog.Providers {
+		engine, selected, err := repository.runtimeProviderSelection(provider.DefinitionKey(), "vendor/model-v1")
+		if err != nil || engine != "opencode" || selected.BaseURL != provider.BaseURL {
+			t.Fatal("exact route selection failed", err)
+		}
+		var registered int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM control_plane.runtime_profiles WHERE provider=$1 AND model=$2 AND stable_key=$3`, provider.DefinitionKey(), "vendor/model-v1", modelProviderProfileKey(provider, "vendor/model-v1")).Scan(&registered); err != nil || registered != 1 {
+			t.Fatal("independent profile registration failed", err)
+		}
+	}
+	if _, _, err := repository.runtimeProviderSelection("vendor/model-v1", "vendor/model-v1"); !errors.Is(err, errs.ErrConflict) {
+		t.Fatal("model alias selected a route")
 	}
 	tasks, err := repository.ClaimProviderModelCatalogTasks(ctx, "catalog-two-routes", 16, &providercredentialclient.Client{})
 	if err != nil || len(tasks) != 2 {
@@ -293,5 +309,150 @@ func TestModelProviderCatalogComponent(t *testing.T) {
 	}
 	if _, _, err := repository.runtimeProviderSelection(second.DefinitionKey(), "vendor/model-v1"); !errors.Is(err, errs.ErrConflict) {
 		t.Fatal("removed route runtime selection survived")
+	}
+}
+
+// TestAlternativeProviderAccountLaunchComponent pins the first available route for a new session and rejects switching an existing session to another account.
+// TestAlternativeProviderAccountLaunchComponent закрепляет первый доступный маршрут новой сессии и запрещает подмену аккаунта существующей сессии.
+func TestAlternativeProviderAccountLaunchComponent(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
+	defer cancel()
+	pool := newIsolatedAssistantComponentPool(t, ctx)
+	defer pool.Close()
+	repository, catalog := newTwoRouteProviderFixture(t, ctx, pool, "vendor/alternate")
+	first, second := catalog.Providers[0], catalog.Providers[1]
+	tasks, err := repository.ClaimProviderModelCatalogTasks(ctx, "alternative-account-catalog", 16, &providercredentialclient.Client{})
+	if err != nil || len(tasks) != 2 {
+		t.Fatalf("claim two catalog tasks: %d, %v", len(tasks), err)
+	}
+	for _, task := range tasks {
+		model := first.Models[0].ID
+		if task.ProviderDefinitionKey == second.DefinitionKey() {
+			model = second.Models[0].ID
+		}
+		observation := platformrepo.ProviderModelCatalogObservation{
+			AccountRef: task.AccountRef, CredentialRef: task.CredentialRef, Source: "REMOTE_API",
+			Failure: "NONE", ObservedAt: time.Now(), Models: []platformrepo.ProviderModelCatalogRecord{{ID: model}},
+		}
+		if err := repository.CompleteProviderModelCatalogTask(ctx, task, observation); err != nil {
+			t.Fatal("complete catalog fixture", err)
+		}
+	}
+	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
+		CallerWorkload: "control-api-gateway", Operation: "platform.command.projects.create",
+	}, "control-api-gateway")
+	service, err := platformservice.New(repository)
+	if err != nil {
+		t.Fatal(err)
+	}
+	project, err := service.Execute(ctx, command.Command{Kind: command.CreateProject, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "alternative-account-project"},
+		Payload:  command.ProjectInput{Name: "Alternative account routing", Language: "en"}})
+	if err != nil || project.Project == nil {
+		t.Fatal("create project", err)
+	}
+	agent := createLifecycleAgent(t, ctx, service, owner, project.Project.Ref, "alternative-account-agent", "Routing reviewer")
+	view, err := service.GetAgentRuntimeConfiguration(ctx, owner, agent.Ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var primaryRef string
+	if err := pool.QueryRow(ctx, "SELECT ref FROM control_plane.provider_accounts WHERE stable_key=$1", "default-"+first.DefinitionKey()).Scan(&primaryRef); err != nil {
+		t.Fatal(err)
+	}
+	const secondaryRef = "pacc_secondcatalog"
+	accountCandidate := func(accountRef, provider string) entity.ProviderAccountCandidate {
+		t.Helper()
+		models, err := service.ListModelCatalog(ctx, owner, provider, accountRef, query.Filter{})
+		if err != nil {
+			t.Fatal("read model catalog", err)
+		}
+		return entity.ProviderAccountCandidate{AccountRef: accountRef, Weight: 1, ProviderDefinitionKey: provider,
+			CatalogRevision: models.Revision, CatalogDigest: models.Digest}
+	}
+	secondary := accountCandidate(secondaryRef, second.DefinitionKey())
+	secondary.RuntimeProfileRef, secondary.Model = modelProviderProfileKey(second, second.Models[0].ID), second.Models[0].ID
+	primaryProfile := modelProviderProfileKey(first, first.Models[0].ID)
+	published, err := service.Execute(ctx, command.Command{Kind: command.PublishAgentRuntimeConfig, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "alternative-account-policy", ExpectedVersion: &view.AgentVersion},
+		Payload: command.AgentRuntimeConfigurationInput{
+			AgentRef: agent.Ref, RuntimeProfileRef: primaryProfile, Model: first.Models[0].ID,
+			ProviderPolicyMode: "FIXED", ProviderAccounts: []entity.ProviderAccountCandidate{accountCandidate(primaryRef, first.DefinitionKey()), secondary},
+		}})
+	if err != nil || published.RuntimeConfiguration == nil {
+		t.Fatal("publish alternative route", err)
+	}
+	assigned := published.RuntimeConfiguration.Configuration.ProviderPolicy.AccountCandidates
+	if len(assigned) != 2 || assigned[0].AccountRef != primaryRef || assigned[1].Model != secondary.Model {
+		t.Fatalf("lost route order or model: %+v", assigned)
+	}
+	launch := func(key string) (command.Result, error) {
+		return service.Execute(ctx, command.Command{Kind: command.LaunchRun, Principal: owner,
+			Mutation: value.Mutation{IdempotencyKey: key}, Payload: command.LaunchRunInput{
+				ProjectRef: project.Project.Ref, Title: "Alternative route", Task: "Return a synthetic result.",
+				Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref},
+			}})
+	}
+	readSessionAccount := func(ref string) (id, organizationID, accountRef string) {
+		t.Helper()
+		err := pool.QueryRow(ctx, `SELECT s.id::text,s.organization_id::text,a.ref FROM control_plane.sessions s
+JOIN control_plane.provider_accounts a ON a.id=s.provider_account_id WHERE s.ref=$1`, ref).Scan(&id, &organizationID, &accountRef)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id, organizationID, accountRef
+	}
+	setEnabled := func(ref string, enabled bool) {
+		t.Helper()
+		if _, err := pool.Exec(ctx, `UPDATE control_plane.provider_accounts
+SET enabled=$2,state=CASE WHEN $2 THEN 'AUTHORIZED' ELSE 'DISABLED' END WHERE ref=$1`, ref, enabled); err != nil {
+			t.Fatal(err)
+		}
+	}
+	primary, err := launch("primary-route-run")
+	if err != nil || primary.Run == nil {
+		t.Fatal("launch primary route", err)
+	}
+	if _, _, account := readSessionAccount(primary.Run.SessionRef); account != primaryRef {
+		t.Fatal("alternative displaced the healthy primary account")
+	}
+	setEnabled(primaryRef, false)
+	fallback, err := launch("alternate-route-run")
+	if err != nil || fallback.Run == nil {
+		t.Fatal("launch fallback route", err)
+	}
+	sessionID, organizationID, accountRef := readSessionAccount(fallback.Run.SessionRef)
+	if accountRef != secondaryRef {
+		t.Fatal("alternate launch did not pin the alternative account")
+	}
+	worker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
+		CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.claim",
+	}, "runtime-controller")
+	claimed, err := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: "alternative-route-claim"},
+		Payload:  command.LeaseInput{WorkloadInstance: "runtime-alternative-account", Limit: 1}})
+	if err != nil || len(claimed.RuntimeItems) != 1 {
+		t.Fatalf("claim alternative session: %d, %v", len(claimed.RuntimeItems), err)
+	}
+	lease := claimed.RuntimeItems[0]
+	if stringMap(lease, "runRef") != fallback.Run.Ref || stringMap(lease, "providerAccountRef") != secondaryRef ||
+		stringMap(lease, "runtimeModel") != secondary.Model || stringMap(lease, "runtimeKey") != secondary.RuntimeProfileRef {
+		t.Fatal("claim did not materialize the pinned alternate provider route")
+	}
+	setEnabled(primaryRef, true)
+	setEnabled(secondaryRef, false)
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = validateSessionRuntimeCatalog(ctx, tx, organizationID, sessionID, agent.Ref)
+	if rollbackErr := tx.Rollback(ctx); rollbackErr != nil || !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("session switched route after revocation: %v, rollback: %v", err, rollbackErr)
+	}
+	setEnabled(primaryRef, false)
+	if failed, err := launch("missing-provider-route"); !errors.Is(err, errs.ErrConflict) || failed.Run != nil {
+		t.Fatalf("unavailable routes allowed a launch: %+v, %v", failed.Run, err)
 	}
 }

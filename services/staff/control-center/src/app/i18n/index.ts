@@ -1698,6 +1698,13 @@ const ru = {
       "Текущий API возвращает назначенные записи, но не предоставляет безопасный каталог доступных provider accounts. Можно менять policy и веса текущего набора; ввод внутренних ref вручную запрещён.",
     accountCatalogHelp:
       "Выберите записи, разрешённые в этом контексте. Совместимость модели проверяется отдельно. Внутренние идентификаторы вводить вручную нельзя.",
+    alternativeAccount: "Альтернативная учётная запись",
+    alternativeAccountHelp:
+      "Используется при запуске новой сессии, если основная запись недоступна.",
+    alternativeProfile: "Профиль и провайдер",
+    addAlternative: "Добавить альтернативу",
+    removeAlternative: "Убрать альтернативу",
+    alternativeDistinctAccount: "Выберите другую учётную запись.",
     environment: "Рабочее окружение",
     environmentHelp: "Версионируемый набор переменных и Secret descriptors",
     chooseEnvironment: "Выберите окружение",
@@ -6774,6 +6781,13 @@ const en = {
       "The current API returns assigned accounts but does not expose a safe provider account catalog. Policy and weights can be changed for the current set; entering internal refs is prohibited.",
     accountCatalogHelp:
       "Select accounts allowed for this context. Model compatibility is checked separately. Internal identifiers cannot be entered manually.",
+    alternativeAccount: "Alternative account",
+    alternativeAccountHelp:
+      "Used to start a new session when the primary account is unavailable.",
+    alternativeProfile: "Profile and provider",
+    addAlternative: "Add alternative",
+    removeAlternative: "Remove alternative",
+    alternativeDistinctAccount: "Select a different account.",
     environment: "Work environment",
     environmentHelp: "Versioned variables and Secret descriptors",
     chooseEnvironment: "Choose an environment",

@@ -29,10 +29,10 @@ SELECT n.id::text,
        COALESCE(t.turn_number, 0),
        a.ref,
        a.name,
-       a.runtime_key,
+       COALESCE(provider_route.profile, a.runtime_key),
        rp.runtime_revision,
-       runtime_config.provider,
-       runtime_config.model,
+       rp.provider,
+       COALESCE(provider_route.model, runtime_config.model),
        pa.id::text,
        pa.ref,
        pcr.id::text,
@@ -635,6 +635,11 @@ LEFT JOIN control_plane.assistant_conversations conversation
  AND conversation.assistant_agent_id = a.id
 JOIN control_plane.agent_runtime_config_versions runtime_config ON runtime_config.id = a.current_runtime_config_id
 JOIN control_plane.provider_account_policy_versions provider_policy ON provider_policy.id = runtime_config.provider_account_policy_id
+LEFT JOIN LATERAL (
+    SELECT candidate->>'runtimeProfileRef' AS profile, candidate->>'providerDefinitionKey' AS provider, candidate->>'model' AS model
+    FROM jsonb_array_elements(provider_policy.account_candidates) candidate
+    WHERE candidate->>'accountRef'=pa.ref AND candidate ? 'runtimeProfileRef'
+) provider_route ON true
 JOIN control_plane.agent_config_overlay_versions config_overlay ON config_overlay.id = a.current_config_overlay_id AND config_overlay.state = 'PUBLISHED'
 JOIN control_plane.agent_runtime_environment_bindings environment_binding ON environment_binding.agent_id = a.id
 JOIN control_plane.runtime_environment_sets environment_set ON environment_set.id = environment_binding.environment_set_id AND environment_set.state = 'ACTIVE'
@@ -643,9 +648,9 @@ JOIN control_plane.runtime_environment_versions runtime_environment ON runtime_e
               AND environment_binding.environment_version_id IS NULL
          THEN environment_set.current_version_id ELSE environment_binding.environment_version_id END
 JOIN control_plane.role_definitions rd ON rd.id = a.role_definition_id
-JOIN control_plane.runtime_profiles rp ON rp.stable_key = runtime_config.runtime_profile_key
-  AND rp.provider = runtime_config.provider
-JOIN control_plane.provider_definitions runtime_provider_definition ON runtime_provider_definition.stable_key = runtime_config.provider
+JOIN control_plane.runtime_profiles rp ON rp.stable_key = COALESCE(provider_route.profile, runtime_config.runtime_profile_key)
+  AND rp.provider = COALESCE(provider_route.provider, runtime_config.provider)
+JOIN control_plane.provider_definitions runtime_provider_definition ON runtime_provider_definition.stable_key = rp.provider
   AND runtime_provider_definition.stable_key = pa.definition_key
 LEFT JOIN control_plane.workflow_versions workflow_version
   ON workflow_version.id = root.workflow_version_id

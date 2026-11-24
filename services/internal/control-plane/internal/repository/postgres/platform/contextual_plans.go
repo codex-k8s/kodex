@@ -691,13 +691,12 @@ func assistantPlanAuthorizationProblem(index int, err error) string {
 
 // validateAssistantLaunchReadiness decodes the planned launch, resolves its project and active
 // agent or published workflow snapshot, and checks role-runtime contract pins for all target
-// agents. Provider account/catalog selection is performed for the first agent or workflow
-// coordinator; this is submission validation rather than live execution or a full per-step
-// provider probe.
+// agents. It checks the pinned session route for continuation or selects an eligible account for
+// the first agent or workflow coordinator. This does not perform a remote provider probe.
 // validateAssistantLaunchReadiness декодирует planned launch, разрешает проект и active agent либо
 // published workflow snapshot, проверяет role-runtime contract pins всех target agents. Provider
-// account/catalog selection выполняет для первого агента либо workflow coordinator; это submission
-// validation, не реальное исполнение и не полная per-step проверка провайдера.
+// account/catalog проверяет по сохранённому маршруту продолжения либо выбирает готовый аккаунт
+// первого агента или координатора. Удалённый вызов провайдера не выполняет.
 func (repository *Repository) validateAssistantLaunchReadiness(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -765,15 +764,16 @@ func (repository *Repository) validateAssistantLaunchReadiness(
 	if !runtimeContractReady {
 		return errs.ErrConflict
 	}
-	if _, err = repository.selectProviderAccountForAgent(ctx, tx, scope.organizationID, targetAgentRefs[0]); err != nil {
-		return err
+	if payload.SessionRef != "" {
+		var sessionID string
+		err := tx.QueryRow(ctx, queryCommandsLaunchrunSelectSessionsOrganizationIdProjectIdRef,
+			scope.organizationID, projectID, payload.SessionRef, payload.Target.Type, payload.Target.Ref).Scan(&sessionID)
+		if err != nil {
+			return errs.ErrConflict
+		}
+		return validateSessionRuntimeCatalog(ctx, tx, scope.organizationID, sessionID, targetAgentRefs[0])
 	}
-	configuration, overlay, err := readRuntimeCatalogConfiguration(ctx, tx, scope.organizationID, targetAgentRefs[0], "")
-	if err != nil {
-		return err
-	}
-	_, _, err = validateRuntimeCatalogCandidates(ctx, tx, scope, configuration.Provider, configuration.Model,
-		overlay, configuration.ProviderPolicy.AccountCandidates, false)
+	_, err = repository.selectReadyProviderAccountForAgent(ctx, tx, scope.organizationID, targetAgentRefs[0])
 	return err
 }
 

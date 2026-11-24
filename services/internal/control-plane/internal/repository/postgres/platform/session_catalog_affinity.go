@@ -54,6 +54,7 @@ var queryRuntimeCatalogReadSessionBinding string
 type sessionCatalogBinding struct {
 	CatalogRevision, CatalogDigest, Provider string
 	PolicyID, PolicyRef, PolicyDigest        string
+	OriginalProfile, OriginalModel           string
 	PolicyVersion                            int64
 	Models                                   []platformrepo.ProviderModelCatalogRecord
 }
@@ -90,7 +91,8 @@ func bindSessionModelCatalog(ctx context.Context, tx pgx.Tx, organizationID, ses
 	if _, _, err := validateRuntimeCatalogCandidates(ctx, tx, scope{organizationID: organizationID}, configuration.Provider, configuration.Model, overlay, selected, false); err != nil {
 		return err
 	}
-	catalog, err := readModelCatalogTx(ctx, tx, scope{organizationID: organizationID}, configuration.Provider, accountRef)
+	provider, _, _ := configuredModelRoute(configuration, selected[0])
+	catalog, err := readModelCatalogTx(ctx, tx, scope{organizationID: organizationID}, provider, accountRef)
 	if err != nil {
 		return err
 	}
@@ -120,7 +122,9 @@ func bindSessionModelCatalog(ctx context.Context, tx pgx.Tx, organizationID, ses
 func readSessionModelCatalog(ctx context.Context, tx pgx.Tx, organizationID, sessionID, accountRef string) (sessionCatalogBinding, error) {
 	var binding sessionCatalogBinding
 	var raw []byte
-	if err := tx.QueryRow(ctx, queryRuntimeCatalogReadSessionBinding, sessionID, organizationID, accountRef).Scan(&binding.CatalogRevision, &binding.CatalogDigest, &raw, &binding.Provider, &binding.PolicyID, &binding.PolicyRef, &binding.PolicyVersion, &binding.PolicyDigest); err != nil {
+	if err := tx.QueryRow(ctx, queryRuntimeCatalogReadSessionBinding, sessionID, organizationID, accountRef).Scan(
+		&binding.CatalogRevision, &binding.CatalogDigest, &raw, &binding.Provider, &binding.PolicyID,
+		&binding.PolicyRef, &binding.PolicyVersion, &binding.PolicyDigest, &binding.OriginalProfile, &binding.OriginalModel); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return binding, errs.ErrConflict
 		}
@@ -151,13 +155,6 @@ func checkedSessionModelCatalog(ctx context.Context, tx pgx.Tx, organizationID, 
 // verified candidate и retained binding только при необходимости; lock flag не обходит eligibility
 // и не выдаёт actor authority.
 func checkedSessionModelCatalogSnapshot(ctx context.Context, tx pgx.Tx, organizationID, sessionID, accountRef string, configuration entity.AgentRuntimeConfiguration, overlay string, lock bool) (entity.ProviderAccountCandidate, *sessionCatalogBinding, error) {
-	var compatible bool
-	if err := tx.QueryRow(ctx, queryRuntimeCatalogNativeModelCompatible, organizationID, sessionID, configuration.Model, configuration.RuntimeProfileRef).Scan(&compatible); err != nil {
-		return entity.ProviderAccountCandidate{}, nil, errs.ErrUnavailable
-	}
-	if !compatible {
-		return entity.ProviderAccountCandidate{}, nil, errs.ErrConflict
-	}
 	binding, err := readSessionModelCatalog(ctx, tx, organizationID, sessionID, accountRef)
 	if err != nil {
 		return entity.ProviderAccountCandidate{}, nil, err
@@ -166,11 +163,38 @@ func checkedSessionModelCatalogSnapshot(ctx context.Context, tx pgx.Tx, organiza
 	if err != nil {
 		return entity.ProviderAccountCandidate{}, nil, err
 	}
+	provider, model, profile := configuredModelRoute(configuration, selected)
+	if binding.OriginalProfile != "" && (binding.OriginalProfile != profile || binding.OriginalModel != model) {
+		return entity.ProviderAccountCandidate{}, nil, errs.ErrConflict
+	}
+	var compatible bool
+	if err := tx.QueryRow(ctx, queryRuntimeCatalogNativeModelCompatible, organizationID, sessionID, model, profile).Scan(&compatible); err != nil {
+		return entity.ProviderAccountCandidate{}, nil, errs.ErrUnavailable
+	}
+	if !compatible || provider != binding.Provider {
+		return entity.ProviderAccountCandidate{}, nil, errs.ErrConflict
+	}
 	verified, _, err := validateRuntimeCatalogCandidatesSnapshot(ctx, tx, scope{organizationID: organizationID}, configuration.Provider, configuration.Model, overlay, []entity.ProviderAccountCandidate{selected}, false, lock)
 	if err != nil {
 		return entity.ProviderAccountCandidate{}, nil, err
 	}
 	return verified[0], retained, nil
+}
+
+// configuredModelRoute returns the primary configuration unless the selected candidate has an explicit route.
+// configuredModelRoute возвращает основную конфигурацию, если у выбранного кандидата отсутствует отдельный маршрут.
+func configuredModelRoute(configuration entity.AgentRuntimeConfiguration, candidate entity.ProviderAccountCandidate) (provider, model, profile string) {
+	if candidate.RuntimeProfileRef != "" {
+		return candidate.ProviderDefinitionKey, candidate.Model, candidate.RuntimeProfileRef
+	}
+	return configuration.Provider, configuration.Model, configuration.RuntimeProfileRef
+}
+
+// hasAlternativeModelRoute distinguishes an ordered primary and reserve pair from legacy shared-model policies.
+// hasAlternativeModelRoute отличает основную и резервную запись от прежних политик с общей моделью.
+func hasAlternativeModelRoute(configuration entity.AgentRuntimeConfiguration) bool {
+	candidates := configuration.ProviderPolicy.AccountCandidates
+	return len(candidates) == 2 && candidates[1].RuntimeProfileRef != ""
 }
 
 // resolveSessionModelCatalogCandidate prefers exactly one configured account match; only when

@@ -4,6 +4,7 @@ import { computed, onBeforeUnmount, reactive, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import CodeEditorSurface from "@/features/agents/detail/CodeEditorSurface.vue";
+import AgentAlternativeModelAccount from "./AgentAlternativeModelAccount.vue";
 import OverlayExecutionPreferences from "./OverlayExecutionPreferences.vue";
 import OverlayHistoryPanel from "./OverlayHistoryPanel.vue";
 import { restoreOverlayRevision } from "./overlay-history";
@@ -43,6 +44,8 @@ import {
 } from "@/features/agents/detail/runtime-api";
 import type {
   AgentRuntimeConfigurationView,
+  ProviderAccountCandidate,
+  ProviderAccountCandidateInput,
   RuntimeSelection,
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
@@ -96,6 +99,23 @@ const form = reactive<RuntimeForm>({
   providerPolicyMode: "FIXED",
   providerAccounts: [],
 });
+const alternative = ref<RuntimeForm>();
+const alternativeCandidate = ref<ProviderAccountCandidateInput>();
+const alternativeAccountDuplicate = computed(() =>
+  Boolean(
+    alternative.value?.providerAccounts.some((account) =>
+      form.providerAccounts.some(
+        (primary) => primary.accountRef === account.accountRef,
+      ),
+    ),
+  ),
+);
+const alternativeReady = computed(
+  () =>
+    form.providerPolicyMode !== "FIXED" ||
+    !alternative.value ||
+    Boolean(alternativeCandidate.value && !alternativeAccountDuplicate.value),
+);
 const providerPolicyModes = ["FIXED", "LEAST_USED", "WEIGHTED"] as const;
 type ProviderPolicyMode = (typeof providerPolicyModes)[number];
 const reasoningEffortId = useId();
@@ -160,8 +180,16 @@ const runtimeDirty = computed(() => {
     form.providerPolicyMode !== current.providerPolicy.mode ||
     JSON.stringify(form.providerAccounts) !==
       JSON.stringify(
-        runtimeCandidates(current.providerPolicy.accountCandidates),
-      )
+        runtimeCandidates(
+          current.providerPolicy.accountCandidates.filter(
+            (item) => !item.runtimeProfileRef,
+          ),
+        ),
+      ) ||
+    JSON.stringify(
+      form.providerPolicyMode === "FIXED" ? alternative.value : undefined,
+    ) !==
+      JSON.stringify(savedAlternative(current.providerPolicy.accountCandidates))
   );
 });
 const catalogPinsChanged = computed(() => {
@@ -315,6 +343,21 @@ function notify(state: "APPLIED" | "DRAFT" | "RUNNING" | "FAILED"): void {
   emit("apply-state", state, copy.value.runtime.title, "next-turn");
 }
 
+function savedAlternative(
+  accounts: readonly ProviderAccountCandidate[],
+): RuntimeForm | undefined {
+  const candidate = accounts.find(
+    (item) => item.runtimeProfileRef && item.model,
+  );
+  if (!candidate?.runtimeProfileRef || !candidate.model) return undefined;
+  return {
+    runtimeProfileRef: candidate.runtimeProfileRef,
+    model: candidate.model,
+    providerPolicyMode: "FIXED",
+    providerAccounts: runtimeCandidates([candidate]),
+  };
+}
+
 function sync(preserveRuntime = false, preserveOverlay = false): void {
   const value = view.value;
   if (!value) return;
@@ -322,9 +365,12 @@ function sync(preserveRuntime = false, preserveOverlay = false): void {
     form.runtimeProfileRef = value.configuration.runtimeProfileRef;
     form.model = value.configuration.model;
     form.providerPolicyMode = value.configuration.providerPolicy.mode;
+    const accounts = value.configuration.providerPolicy.accountCandidates;
     form.providerAccounts = runtimeCandidates(
-      value.configuration.providerPolicy.accountCandidates,
+      accounts.filter((item) => !item.runtimeProfileRef),
     );
+    alternative.value = savedAlternative(accounts);
+    alternativeCandidate.value = undefined;
   }
   if (!preserveOverlay)
     overlayContent.value =
@@ -447,6 +493,21 @@ function chooseProviderPolicy(event: Event): void {
   notify(runtimeDirty.value ? "DRAFT" : "APPLIED");
 }
 
+function toggleAlternative(): void {
+  if (busy.value || !props.canEdit || form.providerPolicyMode !== "FIXED")
+    return;
+  alternative.value = alternative.value
+    ? undefined
+    : {
+        runtimeProfileRef: form.runtimeProfileRef,
+        model: form.model,
+        providerPolicyMode: "FIXED",
+        providerAccounts: [],
+      };
+  alternativeCandidate.value = undefined;
+  notify(runtimeDirty.value ? "DRAFT" : "APPLIED");
+}
+
 function updateOverlay(value: string): void {
   if (busy.value || !props.canEdit) return;
   overlayContent.value = value;
@@ -512,18 +573,25 @@ async function saveRuntime(): Promise<void> {
     !props.canEdit ||
     (!runtimeDirty.value && !catalogPinsChanged.value) ||
     !modelAvailable.value ||
-    !providerSubmissionAllowed.value
+    !providerSubmissionAllowed.value ||
+    !alternativeReady.value
   )
     return;
-  await execute(
-    () =>
-      saveAgentRuntime(
-        props.agentRef,
-        pinnedRuntimeInput(form, modelSelection.value, selectedProvider.value),
-        current.agentVersion,
-      ),
-    "RUNTIME",
-  );
+  await execute(() => {
+    const input = pinnedRuntimeInput(
+      form,
+      modelSelection.value,
+      selectedProvider.value,
+    );
+    if (
+      form.providerPolicyMode === "FIXED" &&
+      alternative.value &&
+      alternativeCandidate.value
+    ) {
+      input.providerAccounts.push(alternativeCandidate.value);
+    }
+    return saveAgentRuntime(props.agentRef, input, current.agentVersion);
+  }, "RUNTIME");
 }
 
 async function saveOverlay(): Promise<void> {
@@ -778,6 +846,49 @@ onBeforeUnmount(reset);
             @submission-allowed-change="providerSubmissionAllowed = $event"
           />
         </section>
+        <section
+          v-if="form.providerPolicyMode === 'FIXED' && (canEdit || alternative)"
+          class="runtime-panel__account-capability"
+        >
+          <div class="runtime-panel__account-heading">
+            <div>
+              <strong>{{ $t("runtime.alternativeAccount") }}</strong>
+              <p>{{ $t("runtime.alternativeAccountHelp") }}</p>
+            </div>
+            <button
+              v-if="canEdit"
+              type="button"
+              class="button button--secondary"
+              :disabled="busy"
+              @click="toggleAlternative"
+            >
+              {{
+                $t(
+                  alternative
+                    ? "runtime.removeAlternative"
+                    : "runtime.addAlternative",
+                )
+              }}
+            </button>
+          </div>
+          <AgentAlternativeModelAccount
+            v-if="alternative"
+            :model-value="alternative"
+            :agent-ref="agentRef"
+            :runtimes="availableRuntimes"
+            :reasoning-effort="providerUsageContext.reasoningEffort"
+            :disabled="!canEdit || busy"
+            @update:model-value="
+              alternative = $event;
+              alternativeCandidate = undefined;
+              notify('DRAFT');
+            "
+            @candidate-change="alternativeCandidate = $event"
+          />
+          <p v-if="alternativeAccountDuplicate" role="status">
+            {{ $t("runtime.alternativeDistinctAccount") }}
+          </p>
+        </section>
         <div v-if="canEdit" class="runtime-panel__actions">
           <span v-if="runtimeDirty">{{ $t("states.DRAFT") }}</span>
           <span v-else-if="catalogPinsChanged" role="status">{{
@@ -794,7 +905,8 @@ onBeforeUnmount(reset);
               !modelAvailable ||
               !selectedRuntime?.ready ||
               !form.providerAccounts.length ||
-              !providerSubmissionAllowed
+              !providerSubmissionAllowed ||
+              !alternativeReady
             "
             @click="saveRuntime"
           >

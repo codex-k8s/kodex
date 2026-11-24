@@ -294,7 +294,20 @@ func (repository *Repository) attachmentAgentDependencies(ctx context.Context, t
 			return nil, false, err
 		}
 	}
-	if checkCatalog {
+	alternative := hasAlternativeModelRoute(view.Configuration)
+	if checkCatalog && alternative {
+		eligible := false
+		for _, candidate := range view.Configuration.ProviderPolicy.AccountCandidates {
+			_, _, err := validateRuntimeCatalogCandidatesSnapshot(ctx, tx, current, view.Configuration.Provider,
+				view.Configuration.Model, view.PublishedOverlay.Content, []entity.ProviderAccountCandidate{candidate}, false, false)
+			if err == nil {
+				eligible = true
+			} else if !continuationIneligible(err) {
+				return nil, false, err
+			}
+		}
+		ready = ready && eligible
+	} else if checkCatalog {
 		if _, _, err := validateRuntimeCatalogCandidatesSnapshot(ctx, tx, current, view.Configuration.Provider, view.Configuration.Model, view.PublishedOverlay.Content, view.Configuration.ProviderPolicy.AccountCandidates, false, false); err != nil {
 			if continuationIneligible(err) {
 				ready = false
@@ -309,7 +322,9 @@ func (repository *Repository) attachmentAgentDependencies(ctx context.Context, t
 		var state, credentialRevision string
 		err := tx.QueryRow(ctx, queryRunAttachmentAccountDependencies, pgx.StrictNamedArgs{"organization_id": current.organizationID, "account_ref": candidate.AccountRef}).Scan(&accountVersion, &enabled, &state, &credentialRevision)
 		if errors.Is(err, pgx.ErrNoRows) {
-			ready = false
+			if !alternative {
+				ready = false
+			}
 			continue
 		}
 		if err != nil {
@@ -319,9 +334,12 @@ func (repository *Repository) attachmentAgentDependencies(ctx context.Context, t
 		if !checkCatalog {
 			continue
 		}
-		catalog, err := readModelCatalogTx(ctx, tx, current, view.Configuration.Provider, candidate.AccountRef)
+		provider, _, _ := configuredModelRoute(view.Configuration, candidate)
+		catalog, err := readModelCatalogTx(ctx, tx, current, provider, candidate.AccountRef)
 		if continuationIneligible(err) {
-			ready = false
+			if !alternative {
+				ready = false
+			}
 			continue
 		}
 		if err != nil {

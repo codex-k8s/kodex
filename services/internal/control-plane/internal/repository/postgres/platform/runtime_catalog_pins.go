@@ -180,16 +180,27 @@ func validateRuntimeCatalogCandidatesSnapshot(ctx context.Context, tx pgx.Tx, cu
 	efforts := []string{}
 	for index := range result {
 		candidate := &result[index]
+		routeProvider, routeModel, routeProfile := provider, model, profile
+		if candidate.RuntimeProfileRef != "" {
+			routeProvider, routeModel = candidate.ProviderDefinitionKey, candidate.Model
+			if !validModel(routeModel) || routeProvider == "" {
+				return nil, nil, errs.ErrInvalid
+			}
+			routeProfile, err = runtimeCatalogProviderConfiguration(ctx, tx, routeProvider)
+			if err != nil {
+				return nil, nil, err
+			}
+		}
 		legacyUnpinned := !input && legacyUnpinnedRuntimeCatalogCandidate(*candidate)
-		if !legacyUnpinned && (!validRuntimeCatalogPin(*candidate) || candidate.ProviderDefinitionKey != provider) || input && (candidate.DefaultReasoningEffort != "" || candidate.ModelCapabilityDigest != "") {
+		if !legacyUnpinned && (!validRuntimeCatalogPin(*candidate) || candidate.ProviderDefinitionKey != routeProvider) || input && (candidate.DefaultReasoningEffort != "" || candidate.ModelCapabilityDigest != "") {
 			return nil, nil, errs.ErrInvalid
 		}
 		var ref string
 		accountQuery := queryRuntimeCatalogReadAccounts
-		accountArgs := []any{pgx.StrictNamedArgs{"organization_id": current.organizationID, "account_ref": candidate.AccountRef, "provider": provider}}
+		accountArgs := []any{pgx.StrictNamedArgs{"organization_id": current.organizationID, "account_ref": candidate.AccountRef, "provider": routeProvider}}
 		if lock {
 			accountQuery = queryRuntimeCatalogLockAccounts
-			accountArgs = []any{current.organizationID, candidate.AccountRef, provider}
+			accountArgs = []any{current.organizationID, candidate.AccountRef, routeProvider}
 		}
 		if err := tx.QueryRow(ctx, accountQuery, accountArgs...).Scan(&ref); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
@@ -197,12 +208,12 @@ func validateRuntimeCatalogCandidatesSnapshot(ctx context.Context, tx pgx.Tx, cu
 			}
 			return nil, nil, errs.ErrUnavailable
 		}
-		catalog, err := readModelCatalogTx(ctx, tx, current, provider, candidate.AccountRef)
+		catalog, err := readModelCatalogTx(ctx, tx, current, routeProvider, candidate.AccountRef)
 		if err != nil {
 			return nil, nil, err
 		}
 		if legacyUnpinned {
-			candidate.ProviderDefinitionKey = provider
+			candidate.ProviderDefinitionKey = routeProvider
 			candidate.CatalogRevision, candidate.CatalogDigest = catalog.Revision, catalog.Digest
 		}
 		// При публикации проверяется точный снимок каталога. Уже сохранённая
@@ -213,14 +224,14 @@ func validateRuntimeCatalogCandidatesSnapshot(ctx context.Context, tx pgx.Tx, cu
 		}
 		found := false
 		for _, capability := range catalog.Models {
-			if capability.ID != model {
+			if capability.ID != routeModel {
 				continue
 			}
 			validDefault := len(capability.ReasoningEfforts) == 0 && capability.DefaultReasoningEffort == "" || slices.Contains(capability.ReasoningEfforts, capability.DefaultReasoningEffort)
 			if !capability.Available || !slices.Contains(capability.EligibleProviderAccountRefs, candidate.AccountRef) || !validDefault {
 				return nil, nil, errs.ErrConflict
 			}
-			modelDigest := modelcatalog.CapabilityDigest(provider, candidate.AccountRef, capability.ID, capability.ReasoningEfforts, capability.DefaultReasoningEffort, capability.IsDefault)
+			modelDigest := modelcatalog.CapabilityDigest(routeProvider, candidate.AccountRef, capability.ID, capability.ReasoningEfforts, capability.DefaultReasoningEffort, capability.IsDefault)
 			if !input && candidate.ModelCapabilityDigest != "" && candidate.ModelCapabilityDigest != modelDigest {
 				return nil, nil, errs.ErrVersionMismatch
 			}
@@ -242,7 +253,7 @@ func validateRuntimeCatalogCandidatesSnapshot(ctx context.Context, tx pgx.Tx, cu
 			if effective == "" {
 				mode = runtimecontract.ReasoningUnsupported
 			}
-			if preferenceErr := profile.ValidateRuntimePreferences(model, overlay, effective, mode); preferenceErr != nil {
+			if preferenceErr := routeProfile.ValidateRuntimePreferences(routeModel, overlay, effective, mode); preferenceErr != nil {
 				return nil, nil, errors.Join(errs.ErrConflict, preferenceErr)
 			}
 			modelEfforts := append([]string{}, capability.ReasoningEfforts...)

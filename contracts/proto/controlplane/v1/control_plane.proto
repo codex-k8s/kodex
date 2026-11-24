@@ -6238,6 +6238,9 @@ message ProviderAccountCandidate {
   string provider_definition_key = 5;
   // Назначаемый сервером default выбранной модели из exact catalog snapshot.
   string default_reasoning_effort = 6;
+  // Отдельный профиль и модель альтернативного аккаунта в политике FIXED.
+  string runtime_profile_ref = 7;
+  string model = 8;
 }
 
 message ProviderAccountPolicyVersion {
