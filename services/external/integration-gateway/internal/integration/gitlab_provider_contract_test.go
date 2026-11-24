@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -22,10 +23,10 @@ import (
 func TestGitLabProviderSubsetContract(t *testing.T) {
 	raw, document := documentedProviderContract(t, "gitlab")
 	inspection, err := integrationpackage.InspectOpenAPI(t.Context(), raw)
-	if err != nil || len(inspection.Operations) != 17 || len(document.Paths.Map()) != 15 {
+	if err != nil || len(inspection.Operations) != 18 || len(document.Paths.Map()) != 16 {
 		t.Fatal("GitLab subset coverage changed", err)
 	}
-	definition := legacyGitLabTestAdapter(t).definitions["gitlab"]
+	definition := testAdapter(t).definitions["gitlab"]
 	internal := map[string]bool{"gitlab.permission.version.read": true, "gitlab.permission.identity.read": true,
 		"gitlab.permission.token.self.read": true, "gitlab.permission.token.details.read": true, "gitlab.permission.branch_rules.read": true, "gitlab.permission.group.read": true}
 	for _, operation := range inspection.Operations {
@@ -40,6 +41,74 @@ func TestGitLabProviderSubsetContract(t *testing.T) {
 	}
 	if bytes.Contains(raw, []byte("$ref: https:")) || bytes.Contains(raw, []byte("$ref: http:")) {
 		t.Fatal("provider subset acquired external schema references")
+	}
+}
+
+// TestGitLabMergeRequestApprovalScope exercises the scoped GET, exact object binding and safe output through an ordinary adapter claim.
+// TestGitLabMergeRequestApprovalScope проверяет GET в заданной области, точную привязку объекта и безопасный вывод через обычный вызов адаптера.
+func TestGitLabMergeRequestApprovalScope(t *testing.T) {
+	for _, scenario := range []struct {
+		name     string
+		body     string
+		expected string
+	}{
+		{"satisfied without rules", `{"project_id":20,"iid":4,"approved":true,"approvals_required":0,"approvals_left":0,"approved_by":[]}`,
+			`{"approved":true,"approvals_left":0,"approvals_required":0,"approver_count":0,"merge_request_iid":4,"project_id":20}`},
+		{"pending without optional counts", `{"project_id":20,"iid":4,"approved":false,"approved_by":[{"user":{"name":"synthetic-name"}}]}`,
+			`{"approved":false,"approver_count":1,"merge_request_iid":4,"project_id":20}`},
+		{"foreign project", `{"project_id":21,"iid":4,"approved":true}`, ""},
+		{"different merge request", `{"project_id":20,"iid":5,"approved":true}`, ""},
+		{"missing state", `{"project_id":20,"iid":4}`, ""},
+		{"malformed approver", `{"project_id":20,"iid":4,"approved":true,"approved_by":[null]}`, ""},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			adapter := testAdapter(t)
+			request := scopedGitLabTestRequest(t, adapter, "gitlab.merge_request.approval.read",
+				map[string]string{"base_url": "https://git.example.invalid", "scope_kind": "GROUP", "group_path": "team"},
+				map[string]any{"project_id": 20, "project_path": "team/service", "merge_request_iid": 4})
+			request.Credential = testCredential(t, adapter, "synthetic-gitlab-personal-key")
+			verifyWire := gitLabWireValidator(t, request)
+			reads := 0
+			adapter.nativeHTTPClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				if r.Method != http.MethodGet || r.URL.Host != "git.example.invalid" || r.Header.Get("Authorization") != "Bearer synthetic-gitlab-personal-key" {
+					t.Fatal("request escaped the scoped GET or credential")
+				}
+				var body string
+				switch r.URL.Path {
+				case "/api/v4/groups/team":
+					body = `{"id":10,"full_path":"team"}`
+				case "/api/v4/projects/team/service":
+					body = `{"id":20,"path_with_namespace":"team/service","namespace":{"id":10,"full_path":"team","kind":"group"}}`
+				case "/api/v4/projects/20/merge_requests/4/approvals":
+					reads++
+					body = scenario.body
+				default:
+					t.Fatalf("unexpected provider path: %s", r.URL.Path)
+				}
+				response := &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": {"application/json"}}, Body: io.NopCloser(strings.NewReader(body)), Request: r}
+				if reads > 0 && scenario.expected != "" {
+					verifyWire(r, response)
+				}
+				return response, nil
+			})}
+			result, err := adapter.Execute(t.Context(), request)
+			if reads != 1 {
+				t.Fatalf("expected one exact approvals GET, got %d", reads)
+			}
+			if scenario.expected == "" {
+				var safe *SafeError
+				if !errors.As(err, &safe) || safe.Code != "INTEGRATION_RESPONSE_INVALID" || result.Receipt.EffectKey != "" {
+					t.Fatal("invalid approval response issued a receipt", err)
+				}
+				return
+			}
+			var observed, expected map[string]any
+			if err != nil || json.Unmarshal([]byte(result.Summary), &observed) != nil ||
+				json.Unmarshal([]byte(scenario.expected), &expected) != nil ||
+				!reflect.DeepEqual(observed, expected) || result.Receipt.EffectKey != request.EffectKey {
+				t.Fatal("safe approval projection or receipt did not match", err)
+			}
+		})
 	}
 }
 

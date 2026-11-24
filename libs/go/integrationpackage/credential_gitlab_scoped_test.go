@@ -10,7 +10,7 @@ func TestGitLabScopedPersonalContracts(t *testing.T) {
 		t.Fatal(err)
 	}
 	definition := definitions["gitlab"]
-	if len(definition.Spec.Capabilities) != 40 {
+	if len(definition.Spec.Capabilities) != 41 {
 		t.Fatal("scoped GitLab operation coverage changed")
 	}
 	for _, capability := range definition.Spec.Capabilities {

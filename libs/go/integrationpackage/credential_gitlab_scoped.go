@@ -54,7 +54,7 @@ func CredentialResourcePermissionContractForProfile(definitionKey, capabilityKey
 func gitLabScopedCapabilityRisk(operation string) string {
 	switch operation {
 	case "gitlab.project.list", "gitlab.repository.search", "gitlab.project.metadata.read", "gitlab.repository.file.read", "gitlab.issue.read", "gitlab.issue.list",
-		"gitlab.merge_request.read", "gitlab.pipeline.read", "gitlab.branch.list", "gitlab.branch.read", "gitlab.commit.list", "gitlab.commit.read", "gitlab.commit.diff",
+		"gitlab.merge_request.read", "gitlab.merge_request.approval.read", "gitlab.pipeline.read", "gitlab.branch.list", "gitlab.branch.read", "gitlab.commit.list", "gitlab.commit.read", "gitlab.commit.diff",
 		"gitlab.repository.tree.list", "gitlab.issue.note.list", "gitlab.issue.note.read", "gitlab.merge_request.list", "gitlab.merge_request.discussion.list",
 		"gitlab.pipeline.list", "gitlab.job.list", "gitlab.job.read", "gitlab.job.trace.read", "gitlab.merge_request.diff.list":
 		return "READ"
