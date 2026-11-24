@@ -459,7 +459,8 @@ func (adapter *Adapter) Execute(ctx context.Context, request Request) (Result, e
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(capability.Execution.TimeoutSeconds)*time.Second)
 	defer cancel()
 	request.permissionEffect = nil
-	if request.PersonalCredentialAdmission && request.ResourcePermissionProfile != "" || capability.ResourceScope.Kind == "GITLAB_SCOPE" || capability.ResourceScope.Kind == "GITHUB_SCOPE" || definition.Spec.Adapter == "SENTRY" || definition.Spec.Adapter == "OBSERVABILITY" {
+	if request.PersonalCredentialAdmission && request.ResourcePermissionProfile != "" || capability.ResourceScope.Kind == "GITLAB_SCOPE" || capability.ResourceScope.Kind == "GITHUB_SCOPE" || definition.Spec.Adapter == "SENTRY" || definition.Spec.Adapter == "OBSERVABILITY" ||
+		definition.Metadata.Key == confluenceServerDefinition && request.Operation == "confluence.page.comment.create" {
 		request.permissionEffect = &permissionEffectObservation{}
 	}
 	var result Result
@@ -815,7 +816,7 @@ func (adapter *Adapter) callSynthetic(ctx context.Context, method, path, effectK
 		}
 		return nil, statusError(response.StatusCode)
 	}
-	return readBoundedResponse(response.Body)
+	return readBoundedResponse(response.Body, maximumResponseBytes)
 }
 
 // executeGitHub opens a credential-bound SDK client, reads exact repository metadata or dispatches issue/catalog operations using the validated owner and repository.
@@ -1081,11 +1082,11 @@ func ObservedProviderHTTPStatus(err error) int {
 	return 0
 }
 
-// readBoundedResponse reads at most one byte beyond the projection budget and rejects both I/O failure and oversize content without returning partial data.
-// RU: readBoundedResponse читает не более одного байта сверх бюджета проекции и отклоняет I/O-ошибку либо превышение без возврата частичных данных.
-func readBoundedResponse(reader io.Reader) ([]byte, error) {
-	body, err := io.ReadAll(io.LimitReader(reader, maximumResponseBytes+1))
-	if err != nil || len(body) > maximumResponseBytes {
+// readBoundedResponse reads at most one byte beyond the supplied wire budget and rejects both I/O failure and oversize content without returning partial data.
+// RU: readBoundedResponse читает не более одного байта сверх бюджета входящего ответа и отклоняет I/O-ошибку либо превышение без возврата частичных данных.
+func readBoundedResponse(reader io.Reader, limit int) ([]byte, error) {
+	body, err := io.ReadAll(io.LimitReader(reader, int64(limit)+1))
+	if err != nil || len(body) > limit {
 		return nil, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
 	}
 	return body, nil

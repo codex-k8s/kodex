@@ -140,7 +140,13 @@ func confluenceServerNext(configuration map[string]string, query url.Values, pag
 	if page.Start == nil || page.Limit == nil {
 		return "", &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
 	}
-	if page.Links.Next == "" {
+	return confluenceServerNextOffset(configuration, "/content", query, *page.Start, *page.Limit, len(page.Results), page.Links.Next)
+}
+
+// confluenceServerNextOffset verifies the next link against the fixed path and query before exposing only its offset.
+// confluenceServerNextOffset сверяет ссылку продолжения с фиксированным маршрутом и запросом, возвращая только смещение.
+func confluenceServerNextOffset(configuration map[string]string, path string, query url.Values, start, limit, count int, link string) (string, error) {
+	if link == "" {
 		return "", nil
 	}
 	prefix, err := atlassianServerContext(configuration)
@@ -148,10 +154,11 @@ func confluenceServerNext(configuration map[string]string, query url.Values, pag
 		return "", err
 	}
 	origin, originErr := url.Parse(configuration["base_url"])
-	next, parseErr := url.Parse(page.Links.Next)
+	next, parseErr := url.Parse(link)
+	apiPath := "/rest/api" + path
 	if originErr != nil || parseErr != nil || next.User != nil || next.Fragment != "" ||
 		(next.Scheme != "" || next.Host != "") && (next.Scheme != "https" || next.Host != origin.Host) ||
-		(next.Path != "/rest/api/content" && next.Path != prefix+"/rest/api/content") || next.RawPath != "" {
+		(next.Path != apiPath && next.Path != prefix+apiPath) || next.RawPath != "" {
 		return "", &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
 	}
 	values, err := url.ParseQuery(next.RawQuery)
@@ -165,19 +172,17 @@ func confluenceServerNext(configuration map[string]string, query url.Values, pag
 		switch key {
 		case "start":
 		case "limit":
-			if value[0] != strconv.Itoa(*page.Limit) {
-				return "", &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
-			}
-		case "spaceKey", "title", "type", "status", "expand":
-			if value[0] != query.Get(key) {
+			if value[0] != strconv.Itoa(limit) {
 				return "", &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
 			}
 		default:
-			return "", &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+			if !query.Has(key) || value[0] != query.Get(key) {
+				return "", &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+			}
 		}
 	}
 	offset, err := atlassianServerOffset(values.Get("start"))
-	if err != nil || len(page.Results) == 0 || offset != *page.Start+len(page.Results) {
+	if err != nil || count == 0 || offset != start+count {
 		return "", &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
 	}
 	return strconv.Itoa(offset), nil
@@ -314,6 +319,8 @@ func (adapter *Adapter) executeConfluenceServer(ctx context.Context, request Req
 		return adapter.createConfluenceServerPage(ctx, request, capability, configuration, input)
 	case "confluence.page.update":
 		return adapter.updateConfluenceServerPage(ctx, request, capability, configuration, input)
+	case "confluence.page.comment.list", "confluence.page.comment.create":
+		return adapter.executeConfluenceServerComment(ctx, request, capability, configuration, input)
 	default:
 		return Result{}, &SafeError{Code: "INTEGRATION_CAPABILITY_UNSUPPORTED"}
 	}

@@ -24,13 +24,42 @@ import (
 // профилем. Внешние права/effect синтетические; live Confluence и TLS не подтверждаются.
 func assertPersonalConfluenceResourcePermission(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, owner value.Principal) {
 	t.Helper()
+	for _, scenario := range []confluencePersonalScenario{
+		{"update-page", "confluence.page.update", integrationpackage.CredentialResourcePermissionConfluencePageUpdateV1,
+			cp.IntegrationCredentialResourcePermissionProfile_INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_CONFLUENCE_SERVER_PAGE_UPDATE_V1,
+			map[string]any{"page_id": "101", "expected_version": 2, "body": "<p>synthetic update</p>"}},
+		{"add-comment", "confluence.page.comment.create", integrationpackage.CredentialResourcePermissionConfluenceContentCreateV1,
+			cp.IntegrationCredentialResourcePermissionProfile_INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_CONFLUENCE_SERVER_CONTENT_CREATE_V1,
+			map[string]any{"page_id": "101", "body": "Synthetic footer comment"}},
+		{"create-page", "confluence.page.create", integrationpackage.CredentialResourcePermissionConfluenceContentCreateV1,
+			cp.IntegrationCredentialResourcePermissionProfile_INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_CONFLUENCE_SERVER_CONTENT_CREATE_V1,
+			map[string]any{"parent_id": "101", "title": "Synthetic child page", "body": "<p>Synthetic body</p>"}},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			assertPersonalConfluenceWrite(t, ctx, repository, service, owner, scenario)
+		})
+	}
+}
+
+// confluencePersonalScenario pins one synthetic operation, its mandatory owner/worker profile and input.
+// confluencePersonalScenario фиксирует синтетическую операцию, обязательный профиль владельца и worker и вход.
+type confluencePersonalScenario struct {
+	name, operation, profile string
+	wireProfile              cp.IntegrationCredentialResourcePermissionProfile
+	input                    map[string]any
+}
+
+// assertPersonalConfluenceWrite verifies the exact admitted effect and its personal credential pins, before any provider call.
+// assertPersonalConfluenceWrite сверяет точный разрешённый эффект и привязку личного ключа до вызова провайдера.
+func assertPersonalConfluenceWrite(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, owner value.Principal, scenario confluencePersonalScenario) {
+	t.Helper()
 	workers, err := platformservice.New(repository)
 	if err != nil {
 		t.Fatal(err)
 	}
-	execute := newComponentCommandExecutor(t, ctx, service, "personal-confluence-")
+	execute := newComponentCommandExecutor(t, ctx, service, "personal-confluence-"+scenario.name+"-")
 	connection := execute(command.CreateConnection, owner, "connection", nil, command.ConnectionInput{
-		DefinitionKey: "confluence-server-dc", Name: "Synthetic personal pages", PublicConfiguration: map[string]any{
+		DefinitionKey: "confluence-server-dc", Name: "Synthetic personal pages " + scenario.name, PublicConfiguration: map[string]any{
 			"base_url": "https://docs.example.invalid", "context_path": "/docs", "space_key": "DEMO", "auth_scheme": "BEARER"}}).Connection
 	connection = execute(command.SetConnectionEnabled, owner, "disable", &connection.Version, command.ConnectionInput{Ref: connection.Ref, Enabled: false}).Connection
 	owner.Permission = "platform.integrations.credential-policy.set"
@@ -40,7 +69,7 @@ func assertPersonalConfluenceResourcePermission(t *testing.T, ctx context.Contex
 	owner.Permission = "platform.personal-integrations.create"
 	binding := execute(command.CreatePersonalIntegrationCredential, owner, "binding", nil, command.PersonalIntegrationCredentialInput{ConnectionRef: connection.Ref, ExpectedConnectionVersion: connection.Version}).PersonalIntegrationCredential
 	owner.Permission = "platform.personal-integrations.configure"
-	configured, err := service.ConfigurePersonalIntegrationCredential(ctx, owner, value.Mutation{IdempotencyKey: "personal-confluence-key", ExpectedVersion: &binding.Version}, connection.Ref, connection.Version, []byte("synthetic-confluence-personal-key"))
+	configured, err := service.ConfigurePersonalIntegrationCredential(ctx, owner, value.Mutation{IdempotencyKey: "personal-confluence-key-" + scenario.name, ExpectedVersion: &binding.Version}, connection.Ref, connection.Version, []byte("synthetic-confluence-personal-key"))
 	if err != nil {
 		t.Fatal("configure personal Confluence key", err)
 	}
@@ -61,14 +90,14 @@ func assertPersonalConfluenceResourcePermission(t *testing.T, ctx context.Contex
 	execute(command.CompletePersonalIntegrationCredentialTest, verifier, "verified", nil, probe)
 	owner.Permission = "platform.personal-integrations.get"
 	current, err := service.GetPersonalIntegrationCredential(ctx, owner, connection.Ref)
-	if err != nil || current.State != "READY" || slices.Contains(current.VerifiedCapabilities, "confluence.page.update") {
+	if err != nil || current.State != "READY" || slices.Contains(current.VerifiedCapabilities, scenario.operation) {
 		t.Fatal("Confluence identity verification fabricated global WRITE", err)
 	}
-	project := execute(command.CreateProject, owner, "project", nil, command.ProjectInput{Name: "Synthetic personal page update", Language: "ru"}).Project
-	agent := createLifecycleAgent(t, ctx, service, owner, project.Ref, "personal-confluence-writer", "Personal page editor")
+	project := execute(command.CreateProject, owner, "project", nil, command.ProjectInput{Name: "Synthetic personal Confluence " + scenario.name, Language: "ru"}).Project
+	agent := createLifecycleAgent(t, ctx, service, owner, project.Ref, "personal-confluence-writer-"+scenario.name, "Personal page editor")
 	connection = execute(command.ChangeIntegrationGrant, owner, "grant", &connection.Version, command.IntegrationGrantInput{
-		ConnectionRef: connection.Ref, AgentRef: agent.Ref, CapabilityKey: "confluence.page.update", ApprovalPolicy: "HUMAN_EACH_EFFECT", Enabled: true}).Connection
-	run := execute(command.LaunchRun, owner, "launch", nil, command.LaunchRunInput{ProjectRef: project.Ref, Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref}, Task: "Update one approved synthetic page"}).Run
+		ConnectionRef: connection.Ref, AgentRef: agent.Ref, CapabilityKey: scenario.operation, ApprovalPolicy: "HUMAN_EACH_EFFECT", Enabled: true}).Connection
+	run := execute(command.LaunchRun, owner, "launch", nil, command.LaunchRunInput{ProjectRef: project.Ref, Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref}, Task: "Write once to one approved synthetic page"}).Run
 	worker := resolvedTestPrincipal(t, ctx, repository, port.ProofPrincipalInput{ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation", CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.claim"}, "runtime-controller")
 	leases := execute(command.ClaimExecution, worker, "runtime", nil, command.LeaseInput{WorkloadInstance: "personal-confluence-runtime", Limit: 1}).RuntimeItems
 	if len(leases) != 1 || stringMap(leases[0], "runRef") != run.Ref {
@@ -76,8 +105,7 @@ func assertPersonalConfluenceResourcePermission(t *testing.T, ctx context.Contex
 	}
 	invocation, err := service.ResolveIntegrationInvocation(ctx, worker, map[string]string{
 		"run_ref": run.Ref, "node_ref": stringMap(leases[0], "nodeRef"), "connection_ref": connection.Ref,
-		"capability_key": "confluence.page.update", "idempotency_key": "personal-confluence-update"},
-		map[string]any{"page_id": "101", "expected_version": 2, "body": "<p>synthetic update</p>"})
+		"capability_key": scenario.operation, "idempotency_key": "personal-confluence-" + scenario.name}, scenario.input)
 	if err != nil || stringMap(invocation, "state") != "WAITING_APPROVAL" {
 		t.Fatal("conditional write bypassed Human Gate or failed owner pinning", err)
 	}
@@ -85,7 +113,7 @@ func assertPersonalConfluenceResourcePermission(t *testing.T, ctx context.Contex
 	if err := repository.pool.QueryRow(ctx, `SELECT pin.resource_permission_profile
 FROM control_plane.integration_personal_invocation_credentials pin
 JOIN control_plane.integration_invocations invocation ON invocation.id=pin.invocation_id
-WHERE invocation.ref=$1`, stringMap(invocation, "invocationRef")).Scan(&storedProfile); err != nil || storedProfile != integrationpackage.CredentialResourcePermissionConfluencePageUpdateV1 {
+WHERE invocation.ref=$1`, stringMap(invocation, "invocationRef")).Scan(&storedProfile); err != nil || storedProfile != scenario.profile {
 		t.Fatal("native credential pin omitted mandatory page permission profile", err)
 	}
 	_, denied := repository.pool.Exec(ctx, `INSERT INTO control_plane.integration_personal_invocation_credentials
@@ -106,23 +134,25 @@ WHERE invocation.ref=$1`, stringMap(invocation, "invocationRef"))
 	_, _, gateway := resolveIntegrationEffectTestPrincipals(t, ctx, repository)
 	work, err := service.ClaimIntegrationInvocations(ctx, gateway, "personal-confluence-gateway", 1)
 	if err != nil || len(work) != 1 || stringMap(work[0], "invocationRef") != stringMap(invocation, "invocationRef") ||
-		stringMap(work[0], "resourcePermissionProfile") != integrationpackage.CredentialResourcePermissionConfluencePageUpdateV1 || work[0]["credential"] != nil {
+		stringMap(work[0], "resourcePermissionProfile") != scenario.profile || work[0]["credential"] != nil {
 		t.Fatal("personal page update claim lost mandatory object check", err)
 	}
 	request := &cp.BeginPersonalIntegrationInvocationRequest{InvocationRef: stringMap(work[0], "invocationRef"), LeaseRef: stringMap(work[0], "leaseRef"), Fence: stringMap(work[0], "fence"), Generation: runtimeRevisionMapInt64(work[0], "generation"), WorkloadInstance: "personal-confluence-gateway"}
 	rpc := personalRuntimeRPCClient(t, workers)
 	admitted, err := rpc.BeginPersonalIntegrationInvocation(personalRuntimeRPCContext(ctx), request)
 	if err != nil || !admitted.GetAdmitted() || admitted.GetCredentialRevision().GetRef() != current.Credential.Ref ||
-		admitted.GetResourcePermissionProfile() != cp.IntegrationCredentialResourcePermissionProfile_INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_CONFLUENCE_SERVER_PAGE_UPDATE_V1 {
+		admitted.GetResourcePermissionProfile() != scenario.wireProfile {
 		t.Fatal("personal Begin lost exact key or object-check profile", err)
 	}
 	// The adapter's separate HTTP tests prove object permission rejection. This native fixture
 	// records recovery observations without claiming an external write or tainting key identity.
 	// Отдельные HTTP tests adapter проверяют отказ прав объекта. Native fixture сохраняет
 	// recovery observations, не заявляя внешнюю запись и не портя identity ключа.
-	assertPersonalServerReadRecovery(t, ctx, repository, service, workers, gateway, work[0], request, current.Credential.Ref, "confluence-page:101", map[string]any{"id": "101", "title": "Synthetic page", "version": 3, "status": "current"})
+	if scenario.operation == "confluence.page.update" {
+		assertPersonalServerReadRecovery(t, ctx, repository, service, workers, gateway, work[0], request, current.Credential.Ref, "confluence-page:101", map[string]any{"id": "101", "title": "Synthetic page", "version": 3, "status": "current"})
+	}
 	retained, err := service.GetPersonalIntegrationCredential(ctx, owner, connection.Ref)
-	if err != nil || retained.State != "READY" || retained.Version != current.Version || slices.Contains(retained.VerifiedCapabilities, "confluence.page.update") {
+	if err != nil || retained.State != "READY" || retained.Version != current.Version || slices.Contains(retained.VerifiedCapabilities, scenario.operation) {
 		t.Fatal("object denial poisoned key readiness or fabricated global WRITE", err)
 	}
 	fresh, err := service.GetRun(ctx, owner, run.Ref)

@@ -36,9 +36,9 @@ func TestAtlassianServerDefinitionsComponent(t *testing.T) {
 	for _, key := range []string{"jira-server-dc", "confluence-server-dc"} {
 		t.Run(key, func(t *testing.T) {
 			definition, exists := repository.integrationDefinitions[key]
-			expectedVersion := "1.0.0"
+			expectedVersion := "1.3.0"
 			if key == "jira-server-dc" {
-				expectedVersion = "1.1.0"
+				expectedVersion = "1.4.0"
 			}
 			if !exists || definition.Metadata.Version != expectedVersion {
 				t.Fatal("Server definition missing from owner registry")

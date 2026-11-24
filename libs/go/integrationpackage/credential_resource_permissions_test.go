@@ -22,6 +22,9 @@ func TestCredentialResourcePermissionProfile(t *testing.T) {
 			if key == "confluence-server-dc" && capability.Key == "confluence.page.update" {
 				want = CredentialResourcePermissionConfluencePageUpdateV1
 			}
+			if key == "confluence-server-dc" && (capability.Key == "confluence.page.comment.create" || capability.Key == "confluence.page.create") {
+				want = CredentialResourcePermissionConfluenceContentCreateV1
+			}
 			if key == "jira-server-dc" {
 				switch capability.Key {
 				case "jira.issue.create":

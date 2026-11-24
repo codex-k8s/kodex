@@ -624,14 +624,14 @@ fi
     fail 'current SSH owner profile requires schema 051'
   fi
   case "$schema_version" in
-    20261124000100)
+    20261124000100|20261125000100)
       schema_proof=workflow-file-provenance-migration-postcondition.sql
-      schema_verifier=validatePersonalModelAccountsFixture
+      schema_verifier=validateCurrentMigrationFixture
       expected_history=$(printf '0\n'; find "$repository_root/services/internal/control-plane/cmd/cli/migrations" -maxdepth 1 -name '*.sql' -printf '%f\n' | cut -d_ -f1 | sort)
       applied_history=$(psql "postgresql://postgres@127.0.0.1:${port}/control_plane?sslmode=disable" \
         --no-password -X -qAt -v ON_ERROR_STOP=1 \
         -c "SELECT CASE WHEN is_applied THEN version_id::text ELSE 'reverted' END FROM public.goose_db_version ORDER BY id")
-      [[ "$applied_history" == "$expected_history" ]] || fail 'personal model account fixture migration history changed'
+      [[ "$applied_history" == "$expected_history" ]] || fail 'current fixture migration history changed'
       ;;
     20261121000200) schema_proof=workflow-file-provenance-migration-postcondition.sql; schema_verifier=validWorkflowFileProvenanceMigrationPostcondition ;;
     20261114170000) schema_proof=personal-integrations-migration-postcondition.sql; schema_verifier=validPersonalIntegrationsMigrationPostcondition ;;
@@ -683,16 +683,21 @@ fi
       let input = "";
       for await (const chunk of process.stdin) input += chunk;
       const proof = JSON.parse(input);
-      // Локальная квалификация чистой052 отдельна от live-профиля 051.
-      const valid = process.argv[2] === "validatePersonalModelAccountsFixture"
+      // Фикстуры новой установки с отдельными точными схемами.
+      const fixtureCatalogs = {
+        20261124000100: "aa75f206a40fb6f7fe333798b7e90eb434cb8a8b79fd1c9a3425bf14fdede0ad",
+        20261125000100: "a04adb5753bf6aba49a6f3320261edc388f5d43737cd745f0f7e4bdaac086c3e",
+      };
+      const currentFixture = process.argv[2] === "validateCurrentMigrationFixture";
+      const valid = currentFixture
         ? proof.database === "control_plane" && proof.readOnly === "on" &&
-          proof.gooseVersion === 20261124000100 && proof.serverVersionNum === 180003 &&
+          proof.gooseVersion === Number(process.argv[3]) && proof.serverVersionNum === 180003 &&
           proof.backupQualification === "NONE" && proof.publicSequenceSafe === true &&
-          proof.schemaCatalog?.catalogDigest === "aa75f206a40fb6f7fe333798b7e90eb434cb8a8b79fd1c9a3425bf14fdede0ad"
+          proof.schemaCatalog?.catalogDigest === fixtureCatalogs[proof.gooseVersion]
         : Object.hasOwn(verifiers, process.argv[2]) && verifiers[process.argv[2]](proof);
-      if (!valid) throw new Error("Current workflow schema postcondition failed");
+      if (!valid) throw new Error(`Current workflow schema postcondition failed for ${proof.gooseVersion} (${proof.schemaCatalog?.catalogDigest ?? "no catalog"})`);
       process.stdout.write("Current workflow schema read-only query passed\n");
-    ' "$repository_root/tools/release/control-plane-immutable-migration.mjs" "$schema_verifier"
+    ' "$repository_root/tools/release/control-plane-immutable-migration.mjs" "$schema_verifier" "$schema_version"
   retention_reference_count=$(psql "$runtime_dsn" --no-password -X -qAt -v ON_ERROR_STOP=1 \
     -c "SELECT control_plane.skill_artifact_reference_count('00000000-0000-4000-8000-000000000001'::uuid,'art_component',1,'sha256:' || repeat('0',64))")
   [[ "$retention_reference_count" == "0" ]] || fail 'artifact retention trigger dependency is unavailable'

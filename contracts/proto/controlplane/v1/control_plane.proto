@@ -5124,6 +5124,8 @@ enum IntegrationCredentialResourcePermissionProfile {
   INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_KUBERNETES_SCOPED_RESOURCE_V1 = 21;
   // Identity health не даёт reusable host permission: current target/user/recipe/gate проверяются при каждой SSH operation.
   INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_SSH_SCOPED_RESOURCE_V1 = 22;
+  // Создание страницы или комментария ограничено заданным пространством и проверяет родительскую страницу.
+  INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_CONFLUENCE_SERVER_CONTENT_CREATE_V1 = 23;
 }
 message IntegrationInvocationClaim {
   string invocation_ref = 1;
