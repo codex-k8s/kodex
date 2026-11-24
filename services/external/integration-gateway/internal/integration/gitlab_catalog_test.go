@@ -1,10 +1,67 @@
 package integration
 
 import (
+	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
 )
+
+// TestGitLabJobTracePlainText checks the entire scoped read and receipt path for ordinary terminal formatting and binary input.
+// TestGitLabJobTracePlainText проверяет сквозное чтение и квитанцию в заданной области для форматированного журнала и двоичного входа.
+func TestGitLabJobTracePlainText(t *testing.T) {
+	for _, scenario := range []struct {
+		name  string
+		wire  string
+		trace string
+	}{
+		{name: "terminal formatting", wire: "section_start:1:build\r\x1b[0K\x1b[32mСборка\x1b[0m\r\n\tOK\rDone\n", trace: "section_start:1:build\nСборка\n\tOK\nDone\n"},
+		{name: "invalid UTF-8", wire: "prefix\xff\n"},
+		{name: "binary data", wire: "prefix\x00\n"},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			adapter := testAdapter(t)
+			request := scopedGitLabTestRequest(t, adapter, "gitlab.job.trace.read", map[string]string{
+				"base_url": "https://git.example.invalid", "scope_kind": "GROUP", "group_path": "team",
+			}, map[string]any{"project_id": 20, "project_path": "team/service", "job_id": 4})
+			serve := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				if r.Method != http.MethodGet {
+					t.Fatal("trace lookup made a mutation")
+				}
+				var body string
+				switch r.URL.Path {
+				case "/api/v4/groups/team":
+					body = `{"id":10,"full_path":"team"}`
+				case "/api/v4/projects/team/service":
+					body = `{"id":20,"path_with_namespace":"team/service","namespace":{"id":10,"full_path":"team","kind":"group"}}`
+				case "/api/v4/projects/20/jobs/4/trace":
+					body = scenario.wire
+				default:
+					t.Fatalf("unexpected provider route: %s", r.URL.Path)
+				}
+				return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(body)), Request: r}, nil
+			})}
+			adapter.nativeHTTPClient, adapter.providerHTTPClient = serve, serve
+			result, err := adapter.Execute(t.Context(), request)
+			if scenario.trace == "" {
+				var safe *SafeError
+				if !errors.As(err, &safe) || safe.Code != "INTEGRATION_RESPONSE_INVALID" || result.Receipt.EffectKey != "" {
+					t.Fatal("invalid input yielded an attested trace", err)
+				}
+				return
+			}
+			var output struct {
+				JobID int    `json:"job_id"`
+				Trace string `json:"trace"`
+			}
+			if err != nil || json.Unmarshal([]byte(result.Summary), &output) != nil || output.JobID != 4 || output.Trace != scenario.trace || result.Receipt.EffectKey == "" {
+				t.Fatal("trace did not return the expected plain text and receipt", err)
+			}
+		})
+	}
+}
 
 // gitLabExtendedResponse supplies synthetic catalog responses only under the escaped configured project, checking operation-specific routes and pagination before returning branch, commit, note, merge-request or pipeline fixtures.
 // gitLabExtendedResponse выдаёт синтетические ответы каталога только в экранированном заданном проекте, проверяя маршруты операций и страницы перед возвратом данных веток, коммитов, заметок, запросов слияния и конвейеров.

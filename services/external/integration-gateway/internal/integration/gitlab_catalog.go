@@ -5,7 +5,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
+	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 // gitLabCatalogInput decodes operation-specific identifiers, content and pagination fields from the previously schema-validated request.
@@ -376,10 +380,41 @@ func (adapter *Adapter) executeGitLabCatalog(ctx context.Context, request Reques
 			PipelineID int64  `json:"pipeline_id"`
 		}{job.ID, job.Name, job.Stage, job.Status, job.Ref, job.WebURL, job.Pipeline.ID})
 	case "gitlab.job.trace.read":
+		trace, err := gitLabJobTraceText(response.Body)
+		if err != nil {
+			return Result{}, err
+		}
 		return providerResult(request, reference, struct {
 			JobID int64  `json:"job_id"`
 			Trace string `json:"trace"`
-		}{in.JobID, string(response.Body)})
+		}{in.JobID, trace})
 	}
 	return Result{}, &SafeError{Code: "INTEGRATION_CAPABILITY_UNSUPPORTED"}
+}
+
+// gitLabTraceCSI matches control sequences used for colors and erased lines in a job trace.
+// gitLabTraceCSI находит управляющие последовательности цвета и очистки строки в журнале job.
+var gitLabTraceCSI = regexp.MustCompile("(?:\x1b\\[|\u009b)[0-?]*[ -/]*[@-~]")
+
+// gitLabJobTraceText keeps the text and line structure of a bounded UTF-8 trace while dropping terminal controls before result validation.
+// gitLabJobTraceText сохраняет текст и строки ограниченного UTF-8 журнала, убирая управляющие символы до проверки результата.
+func gitLabJobTraceText(body []byte) (string, error) {
+	trace := string(body)
+	if !utf8.ValidString(trace) || strings.ContainsRune(trace, '\x00') {
+		return "", &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+	}
+	trace = gitLabTraceCSI.ReplaceAllString(trace, "")
+	trace = strings.ReplaceAll(trace, "\r\n", "\n")
+	return strings.Map(func(character rune) rune {
+		switch {
+		case character == '\r':
+			return '\n'
+		case character == '\n' || character == '\t':
+			return character
+		case unicode.IsControl(character):
+			return -1
+		default:
+			return character
+		}
+	}, trace), nil
 }
