@@ -32,6 +32,7 @@ const getOverviewMock = vi.hoisted(() => vi.fn());
 const listOwnerGatesMock = vi.hoisted(() => vi.fn());
 const searchPlatformMock = vi.hoisted(() => vi.fn());
 const listAuditEventsMock = vi.hoisted(() => vi.fn());
+const getRunMock = vi.hoisted(() => vi.fn());
 const getRunGraphMock = vi.hoisted(() => vi.fn());
 const listRunEventsMock = vi.hoisted(() => vi.fn());
 const listRunsMock = vi.hoisted(() => vi.fn());
@@ -96,6 +97,7 @@ vi.mock("@/shared/api/generated/openapi/sdk.gen", async (importOriginal) => ({
   listOwnerGates: listOwnerGatesMock,
   searchPlatform: searchPlatformMock,
   listAuditEvents: listAuditEventsMock,
+  getRun: getRunMock,
   getRunGraph: getRunGraphMock,
   listRunEvents: listRunEventsMock,
   listRuns: listRunsMock,
@@ -1404,6 +1406,62 @@ describe("platform store", () => {
     await store.loadRunTranscript(value.run.ref);
     expect(listRunEventsMock).toHaveBeenCalledTimes(1);
     expect(getRunGraphMock).not.toHaveBeenCalled();
+  });
+
+  it("читает метаданные корневого узла на маршруте дочернего запуска", async () => {
+    const store = usePlatformStore();
+    const { run: root, graph } = transcriptWorkspace(3);
+    const child = {
+      ...root,
+      ref: "run_child00001",
+      rootRunRef: root.ref,
+      parentRunRef: root.ref,
+      sessionRef: "ses_child00001",
+    };
+    store.applyRunSnapshot(graph);
+    store.runs[child.ref] = child;
+    expect(store.runs[root.ref]).toBeUndefined();
+    const response = new Response(null, { status: 200 });
+    getRunMock.mockResolvedValueOnce({ data: root, response });
+    const signal = new AbortController().signal;
+
+    await store.loadGraphRunMetadata(root.ref, child.ref, signal);
+
+    expect(store.runs[root.ref]).toEqual(root);
+    expect(store.runs[child.ref]).toEqual(child);
+    expect(getRunMock).toHaveBeenCalledWith(
+      expect.objectContaining({ path: { runRef: root.ref } }),
+    );
+    expect(getRunGraphMock).not.toHaveBeenCalled();
+    expect(listRunEventsMock).not.toHaveBeenCalled();
+  });
+
+  it("отклоняет запуск вне графа и метаданные другого проекта", async () => {
+    const store = usePlatformStore();
+    const { run: root, graph } = transcriptWorkspace(3);
+    const child = {
+      ...root,
+      ref: "run_child00002",
+      rootRunRef: root.ref,
+      parentRunRef: root.ref,
+      sessionRef: "ses_child00002",
+    };
+    store.applyRunSnapshot(graph);
+    store.runs[child.ref] = child;
+    const signal = new AbortController().signal;
+
+    await expect(
+      store.loadGraphRunMetadata("run_outside", child.ref, signal),
+    ).rejects.toThrow("outside the current graph");
+    expect(getRunMock).not.toHaveBeenCalled();
+    getRunMock.mockResolvedValueOnce({
+      data: { ...root, projectRef: "prj_elsewhere" },
+      response: new Response(null, { status: 200 }),
+    });
+    await expect(
+      store.loadGraphRunMetadata(root.ref, child.ref, signal),
+    ).rejects.toThrow("identity mismatch");
+    expect(store.runs[root.ref]).toBeUndefined();
   });
 
   it("не начинает history read без проверенного root snapshot", async () => {
