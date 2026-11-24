@@ -27,7 +27,7 @@ function originalPublisher(migration,publisher){
   target?.sourceSHA===migration.source.revision&&uid(target.publisherUID)&&publisher?.metadata?.uid===target.publisherUID&&
   !publisher.metadata.deletionTimestamp&&target.authorityImage===publisher.spec?.template?.spec?.containers?.find(c=>c.name==='publisher')?.image);
  return {uid:target.publisherUID,image:target.authorityImage,creatorPlanSHA256:proof.createPlanSHA256,
-  creatorTargetSHA256:proof.targetSHA256,runtimeObservability:telegramPublisherRuntimeObservability(publisher,'DISABLED')};
+  creatorTargetSHA256:proof.targetSHA256,runtimeObservability:telegramPublisherRuntimeObservability(publisher,'DISABLED',target.pullRegistry)};
 }
 
 // План создаётся только после завершённого046 и собственного handoff/start.

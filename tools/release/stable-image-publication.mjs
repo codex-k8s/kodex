@@ -4,6 +4,8 @@ import { createHash } from "node:crypto";
 import { constants } from "node:fs";
 import { mkdir, open } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
+import { logicalRegistryHost } from './stable-node-registry-model.mjs';
+import { promotedServicePullRegistry } from './component-node-qualification.mjs';
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { readPrivateJSON } from "../../infra/public-ingress/edge-plan.mjs";
@@ -38,7 +40,8 @@ export function validateStableReceipt(receipt) {
 
 // Связывает фактический build с завершённым журналом этого publisher.
 // Registry publication не доказывает node pull, admission или совместимость кода.
-export function validatedStablePublication(sourceSHA, evidence, component) {
+export function validatedStablePublication(sourceSHA, evidence, component, registry = logicalRegistryHost) {
+  requireValue([logicalRegistryHost, promotedServicePullRegistry].includes(registry), 'MIGRATION_IMAGE_REGISTRY_INVALID');
   const {publicationPlan: plan, publicationEvidence: records} = evidence ?? {};
   const image = validateStableReceipt(plan?.receipt);
   requireValue(plan.schema === "kodex.stable-image-publication/v2" && plan.artifactProfile === "built" &&
@@ -51,7 +54,7 @@ export function validatedStablePublication(sourceSHA, evidence, component) {
     records[0].component === image.component && records[0].digest === image.digest &&
     records[1].status === "PASS" && records[1].phase === "REGISTRY_PUBLICATION_ONLY" && records[1].nodePull === "NOT_RUN",
     "MIGRATION_IMAGE_PUBLICATION_UNCONFIRMED");
-  return `registry.local.kodex/kodex/${component}@${image.digest}`;
+  return `${registry}/kodex/${component}@${image.digest}`;
 }
 
 export async function privateArchiveHash(path) {

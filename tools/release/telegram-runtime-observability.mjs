@@ -1,6 +1,7 @@
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {fingerprint} from './scoped-release.mjs';
+import {isTelegramAuthorityImage} from './telegram-introduction-contract.mjs';
 
 const root=fileURLToPath(new URL('../../',import.meta.url));
 const rejected='TELEGRAM_RUNTIME_OBSERVABILITY_REJECTED';
@@ -12,13 +13,13 @@ const exact=(value,keys)=>value&&typeof value==='object'&&!Array.isArray(value)&
 
 // Проекция не включает mutable restart annotations publisher. Явный mode
 // подтверждается фактически обслуживаемым env, без inference при отказе.
-export function telegramPublisherRuntimeObservability(publisher,mode){
+export function telegramPublisherRuntimeObservability(publisher,mode,pullRegistry){
  fail(modes.includes(mode)&&publisher?.apiVersion==='apps/v1'&&publisher.kind==='Deployment'&&
   publisher.metadata?.name==='internal-rpc-authority-publisher'&&publisher.metadata.namespace==='kodex-system');
  const containers=publisher.spec?.template?.spec?.containers;
  fail(Array.isArray(containers)&&containers.filter(c=>c.name==='publisher').length===1);
  const container=containers.find(c=>c.name==='publisher'),env=container.env??[];
- fail(/^registry\.local\.kodex\/kodex\/internal-rpc-authority@sha256:[a-f0-9]{64}$/.test(container.image??'')&&!container.image.endsWith('0'.repeat(64)));
+ fail(isTelegramAuthorityImage(container.image,pullRegistry));
  fail(Array.isArray(env));
  const selected=env.filter(e=>e?.name==='OTEL_SDK_DISABLED');
  fail(selected.length<=1&&(!selected.length||exact(selected[0],['name','value'])&&['true','false'].includes(selected[0].value)));
@@ -26,9 +27,9 @@ export function telegramPublisherRuntimeObservability(publisher,mode){
  return {mode,publisherRuntimeSHA256:fingerprint({name:container.name,image:container.image,otelSDKDisabled:selected[0]??null})};
 }
 
-export function requireTelegramRuntimeObservability(profile,publisher){
+export function requireTelegramRuntimeObservability(profile,publisher,pullRegistry){
  fail(exact(profile,['mode','publisherRuntimeSHA256'])&&/^[a-f0-9]{64}$/.test(profile.publisherRuntimeSHA256??'')&&
-  same(profile,telegramPublisherRuntimeObservability(publisher,profile.mode)));
+  same(profile,telegramPublisherRuntimeObservability(publisher,profile.mode,pullRegistry)));
  return profile;
 }
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import {isWorkflowFileProvenanceMigrationProfile} from './workflow-file-provenance-migration-contract.mjs';
 import {isPersonalIntegrationsMigrationProfile,validPersonalIntegrationsAuthoritySchemaHeads} from './personal-integrations-migration-contract.mjs';
-import {validateTelegramIntroducedReceiverProof} from './telegram-introduction-contract.mjs';
+import {isTelegramInteractionImage,validateTelegramIntroducedReceiverProof} from './telegram-introduction-contract.mjs';
 import {execFile} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {constants} from 'node:fs';
@@ -54,9 +54,13 @@ export function validateComponentPublicationConfiguration(config){
     config.sourceSHA!=='0'.repeat(40)&&/^[a-f0-9]{40}$/.test(config.baseSourceSHA??'')&&
     /^[a-f0-9]{64}$/.test(config.baseReleaseLockSHA256??'')&&/^k3d-[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(config.context??''),
     'COMPONENT_PUBLICATION_CONFIGURATION_INVALID');
-  requireValue(!useService||(!profile.introduced&&config.pullRegistry===promotedServicePullRegistry),
+  requireValue(!useService||config.pullRegistry===promotedServicePullRegistry,
     'COMPONENT_PUBLICATION_PULL_REGISTRY_INVALID');
-  if(profile.introduced)validateTelegramIntroducedReceiverProof(config.introducedReceiver,config.sourceSHA);
+  if(profile.introduced){
+    validateTelegramIntroducedReceiverProof(config.introducedReceiver,config.sourceSHA);
+    requireValue(isTelegramInteractionImage(config.introducedReceiver.imageRef,config.pullRegistry??logicalRegistryHost),
+      'COMPONENT_PUBLICATION_PULL_REGISTRY_INVALID');
+  }
   const uid=v=>/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(v??'');
   requireValue(uid(config.clusterUID)&&uid(config.namespaceUID)&&Array.isArray(config.nodes)&&config.nodes.length>0&&config.nodes.length<=8&&
     config.nodes.every(n=>exact(n,['name','uid'])&&uid(n.uid)&&/^[a-z0-9][a-z0-9.-]{0,252}$/.test(n.name??''))&&
@@ -89,8 +93,7 @@ export function createComponentImageLock(config,component,evidence,sourceEvidenc
   const profile=validateComponentPublicationConfiguration(config);
   requireValue(config.components.some(c=>same(c,component)),'COMPONENT_PUBLICATION_COMPONENTS_INVALID');
   const plan=evidence.publicationPlan;
-  const publishedRef=validatedStablePublication(config.sourceSHA,evidence,component.name);
-  const imageRef=config.pullRegistry?`${config.pullRegistry}/kodex/${component.name}@${plan.image.digest}`:publishedRef;
+  const imageRef=validatedStablePublication(config.sourceSHA,evidence,component.name,config.pullRegistry);
   requireValue(plan.context===config.context&&plan.clusterUID===config.clusterUID&&plan.namespaceUID===config.namespaceUID&&
     plan.source===config.sourceSHA&&same(plan.receipt,sourceEvidence.receipt)&&
     plan.receipt.contextSHA256===sourceEvidence.contextSHA256&&

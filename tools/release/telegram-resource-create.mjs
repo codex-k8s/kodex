@@ -11,7 +11,9 @@ import {isIP} from 'node:net';
 import {fingerprint,withPrivatePatchFile} from './scoped-release.mjs';
 import {validatedStablePublication} from './stable-image-publication.mjs';
 import {createPrivatePrettyJSONSync} from './private-json-write.mjs';
-import {telegramResourceCreateKeys} from './telegram-introduction-contract.mjs';
+import {isTelegramAuthorityImage,isTelegramInteractionImage,telegramResourceCreateKeys,telegramResourceKeysFor} from './telegram-introduction-contract.mjs';
+import {logicalRegistryHost} from './stable-node-registry-model.mjs';
+import {promotedServicePullRegistry} from './component-node-qualification.mjs';
 export {telegramResourceCreateKeys} from './telegram-introduction-contract.mjs';
 import {privateJournal} from '../dev/role-image-acceptance.mjs';
 
@@ -30,11 +32,13 @@ export const telegramResourceCreateHeader=plan=>({schema:'kodex.telegram-resourc
 // Новый target закрепляет существующую установку и publisher, не присваивая
 // ещё отсутствующим ресурсам выдуманные UID. Их UID появляются только в readback.
 export function requireTelegramResourceCreateTarget(target,observed){
- fail(exact(target,['schema','sourceSHA','context','clusterUID','namespaceUID','installationUID','installationSHA256','publisherUID','authorityImage','runtimeObservability'])&&
+ const monitoring=Object.hasOwn(target??{},'monitoringResources');
+ fail(exact(target,['schema','sourceSHA','context','clusterUID','namespaceUID','installationUID','installationSHA256','publisherUID','authorityImage','runtimeObservability',...(Object.hasOwn(target??{},'pullRegistry')?['pullRegistry']:[]),...(monitoring?['monitoringResources']:[])])&&
+  (!monitoring||target.monitoringResources==='DISABLED')&&
+  (!Object.hasOwn(target,'pullRegistry')||target.pullRegistry===promotedServicePullRegistry)&&
   target.schema==='kodex.telegram-resource-create-target/v2'&&source(target.sourceSHA)&&
   /^[A-Za-z0-9_.:@/-]{1,160}$/.test(target.context??'')&&['clusterUID','namespaceUID','installationUID','publisherUID'].every(k=>uuid(target[k]))&&
-  sha(target.installationSHA256)&&/^registry\.local\.kodex\/kodex\/internal-rpc-authority@sha256:[a-f0-9]{64}$/.test(target.authorityImage??'')&&
-  !target.authorityImage.endsWith('0'.repeat(64)),'TELEGRAM_CREATE_TARGET_INVALID');
+  sha(target.installationSHA256)&&isTelegramAuthorityImage(target.authorityImage,target.pullRegistry),'TELEGRAM_CREATE_TARGET_INVALID');
  const installation=observed?.installation,publisher=observed?.publisher;
  fail(observed?.context===target.context&&observed.clusterUID===target.clusterUID&&observed.namespaceUID===target.namespaceUID&&
   observed.namespace?.kind==='Namespace'&&observed.namespace.metadata?.name===namespace&&observed.namespace.metadata.uid===target.namespaceUID&&
@@ -48,7 +52,7 @@ export function requireTelegramResourceCreateTarget(target,observed){
   publisher.metadata.labels?.['kodex.dev/profile']==='web-only'&&publisher.metadata.labels?.['kodex.dev/environment']==='production'&&
   publisher.spec?.template?.spec?.containers?.filter(c=>c.name==='publisher'&&c.image===target.authorityImage).length===1,
   'TELEGRAM_CREATE_TARGET_CHANGED');
- requireTelegramRuntimeObservability(target.runtimeObservability,publisher);
+ requireTelegramRuntimeObservability(target.runtimeObservability,publisher,target.pullRegistry);
  return fingerprint(target);
 }
 
@@ -56,11 +60,11 @@ export function requireTelegramResourceCreateTarget(target,observed){
 // source. Caller не выбирает новые endpoints, Secret, RBAC либо произвольный kind.
 export function telegramResourceCreateRequests(resources,target,createID,interactionImage){
  fail(uuid(createID)&&Array.isArray(resources)&&resources.length<=10000&&source(target.sourceSHA)&&
-  /^registry\.local\.kodex\/kodex\/interaction-gateway@sha256:[a-f0-9]{64}$/.test(interactionImage??'')&&
-  !interactionImage.endsWith('0'.repeat(64)),'TELEGRAM_CREATE_SOURCE_INVALID');
- const selected=resources.filter(item=>telegramResourceCreateKeys.includes(key(item)));
- fail(selected.length===telegramResourceCreateKeys.length&&new Set(selected.map(key)).size===selected.length,'TELEGRAM_CREATE_SOURCE_CLOSURE_INVALID');
- const requests=telegramResourceCreateKeys.map(identity=>structuredClone(selected.find(item=>key(item)===identity)));
+  isTelegramInteractionImage(interactionImage,target.pullRegistry??logicalRegistryHost),'TELEGRAM_CREATE_SOURCE_INVALID');
+ const keys=telegramResourceKeysFor(target.monitoringResources);
+ const selected=resources.filter(item=>keys.includes(key(item)));
+ fail(selected.length===keys.length&&new Set(selected.map(key)).size===selected.length,'TELEGRAM_CREATE_SOURCE_CLOSURE_INVALID');
+ const requests=keys.map(identity=>structuredClone(selected.find(item=>key(item)===identity)));
  for(const item of requests){
   const metadata=item.metadata;
   fail(metadata?.namespace===namespace&&!metadata.uid&&!metadata.resourceVersion&&!metadata.generateName&&!metadata.ownerReferences?.length&&
@@ -194,7 +198,7 @@ export function planTelegramResourceCreate({target,observed,resources,interactio
 
 function validatePlan(plan){
  fail(exact(plan,['schema','target','createID','interactionImage','intendedReplicas','planPath','evidencePath','objects'])&&plan.schema==='kodex.telegram-resource-create-plan/v2'&&uuid(plan.createID)&&plan.intendedReplicas===3&&
-  Array.isArray(plan.objects)&&same(plan.objects.map(p=>key(p.request)),telegramResourceCreateKeys)&&
+  Array.isArray(plan.objects)&&same(plan.objects.map(p=>key(p.request)),telegramResourceKeysFor(plan.target?.monitoringResources))&&
   [plan.planPath,plan.evidencePath].every(path=>typeof path==='string'&&path===resolve(path)&&!/[\r\n\0]/.test(path))&&plan.planPath!==plan.evidencePath,'TELEGRAM_CREATE_PLAN_INVALID');
  for(const part of plan.objects){
   const request=part.request,metadata=request.metadata;
@@ -303,26 +307,39 @@ export function decodeTelegramResourceCreateSource(raw,run){
 
 async function main(args){
  const phase=args.shift(),options={};
- while(args.length){const name=args.shift();fail(['--kubeconfig','--context','--target','--publication','--plan','--evidence','--approved-plan-sha'].includes(name)&&!Object.hasOwn(options,name)&&args.length,'TELEGRAM_CREATE_ARGUMENTS_INVALID');options[name]=args.shift();}
+ while(args.length){const name=args.shift();fail(['--kubeconfig','--context','--target','--publication','--plan','--evidence','--approved-plan-sha','--source-checkout'].includes(name)&&!Object.hasOwn(options,name)&&args.length,'TELEGRAM_CREATE_ARGUMENTS_INVALID');options[name]=args.shift();}
  fail(['plan','apply','status'].includes(phase)&&options['--kubeconfig']?.startsWith('/')&&!/[\r\n\0]/.test(options['--kubeconfig'])&&
   /^[A-Za-z0-9_.:@/-]{1,160}$/.test(options['--context']??'')&&options['--publication']&&options['--plan'],'TELEGRAM_CREATE_ARGUMENTS_INVALID');
  const env=Object.fromEntries(['HOME','PATH','LANG'].filter(k=>process.env[k]).map(k=>[k,process.env[k]]));
- const run=(program,argv,input,maxBuffer=4<<20)=>{try{return execFileSync(program,argv,{cwd:root,env,input,encoding:'utf8',timeout:35000,maxBuffer,stdio:['pipe','pipe','pipe']});}catch{throw Error('TELEGRAM_CREATE_OPERATION_FAILED_OR_UNKNOWN');}};
+ const run=(program,argv,input,maxBuffer=4<<20,cwd=root)=>{try{return execFileSync(program,argv,{cwd,env,input,encoding:'utf8',timeout:35000,maxBuffer,stdio:['pipe','pipe','pipe']});}catch{throw Error('TELEGRAM_CREATE_OPERATION_FAILED_OR_UNKNOWN');}};
  const kube=(argv,input,maxBuffer)=>run('kubectl',['--kubeconfig',options['--kubeconfig'],'--context',options['--context'],'--request-timeout=25s',...argv],input,maxBuffer);
- const sourceSHA=run('git',['rev-parse','HEAD']).trim();fail(source(sourceSHA)&&run('git',['status','--porcelain','--untracked-files=normal']).trim()==='','TELEGRAM_CREATE_CLEAN_SOURCE_REQUIRED');
- const publication=await privateJSON(options['--publication']),interactionImage=validatedStablePublication(sourceSHA,publication,'interaction-gateway');
+ const sourceCheckout=options['--source-checkout'];
+ fail(sourceCheckout===undefined||sourceCheckout.startsWith('/')&&!/[\r\n\0]/.test(sourceCheckout)&&realpathSync(sourceCheckout)===sourceCheckout,
+  'TELEGRAM_CREATE_SOURCE_CHECKOUT_INVALID');
+ const sourceRoot=sourceCheckout??root;
+ const sourceGit=argv=>run('git',argv,undefined,4<<20,sourceRoot).trim();
+ const sourceSHA=sourceGit(['rev-parse','HEAD']);
+ const statusArgs=['status','--porcelain','--untracked-files=normal'];
+ fail(source(sourceSHA)&&sourceGit(statusArgs)==='','TELEGRAM_CREATE_CLEAN_SOURCE_REQUIRED');
+ if(sourceCheckout){
+  fail(run('git',statusArgs).trim()===''&&sourceGit(['rev-parse','--show-toplevel'])===sourceRoot,'TELEGRAM_CREATE_CLEAN_SOURCE_REQUIRED');
+  run('git',['merge-base','--is-ancestor',sourceSHA,'HEAD']);
+ }
+ const publication=await privateJSON(options['--publication']);
+ const interactionImageFor=target=>validatedStablePublication(sourceSHA,publication,'interaction-gateway',target?.pullRegistry);
  const get=(kind,name)=>JSON.parse(kube(['-n',namespace,'get',kind,name,'-o','json']));
  const observe=()=>{const ns=JSON.parse(kube(['get','namespace',namespace,'-o','json']));return {context:options['--context'],clusterUID:JSON.parse(kube(['get','namespace','kube-system','-o','json'])).metadata.uid,
   namespaceUID:ns.metadata.uid,namespace:ns,installation:get('configmap','kodex-installation-profile'),publisher:get('deployment','internal-rpc-authority-publisher')};};
  const resourceGet=request=>{const raw=kube(['-n',namespace,'get',request.kind.toLowerCase(),request.metadata.name,'--ignore-not-found','-o','json']);return raw.trim()===''?null:JSON.parse(raw);};
  const create=(request,dry=false)=>withPrivatePatchFile(request,path=>JSON.parse(kube(['-n',namespace,'create','--validate=strict',...(dry?['--dry-run=server']:[]),'-f',path,'-o','json'])));
  const inventory=()=>readTelegramIntroductionInventory(kube);
- const raw=kube(['kustomize','deploy/k8s/profiles/web-only'],undefined,32<<20);
+ const raw=kube(['kustomize',sourceCheckout?`${sourceRoot}/deploy/k8s/profiles/web-only`:'deploy/k8s/profiles/web-only'],undefined,32<<20);
  const resources=decodeTelegramResourceCreateSource(raw,run);
  let plan;
  if(phase==='plan'){
   fail(options['--target']&&options['--evidence']&&!options['--approved-plan-sha'],'TELEGRAM_CREATE_ARGUMENTS_INVALID');
   const target=await privateJSON(options['--target']);fail(target.sourceSHA===sourceSHA&&target.context===options['--context'],'TELEGRAM_CREATE_SOURCE_CHANGED');
+  const interactionImage=interactionImageFor(target);
   fail(publication.publicationPlan.context===target.context&&publication.publicationPlan.clusterUID===target.clusterUID&&publication.publicationPlan.namespaceUID===target.namespaceUID,'TELEGRAM_CREATE_PUBLICATION_TARGET_CHANGED');
   plan=planTelegramResourceCreate({target,observed:observe(),resources,interactionImage,get:resourceGet,dryRun:r=>create(r,true),inventory,planPath:resolve(options['--plan']),evidencePath:resolve(options['--evidence'])});
   syncPrivateDirectory(options['--plan']);syncPrivateDirectory(options['--evidence']);
@@ -331,6 +348,7 @@ async function main(args){
  }
  fail(!options['--target']&&options['--evidence'],'TELEGRAM_CREATE_ARGUMENTS_INVALID');
  plan=await privateJSON(options['--plan']);
+ const interactionImage=interactionImageFor(plan.target);
  fail(plan.planPath===resolve(options['--plan'])&&plan.evidencePath===resolve(options['--evidence']),'TELEGRAM_CREATE_JOURNAL_PATH_CHANGED');
  fail(plan.target?.sourceSHA===sourceSHA&&plan.target.context===options['--context']&&plan.interactionImage===interactionImage&&
   same(plan.objects?.map(p=>p.request),telegramResourceCreateRequests(resources,plan.target,plan.createID,interactionImage)),'TELEGRAM_CREATE_SOURCE_CHANGED');

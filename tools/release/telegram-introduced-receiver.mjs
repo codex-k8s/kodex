@@ -18,7 +18,7 @@ export async function readTelegramIntroducedReceiver({planPath,evidencePath,publ
   plan.target.context===context&&['clusterUID','namespaceUID','installationUID','installationSHA256'].every(key=>plan.target[key]===target[key])&&
   plan.target.authorityImage===publisherImage,'TELEGRAM_INTRODUCTION_SOURCE_OR_TARGET_CHANGED');
  const publication=readAuthorityPrivateJSON(publicationPath);
- const interactionImage=validatedStablePublication(sourceSHA,publication,'interaction-gateway');
+ const interactionImage=validatedStablePublication(sourceSHA,publication,'interaction-gateway',plan.target.pullRegistry);
  fail(plan.interactionImage===interactionImage&&publication.publicationPlan.context===context&&
   publication.publicationPlan.clusterUID===target.clusterUID&&publication.publicationPlan.namespaceUID===target.namespaceUID&&
   typeof renderSource==='function'&&same(plan.objects?.map(part=>part.request),
@@ -43,7 +43,8 @@ export async function readTelegramIntroducedReceiver({planPath,evidencePath,publ
  const proof={schema:'kodex.telegram-introduced-receiver/v1',state:'PENDING_AUTHORITY',sourceSHA,
   planPath:resolve(planPath),evidencePath:resolve(evidencePath),publicationPath:resolve(publicationPath),publicationSHA256:fingerprint(publication),createPlanSHA256:fingerprint(plan),createID:plan.createID,
   targetSHA256:fingerprint(plan.target),deploymentUID:receipt.uid,specSHA256:fingerprint(request.expected.spec),
-  imageRef:plan.interactionImage,intendedReplicas:plan.intendedReplicas,resources:result.resources};
+  imageRef:plan.interactionImage,intendedReplicas:plan.intendedReplicas,resources:result.resources,
+  ...(plan.target.monitoringResources===undefined?{}:{monitoringResources:plan.target.monitoringResources})};
  validateTelegramIntroducedReceiverProof(proof,sourceSHA);return Object.freeze(proof);
 }
 
