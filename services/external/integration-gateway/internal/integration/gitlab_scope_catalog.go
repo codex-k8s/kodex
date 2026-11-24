@@ -116,7 +116,8 @@ func (adapter *Adapter) executeGitLabScopeCatalog(ctx context.Context, request R
 		query.Set("include_subgroups", strconv.FormatBool(scope.IncludeSubgroups))
 	}
 	response, err := adapter.callProviderResponse(ctx, providerCall{BaseURL: configuration["base_url"], Method: http.MethodGet, Path: path, Query: query,
-		AuthScheme: "BEARER", Credential: request.Credential, Capability: capability, Client: adapter.nativeHTTPClient})
+		AuthScheme: "BEARER", Credential: request.Credential, Capability: capability, Client: adapter.nativeHTTPClient,
+		responseBodyLimit: maximumTypedListWireBytes})
 	if err != nil {
 		return Result{}, err
 	}
