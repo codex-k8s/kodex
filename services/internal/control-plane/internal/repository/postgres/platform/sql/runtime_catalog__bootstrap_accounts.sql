@@ -14,6 +14,7 @@ WITH eligible AS (
         LIMIT 1
     ) auth_attempt ON true
     WHERE account.organization_id = $1::uuid AND account.definition_key = $2
+      AND account.personal_owner_subject_id IS NULL
       AND account.enabled AND account.state = 'AUTHORIZED'
       AND account.current_credential_revision_id IS NOT NULL
 )

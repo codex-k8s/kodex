@@ -294,10 +294,17 @@ func (repository *Repository) attachmentAgentDependencies(ctx context.Context, t
 			return nil, false, err
 		}
 	}
+	candidates := view.Configuration.ProviderPolicy.AccountCandidates
 	alternative := hasAlternativeModelRoute(view.Configuration)
-	if checkCatalog && alternative {
+	if checkCatalog && view.Configuration.ProviderPolicy.Mode == "PERSONAL" {
+		candidates, err = readyPersonalModelAccounts(ctx, tx, current, view.Configuration, view.PublishedOverlay.Content)
+		if err != nil {
+			return nil, false, err
+		}
+		ready = ready && len(candidates) > 0
+	} else if checkCatalog && alternative {
 		eligible := false
-		for _, candidate := range view.Configuration.ProviderPolicy.AccountCandidates {
+		for _, candidate := range candidates {
 			_, _, err := validateRuntimeCatalogCandidatesSnapshot(ctx, tx, current, view.Configuration.Provider,
 				view.Configuration.Model, view.PublishedOverlay.Content, []entity.ProviderAccountCandidate{candidate}, false, false)
 			if err == nil {
@@ -316,7 +323,7 @@ func (repository *Repository) attachmentAgentDependencies(ctx context.Context, t
 			}
 		}
 	}
-	for _, candidate := range view.Configuration.ProviderPolicy.AccountCandidates {
+	for _, candidate := range candidates {
 		var accountVersion int64
 		var enabled bool
 		var state, credentialRevision string

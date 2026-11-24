@@ -57,9 +57,12 @@ import {
   type ProviderAccount,
   type ProviderAuthorizationMethod,
 } from "./model";
-import { useProvidersStore } from "./store";
+import { usePersonalProviderAccountsStore, useProvidersStore } from "./store";
 
-const store = useProvidersStore();
+const props = defineProps<{ personal?: boolean }>();
+const store = props.personal
+  ? usePersonalProviderAccountsStore()
+  : useProvidersStore();
 const platform = usePlatformStore();
 const { t } = useI18n();
 const {
@@ -144,11 +147,16 @@ const hasAuthorizedApiKeyAccount = computed(() =>
 );
 const speechConfigurationMissing = computed(
   () =>
+    !props.personal &&
     hasAuthorizedApiKeyAccount.value &&
     platform.bootstrap?.speechTranscription.reason === "STT_NOT_CONFIGURED",
 );
 const availableDefinitions = computed(() =>
-  definitions.value.filter((item) => item.available),
+  definitions.value.filter(
+    (item) =>
+      item.available &&
+      (!props.personal || item.authorizationMethods.includes("API_KEY")),
+  ),
 );
 const selectedDefinition = computed(() => {
   const definition = definitions.value.find(
@@ -172,17 +180,22 @@ async function searchDefinitions(
   if (!Array.isArray(page.items) || typeof page.nextPageToken !== "string")
     throw new Error("Invalid provider definition catalog");
   return {
-    items: page.items.map((definition) => ({
-      ref: definition.key,
-      title: definition.name,
-      description: definition.description,
-      disabled: !definition.available,
-      disabledReason: definition.available
-        ? undefined
-        : definition.readinessBlockers
-            .map((code) => t(blockerLabel(code)))
-            .join("; ") || t("common.unavailable"),
-    })),
+    items: page.items
+      .filter(
+        (item) =>
+          !props.personal || item.authorizationMethods.includes("API_KEY"),
+      )
+      .map((definition) => ({
+        ref: definition.key,
+        title: definition.name,
+        description: definition.description,
+        disabled: !definition.available,
+        disabledReason: definition.available
+          ? undefined
+          : definition.readinessBlockers
+              .map((code) => t(blockerLabel(code)))
+              .join("; ") || t("common.unavailable"),
+      })),
     nextPageToken: page.nextPageToken || undefined,
   };
 }
@@ -197,8 +210,10 @@ const authorizationDefinition = computed(() =>
     (item) => item.key === authorizationAccount.value?.definitionKey,
   ),
 );
-const authorizationMethods = computed(
-  () => authorizationDefinition.value?.authorizationMethods ?? [],
+const authorizationMethods = computed(() =>
+  props.personal
+    ? ["API_KEY" as const]
+    : (authorizationDefinition.value?.authorizationMethods ?? []),
 );
 
 function providerName(definitionKey: string): string {
@@ -399,7 +414,12 @@ async function copyUserCode(): Promise<void> {
   }
 }
 
-onMounted(() => store.restoreSnapshot());
+onMounted(() => {
+  if (props.personal) {
+    store.$reset();
+    void reload();
+  } else store.restoreSnapshot();
+});
 watch(accounts, (items) => {
   if (settingsAccount.value) {
     const updated = items.find(
@@ -421,6 +441,7 @@ watch(authorizationMethod, () => {
 onBeforeUnmount(() => {
   if (searchTimer) clearTimeout(searchTimer);
   store.stopAllPolling();
+  if (props.personal) store.$reset();
   apiKey.value = "";
 });
 </script>

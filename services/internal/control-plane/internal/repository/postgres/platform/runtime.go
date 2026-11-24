@@ -2559,7 +2559,7 @@ func (repository *Repository) delegateExecution(ctx context.Context, tx pgx.Tx, 
 			return commandOutcome{}, err
 		}
 	}
-	providerAccountID, err := repository.selectReadyProviderAccountForAgent(ctx, tx, scope.organizationID, payload.TargetAgentRef)
+	providerAccountID, err := repository.selectReadyProviderAccountForRoot(ctx, tx, scope.organizationID, stringMap(lease, "rootRunID"), initiatorID, payload.TargetAgentRef)
 	if err != nil {
 		return commandOutcome{}, err
 	}

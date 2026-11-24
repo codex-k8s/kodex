@@ -1557,9 +1557,15 @@ func (repository *Repository) applyResultActionPermissions(
 		assistant.projectConversation(result.Conversation)
 	}
 	if result.ProviderAccount != nil {
-		target := entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "PROVIDER_ACCOUNT", ResourceRef: result.ProviderAccount.Ref}
-		if err := repository.requireAccess(ctx, runner, scope, "provider.account.view", target); err != nil {
+		personal, err := personalModelAccount(ctx, runner, scope, result.ProviderAccount.Ref)
+		if err != nil {
 			return err
+		}
+		if !personal {
+			target := entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "PROVIDER_ACCOUNT", ResourceRef: result.ProviderAccount.Ref}
+			if err := repository.requireAccess(ctx, runner, scope, "provider.account.view", target); err != nil {
+				return err
+			}
 		}
 		fresh, err := repository.providerAccountByRef(ctx, runner, scope, result.ProviderAccount.Ref)
 		if err != nil {

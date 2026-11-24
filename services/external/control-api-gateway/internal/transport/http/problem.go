@@ -61,6 +61,9 @@ func writeRPCProblem(writer http.ResponseWriter, err error) {
 		if rpcErrorHasReason(err, resourceInUseReason) {
 			name = resourceInUseReason
 		}
+		if rpcErrorHasClosedReason(err, "PERSONAL_MODEL_ACCOUNT_REQUIRED") {
+			name = "PERSONAL_MODEL_ACCOUNT_REQUIRED"
+		}
 		if rpcErrorHasClosedReason(err, managedkubernetes.ConfigurationPlanUnsupportedReason) {
 			name = managedkubernetes.ConfigurationPlanUnsupportedReason
 		}

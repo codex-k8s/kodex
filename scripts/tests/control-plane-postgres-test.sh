@@ -19,7 +19,7 @@ kubernetes_plan_consumer_required=false
 ssh_gateway_consumer_directory=""
 ssh_gateway_consumer_required=false
 ssh_current_schema_required=false
-test_pattern=${1:-${KODEX_CONTROL_PLANE_TEST_FILTER:-'^(TestSentryObservabilityPersonalProfilesComponent|TestAuthorityProofCounterOwnerConcurrencyComponent|TestRoleImageOwnerTransactionRetryComponent|TestRoleImageOwnerTransactionRetryBoundsComponent|TestInstructionCommandProjectionComponent|TestIntegrationAutonomousGitHubInvocationComponent|TestIntegrationGitHubHistoricalAdmissionComponent|TestIntegrationGitHubBackupSchemaProofComponent|TestBootstrapComponent|TestConcurrentBootstrapComponent|TestWorkerGrantInstancesComponent|TestTrustedWorkloadGenerationComponent|TestServiceCredentialColdStartComponent|TestNativeSessionOwnerComponent|TestWorkspaceWriterOwnerComponent|TestWorkspaceUnboundStopOwnerComponent|TestWorkflowWorkspaceOwnerComponent|TestModelDiscoveryEligibilityComponent|TestModelProviderBootstrapComponent|TestModelProviderCatalogComponent|TestModelCatalogBootstrapMethodComponent|TestAssistantCredentialScopesComponent|TestAssistantParallelLifecycleComponent|TestProjectAssistantProfilesComponent|TestOrganizationRoleImagesComponent|TestOrganizationRuntimeEnvironmentComponent|TestOrganizationRuntimeSecretComponent|TestAssistantSystemRunProjectScopeComponent|TestArtifactOptionalRuntimeComponent|TestRuntimeResourceQueueComponent|TestRuntimeTerminalStorageComponent|TestRuntimeSecretDraftReadinessComponent|TestRuntimeOverloadCompletionComponent|TestIntegrationGateFeedbackComponent|TestWorkflowMetadataDraftComponent|TestDeletedEnvironmentSecretRetentionComponent|TestHistoricalEnvironmentSecretAdmissionComponent|TestHistoricalSecretRecoveryConcurrencyComponent|TestWorkflowGateDecisionsComponent|TestCompletionReceiptComponent|TestNativeCompletionCapabilityRevokeComponent|TestUsageCompletenessComponent|TestRepositoryBundlePublicationComponent|TestPersonalGitHubScopedPolicyComponent|TestRepositoryBundlePersonalCredentialComponent|TestCommitAckArtifactComponent|TestOwnerGateExpiryComponent|TestOwnerGateServerCompletionComponent|TestOwnerGateExpiryMigrationProofComponent|TestProjectPurgeAuthorityComponent|TestProjectPurgeAuthorityMigrationProofComponent|TestServerWorkflowMigrationProofComponent|TestOverviewEligibilityComponent|TestWorkflowExceptionContextComponent|TestWorkflowExceptionContextMigrationProofComponent)$'}}
+test_pattern=${1:-${KODEX_CONTROL_PLANE_TEST_FILTER:-'^(TestSentryObservabilityPersonalProfilesComponent|TestAuthorityProofCounterOwnerConcurrencyComponent|TestRoleImageOwnerTransactionRetryComponent|TestRoleImageOwnerTransactionRetryBoundsComponent|TestInstructionCommandProjectionComponent|TestIntegrationAutonomousGitHubInvocationComponent|TestIntegrationGitHubHistoricalAdmissionComponent|TestIntegrationGitHubBackupSchemaProofComponent|TestBootstrapComponent|TestConcurrentBootstrapComponent|TestWorkerGrantInstancesComponent|TestTrustedWorkloadGenerationComponent|TestServiceCredentialColdStartComponent|TestNativeSessionOwnerComponent|TestWorkspaceWriterOwnerComponent|TestWorkspaceUnboundStopOwnerComponent|TestWorkflowWorkspaceOwnerComponent|TestModelDiscoveryEligibilityComponent|TestModelProviderBootstrapComponent|TestModelProviderCatalogComponent|TestPersonalModelAccountLaunchComponent|TestModelCatalogBootstrapMethodComponent|TestAssistantCredentialScopesComponent|TestAssistantParallelLifecycleComponent|TestProjectAssistantProfilesComponent|TestOrganizationRoleImagesComponent|TestOrganizationRuntimeEnvironmentComponent|TestOrganizationRuntimeSecretComponent|TestAssistantSystemRunProjectScopeComponent|TestArtifactOptionalRuntimeComponent|TestRuntimeResourceQueueComponent|TestRuntimeTerminalStorageComponent|TestRuntimeSecretDraftReadinessComponent|TestRuntimeOverloadCompletionComponent|TestIntegrationGateFeedbackComponent|TestWorkflowMetadataDraftComponent|TestDeletedEnvironmentSecretRetentionComponent|TestHistoricalEnvironmentSecretAdmissionComponent|TestHistoricalSecretRecoveryConcurrencyComponent|TestWorkflowGateDecisionsComponent|TestCompletionReceiptComponent|TestNativeCompletionCapabilityRevokeComponent|TestUsageCompletenessComponent|TestRepositoryBundlePublicationComponent|TestPersonalGitHubScopedPolicyComponent|TestRepositoryBundlePersonalCredentialComponent|TestCommitAckArtifactComponent|TestOwnerGateExpiryComponent|TestOwnerGateServerCompletionComponent|TestOwnerGateExpiryMigrationProofComponent|TestProjectPurgeAuthorityComponent|TestProjectPurgeAuthorityMigrationProofComponent|TestServerWorkflowMigrationProofComponent|TestOverviewEligibilityComponent|TestWorkflowExceptionContextComponent|TestWorkflowExceptionContextMigrationProofComponent)$'}}
 
 # Оба закрытых upgrade-сценария используют одну и ту же отдельную пустую БД.
 upgrade_timeout=180s
@@ -624,6 +624,15 @@ fi
     fail 'current SSH owner profile requires schema 051'
   fi
   case "$schema_version" in
+    20261124000100)
+      schema_proof=workflow-file-provenance-migration-postcondition.sql
+      schema_verifier=validatePersonalModelAccountsFixture
+      expected_history=$(printf '0\n'; find "$repository_root/services/internal/control-plane/cmd/cli/migrations" -maxdepth 1 -name '*.sql' -printf '%f\n' | cut -d_ -f1 | sort)
+      applied_history=$(psql "postgresql://postgres@127.0.0.1:${port}/control_plane?sslmode=disable" \
+        --no-password -X -qAt -v ON_ERROR_STOP=1 \
+        -c "SELECT CASE WHEN is_applied THEN version_id::text ELSE 'reverted' END FROM public.goose_db_version ORDER BY id")
+      [[ "$applied_history" == "$expected_history" ]] || fail 'personal model account fixture migration history changed'
+      ;;
     20261121000200) schema_proof=workflow-file-provenance-migration-postcondition.sql; schema_verifier=validWorkflowFileProvenanceMigrationPostcondition ;;
     20261114170000) schema_proof=personal-integrations-migration-postcondition.sql; schema_verifier=validPersonalIntegrationsMigrationPostcondition ;;
     20261114140000) schema_proof=telegram-notifications-migration-postcondition.sql; schema_verifier=validTelegramNotificationsMigrationPostcondition ;;
@@ -673,8 +682,15 @@ fi
       const verifiers = await import(pathToFileURL(process.argv[1]));
       let input = "";
       for await (const chunk of process.stdin) input += chunk;
-      if (!Object.hasOwn(verifiers, process.argv[2]) || !verifiers[process.argv[2]](JSON.parse(input)))
-        throw new Error("Current workflow schema postcondition failed");
+      const proof = JSON.parse(input);
+      // Локальная квалификация чистой052 отдельна от live-профиля 051.
+      const valid = process.argv[2] === "validatePersonalModelAccountsFixture"
+        ? proof.database === "control_plane" && proof.readOnly === "on" &&
+          proof.gooseVersion === 20261124000100 && proof.serverVersionNum === 180003 &&
+          proof.backupQualification === "NONE" && proof.publicSequenceSafe === true &&
+          proof.schemaCatalog?.catalogDigest === "aa75f206a40fb6f7fe333798b7e90eb434cb8a8b79fd1c9a3425bf14fdede0ad"
+        : Object.hasOwn(verifiers, process.argv[2]) && verifiers[process.argv[2]](proof);
+      if (!valid) throw new Error("Current workflow schema postcondition failed");
       process.stdout.write("Current workflow schema read-only query passed\n");
     ' "$repository_root/tools/release/control-plane-immutable-migration.mjs" "$schema_verifier"
   retention_reference_count=$(psql "$runtime_dsn" --no-password -X -qAt -v ON_ERROR_STOP=1 \

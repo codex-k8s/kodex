@@ -398,6 +398,7 @@ func (e AgentEffectiveCapabilitySource) Valid() bool {
 const (
 	AgentRuntimeConfigurationInputProviderPolicyModeFIXED     AgentRuntimeConfigurationInputProviderPolicyMode = "FIXED"
 	AgentRuntimeConfigurationInputProviderPolicyModeLEASTUSED AgentRuntimeConfigurationInputProviderPolicyMode = "LEAST_USED"
+	AgentRuntimeConfigurationInputProviderPolicyModePERSONAL  AgentRuntimeConfigurationInputProviderPolicyMode = "PERSONAL"
 	AgentRuntimeConfigurationInputProviderPolicyModeWEIGHTED  AgentRuntimeConfigurationInputProviderPolicyMode = "WEIGHTED"
 )
 
@@ -407,6 +408,8 @@ func (e AgentRuntimeConfigurationInputProviderPolicyMode) Valid() bool {
 	case AgentRuntimeConfigurationInputProviderPolicyModeFIXED:
 		return true
 	case AgentRuntimeConfigurationInputProviderPolicyModeLEASTUSED:
+		return true
+	case AgentRuntimeConfigurationInputProviderPolicyModePERSONAL:
 		return true
 	case AgentRuntimeConfigurationInputProviderPolicyModeWEIGHTED:
 		return true
@@ -7127,6 +7130,7 @@ func (e ProviderAccountDeletionState) Valid() bool {
 const (
 	FIXED     ProviderAccountPolicyVersionMode = "FIXED"
 	LEASTUSED ProviderAccountPolicyVersionMode = "LEAST_USED"
+	PERSONAL  ProviderAccountPolicyVersionMode = "PERSONAL"
 	WEIGHTED  ProviderAccountPolicyVersionMode = "WEIGHTED"
 )
 
@@ -7136,6 +7140,8 @@ func (e ProviderAccountPolicyVersionMode) Valid() bool {
 	case FIXED:
 		return true
 	case LEASTUSED:
+		return true
+	case PERSONAL:
 		return true
 	case WEIGHTED:
 		return true
@@ -17416,6 +17422,7 @@ type ProviderAccount struct {
 	MaximumConcurrentExecutions int32                     `json:"maximumConcurrentExecutions"`
 	Name                        string                    `json:"name"`
 	NextActions                 []NextAction              `json:"nextActions"`
+	Personal                    *bool                     `json:"personal,omitempty"`
 	Ready                       bool                      `json:"ready"`
 	Ref                         OpaqueRef                 `json:"ref"`
 
@@ -17496,6 +17503,7 @@ type ProviderAccountConcurrencyInput struct {
 type ProviderAccountCreateInput struct {
 	DefinitionKey string `json:"definitionKey"`
 	Name          string `json:"name"`
+	Personal      *bool  `json:"personal,omitempty"`
 }
 
 // ProviderAccountDeletion defines model for ProviderAccountDeletion.
@@ -22671,10 +22679,13 @@ type ListProviderAccountsParams struct {
 	UsageModel                 *ProviderUsageModel                     `form:"usageModel,omitempty" json:"usageModel,omitempty"`
 	UsageReasoningEffort       *ProviderUsageReasoningEffort           `form:"usageReasoningEffort,omitempty" json:"usageReasoningEffort,omitempty"`
 	State                      *ListProviderAccountsParamsState        `form:"state,omitempty" json:"state,omitempty"`
-	DefinitionKey              *string                                 `form:"definitionKey,omitempty" json:"definitionKey,omitempty"`
-	Query                      *Query                                  `form:"query,omitempty" json:"query,omitempty"`
-	PageSize                   *PageSize                               `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken                  *PageToken                              `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+
+	// Personal Вернуть только личные аккаунты текущего пользователя.
+	Personal      *bool      `form:"personal,omitempty" json:"personal,omitempty"`
+	DefinitionKey *string    `form:"definitionKey,omitempty" json:"definitionKey,omitempty"`
+	Query         *Query     `form:"query,omitempty" json:"query,omitempty"`
+	PageSize      *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken     *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
 // ListProviderAccountsParamsUsagePurpose defines parameters for ListProviderAccounts.
@@ -49856,6 +49867,19 @@ func (siw *ServerInterfaceWrapper) ListProviderAccounts(w http.ResponseWriter, r
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "state"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "state", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "personal" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "personal", r.URL.Query(), &params.Personal, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "personal"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "personal", Err: err})
 		}
 		return
 	}

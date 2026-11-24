@@ -323,7 +323,7 @@ func (repository *Repository) createWorkflowAgentRunTx(ctx context.Context, tx p
 	if err != nil {
 		return stage, errs.ErrUnavailable
 	}
-	accountID, err := repository.selectReadyProviderAccountForAgent(ctx, tx, current.organizationID, agentRef)
+	accountID, err := repository.selectReadyProviderAccountForRoot(ctx, tx, current.organizationID, root.ID, root.InitiatorID, agentRef)
 	if err != nil {
 		return stage, err
 	}

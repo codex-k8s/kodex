@@ -561,7 +561,7 @@ SELECT n.id::text,
        provider_policy.ref,
        provider_policy.version_number,
        provider_policy.digest,
-       provider_policy.mode,
+       CASE WHEN provider_policy.mode = 'PERSONAL' THEN 'FIXED' ELSE provider_policy.mode END,
        config_overlay.id::text,
        config_overlay.ref,
        config_overlay.version_number,
@@ -621,6 +621,11 @@ JOIN control_plane.provider_accounts pa
  AND pa.organization_id = r.organization_id
  AND pa.state = 'AUTHORIZED'
  AND pa.enabled
+ AND (pa.personal_owner_subject_id IS NULL
+   OR (pa.personal_owner_subject_id = s.created_by
+     AND pa.personal_owner_subject_id = root.initiated_by
+     AND initiator.active AND initiator.kind = 'USER'
+     AND root.source IN ('CONTROL_CENTER', 'SYSTEM_ASSISTANT')))
 JOIN control_plane.provider_credential_revisions pcr
   ON pcr.id = pa.current_credential_revision_id
  AND pcr.organization_id = r.organization_id
@@ -635,6 +640,7 @@ LEFT JOIN control_plane.assistant_conversations conversation
  AND conversation.assistant_agent_id = a.id
 JOIN control_plane.agent_runtime_config_versions runtime_config ON runtime_config.id = a.current_runtime_config_id
 JOIN control_plane.provider_account_policy_versions provider_policy ON provider_policy.id = runtime_config.provider_account_policy_id
+ AND (provider_policy.mode = 'PERSONAL') = (pa.personal_owner_subject_id IS NOT NULL)
 LEFT JOIN LATERAL (
     SELECT candidate->>'runtimeProfileRef' AS profile, candidate->>'providerDefinitionKey' AS provider, candidate->>'model' AS model
     FROM jsonb_array_elements(provider_policy.account_candidates) candidate

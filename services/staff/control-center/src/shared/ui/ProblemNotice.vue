@@ -24,6 +24,8 @@ const heading = computed(() => {
 const message = computed(() => {
   if (props.problem?.code === "FRESH_AUTHENTICATION_REQUIRED")
     return translator.t("common.freshAuthenticationHelp");
+  if (props.problem?.code === "PERSONAL_MODEL_ACCOUNT_REQUIRED")
+    return translator.t("runtime.personalAccountHelp");
   if (props.problem?.title) return props.problem.title;
   const key = `errors.${props.problem?.code ?? "default"}`;
   return translator.te(key)
@@ -53,6 +55,12 @@ const message = computed(() => {
           · {{ diagnostic.line }}:{{ diagnostic.column }}
         </li>
       </ul>
+      <RouterLink
+        v-if="problem?.code === 'PERSONAL_MODEL_ACCOUNT_REQUIRED'"
+        :to="{ name: 'personal-provider-accounts' }"
+      >
+        {{ $t("providers.personalTitle") }}
+      </RouterLink>
       <small v-if="problem?.correlationId">{{ problem.correlationId }}</small>
     </div>
     <button

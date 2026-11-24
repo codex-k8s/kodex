@@ -28,11 +28,6 @@ import { startProviderLifecycle } from "./lifecycle";
 import { requestSignal } from "@/shared/api/client";
 
 const devicePollDelayMs = 4_000;
-const pollTimers = new Map<string, ReturnType<typeof setTimeout>>();
-const pollGenerations = new Map<string, number>();
-let loadGeneration = 0;
-let loadController: AbortController | undefined;
-
 interface ProvidersState {
   catalogUnavailable: boolean;
   definitions: ProviderDefinition[];
@@ -55,383 +50,415 @@ interface ProvidersState {
   snapshotReady: boolean;
 }
 
-export const useProvidersStore = defineStore("providers", {
-  state: (): ProvidersState => ({
-    catalogUnavailable: false,
-    definitions: [],
-    definitionsNextPageToken: "",
-    definitionsLoadingMore: false,
-    accounts: [],
-    accountsNextPageToken: "",
-    pageNextActions: [],
-    query: "",
-    loading: false,
-    loadingMore: false,
-    busyRefs: [],
-    pollingRefs: [],
-    problem: undefined,
-    snapshotAccounts: [],
-    snapshotAccountsNextPageToken: "",
-    snapshotDefinitions: [],
-    snapshotDefinitionsNextPageToken: "",
-    snapshotNextActions: [],
-    snapshotReady: false,
-  }),
-  actions: {
-    applyUnavailableCatalog(): void {
-      this.stopAllPolling();
-      this.accounts = [];
-      this.snapshotAccounts = [];
-      this.accountsNextPageToken = "";
-      this.snapshotAccountsNextPageToken = "";
-      this.pageNextActions = [];
-      this.snapshotNextActions = [];
-      this.snapshotReady = false;
-      this.catalogUnavailable = true;
-    },
-    applySnapshot(
-      accounts: ProviderAccount[],
-      nextPageToken = "",
-      nextActions: ProviderAccountAction[] = [],
-      definitions?: ProviderDefinition[],
-      definitionsNextPageToken = "",
-    ): void {
-      this.catalogUnavailable = false;
-      this.snapshotAccounts = accounts;
-      this.snapshotAccountsNextPageToken = nextPageToken;
-      this.snapshotNextActions = nextActions;
-      this.snapshotReady = true;
-      if (definitions) {
-        this.snapshotDefinitions = definitions;
-        this.snapshotDefinitionsNextPageToken = definitionsNextPageToken;
-      }
-      if (!this.query) this.restoreSnapshot();
-      else this.resumeDeviceAuthorizationPolling();
-    },
-    restoreSnapshot(): void {
-      this.query = "";
-      this.accounts = [...this.snapshotAccounts];
-      this.accountsNextPageToken = this.snapshotAccountsNextPageToken;
-      this.pageNextActions = [...this.snapshotNextActions];
-      this.definitions = [...this.snapshotDefinitions];
-      this.definitionsNextPageToken = this.snapshotDefinitionsNextPageToken;
-      this.loading = false;
-      this.problem = undefined;
-      this.resumeDeviceAuthorizationPolling();
-    },
-    async loadDefinitions(query = "", pageSize = 20): Promise<void> {
-      const page = await loadProviderDefinitions(
-        query,
-        undefined,
-        requestSignal(),
-        pageSize,
-      );
-      this.definitions = page.items;
-      this.definitionsNextPageToken = page.nextPageToken;
-      if (!query.trim()) {
-        this.snapshotDefinitions = [...page.items];
-        this.snapshotDefinitionsNextPageToken = page.nextPageToken;
-      }
-    },
-    async loadMoreDefinitions(pageSize = 20): Promise<void> {
-      if (!this.definitionsNextPageToken || this.definitionsLoadingMore) return;
-      this.definitionsLoadingMore = true;
-      this.problem = undefined;
-      try {
+function defineProviderAccountsStore(id: string, personal: boolean) {
+  const pollTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  const pollGenerations = new Map<string, number>();
+  let loadGeneration = 0;
+  let loadController: AbortController | undefined;
+  return defineStore(id, {
+    state: (): ProvidersState => ({
+      catalogUnavailable: false,
+      definitions: [],
+      definitionsNextPageToken: "",
+      definitionsLoadingMore: false,
+      accounts: [],
+      accountsNextPageToken: "",
+      pageNextActions: [],
+      query: "",
+      loading: false,
+      loadingMore: false,
+      busyRefs: [],
+      pollingRefs: [],
+      problem: undefined,
+      snapshotAccounts: [],
+      snapshotAccountsNextPageToken: "",
+      snapshotDefinitions: [],
+      snapshotDefinitionsNextPageToken: "",
+      snapshotNextActions: [],
+      snapshotReady: false,
+    }),
+    actions: {
+      applyUnavailableCatalog(): void {
+        this.stopAllPolling();
+        this.accounts = [];
+        this.snapshotAccounts = [];
+        this.accountsNextPageToken = "";
+        this.snapshotAccountsNextPageToken = "";
+        this.pageNextActions = [];
+        this.snapshotNextActions = [];
+        this.snapshotReady = false;
+        this.catalogUnavailable = true;
+      },
+      applySnapshot(
+        accounts: ProviderAccount[],
+        nextPageToken = "",
+        nextActions: ProviderAccountAction[] = [],
+        definitions?: ProviderDefinition[],
+        definitionsNextPageToken = "",
+      ): void {
+        this.catalogUnavailable = false;
+        this.snapshotAccounts = accounts;
+        this.snapshotAccountsNextPageToken = nextPageToken;
+        this.snapshotNextActions = nextActions;
+        this.snapshotReady = true;
+        if (definitions) {
+          this.snapshotDefinitions = definitions;
+          this.snapshotDefinitionsNextPageToken = definitionsNextPageToken;
+        }
+        if (!this.query) this.restoreSnapshot();
+        else this.resumeDeviceAuthorizationPolling();
+      },
+      restoreSnapshot(): void {
+        this.query = "";
+        this.accounts = [...this.snapshotAccounts];
+        this.accountsNextPageToken = this.snapshotAccountsNextPageToken;
+        this.pageNextActions = [...this.snapshotNextActions];
+        this.definitions = [...this.snapshotDefinitions];
+        this.definitionsNextPageToken = this.snapshotDefinitionsNextPageToken;
+        this.loading = false;
+        this.problem = undefined;
+        this.resumeDeviceAuthorizationPolling();
+      },
+      async loadDefinitions(query = "", pageSize = 20): Promise<void> {
         const page = await loadProviderDefinitions(
-          "",
-          this.definitionsNextPageToken,
+          query,
+          undefined,
           requestSignal(),
           pageSize,
         );
-        const definitions = new Map(
-          this.definitions.map((definition) => [definition.key, definition]),
-        );
-        for (const definition of page.items)
-          definitions.set(definition.key, definition);
-        this.definitions = [...definitions.values()].sort((left, right) =>
-          left.name.localeCompare(right.name, "ru"),
-        );
+        this.definitions = page.items;
         this.definitionsNextPageToken = page.nextPageToken;
-        if (!this.query) {
-          this.snapshotDefinitions = [...this.definitions];
+        if (!query.trim()) {
+          this.snapshotDefinitions = [...page.items];
           this.snapshotDefinitionsNextPageToken = page.nextPageToken;
         }
-      } catch (error) {
-        this.problem = asProblem(error);
-      } finally {
-        this.definitionsLoadingMore = false;
-      }
-    },
-    async load(
-      query?: string,
-      accountPageSize = 20,
-      definitionPageSize = 20,
-    ): Promise<void> {
-      this.query = (query ?? this.query).trim();
-      if (!this.query && this.snapshotReady) {
-        this.restoreSnapshot();
-        return;
-      }
-      this.loading = true;
-      this.problem = undefined;
-      loadController?.abort();
-      const controller = new AbortController();
-      loadController = controller;
-      const generation = ++loadGeneration;
-      try {
-        const [definitions, accounts] = await Promise.all([
-          loadProviderDefinitions(
+      },
+      async loadMoreDefinitions(pageSize = 20): Promise<void> {
+        if (!this.definitionsNextPageToken || this.definitionsLoadingMore)
+          return;
+        this.definitionsLoadingMore = true;
+        this.problem = undefined;
+        try {
+          const page = await loadProviderDefinitions(
             "",
-            undefined,
-            controller.signal,
-            definitionPageSize,
-          ),
-          loadProviderAccounts(
-            this.query,
-            undefined,
-            controller.signal,
-            undefined,
-            undefined,
-            accountPageSize,
-          ),
-        ]);
-        if (controller.signal.aborted || generation !== loadGeneration) return;
-        this.definitions = definitions.items;
-        this.definitionsNextPageToken = definitions.nextPageToken;
-        this.accounts = accounts.items;
-        this.accountsNextPageToken = accounts.nextPageToken;
-        this.pageNextActions = accounts.nextActions;
-        if (!this.query) {
-          this.snapshotDefinitions = [...definitions.items];
-          this.snapshotDefinitionsNextPageToken = definitions.nextPageToken;
-          this.snapshotAccounts = [...accounts.items];
-          this.snapshotAccountsNextPageToken = accounts.nextPageToken;
-          this.snapshotNextActions = [...accounts.nextActions];
-        }
-        this.resumeDeviceAuthorizationPolling();
-      } catch (error) {
-        if (controller.signal.aborted || generation !== loadGeneration) return;
-        this.problem = asProblem(error);
-      } finally {
-        if (generation === loadGeneration) this.loading = false;
-        if (loadController === controller) loadController = undefined;
-      }
-    },
-    async loadMore(pageSize = 20): Promise<void> {
-      if (!this.accountsNextPageToken || this.loadingMore) return;
-      this.loadingMore = true;
-      this.problem = undefined;
-      const token = this.accountsNextPageToken;
-      const generation = loadGeneration;
-      const query = this.query;
-      try {
-        const page = await loadProviderAccounts(
-          query,
-          token,
-          requestSignal(),
-          undefined,
-          undefined,
-          pageSize,
-        );
-        if (generation !== loadGeneration || query !== this.query) return;
-        for (const account of page.items)
-          this.accounts = upsertProviderAccount(this.accounts, account);
-        this.accountsNextPageToken = page.nextPageToken;
-        this.pageNextActions = page.nextActions;
-        if (!query) {
-          this.snapshotAccounts = [...this.accounts];
-          this.snapshotAccountsNextPageToken = page.nextPageToken;
-          this.snapshotNextActions = [...page.nextActions];
-        }
-      } catch (error) {
-        if (generation === loadGeneration && query === this.query)
+            this.definitionsNextPageToken,
+            requestSignal(),
+            pageSize,
+          );
+          const definitions = new Map(
+            this.definitions.map((definition) => [definition.key, definition]),
+          );
+          for (const definition of page.items)
+            definitions.set(definition.key, definition);
+          this.definitions = [...definitions.values()].sort((left, right) =>
+            left.name.localeCompare(right.name, "ru"),
+          );
+          this.definitionsNextPageToken = page.nextPageToken;
+          if (!this.query) {
+            this.snapshotDefinitions = [...this.definitions];
+            this.snapshotDefinitionsNextPageToken = page.nextPageToken;
+          }
+        } catch (error) {
           this.problem = asProblem(error);
-      } finally {
-        this.loadingMore = false;
-      }
-    },
-    async create(input: ProviderAccountCreateInput): Promise<ProviderAccount> {
-      if (!pageAllowsAccountCreation(this.pageNextActions))
-        throw new Error("Provider account creation is unavailable");
-      return this.execute("create", () => createProviderAccount(input));
-    },
-    async startDevice(
-      account: ProviderAccount,
-      reauthorize = false,
-    ): Promise<ProviderAccount> {
-      if (!accountAllows(account, "CONFIGURE_CREDENTIAL")) return account;
-      const generation = pollGenerations.get(account.ref) ?? 0;
-      const updated = await this.execute(account.ref, () =>
-        startProviderLifecycle(
-          account,
-          {
-            action:
-              reauthorize || account.state === "REAUTHORIZATION_REQUIRED"
-                ? "REAUTHORIZE"
-                : "START_DEVICE",
-          },
-          window.sessionStorage,
-          requestSignal(),
-        ).then((result) => result.account),
-      );
-      if (
-        generation === (pollGenerations.get(account.ref) ?? 0) &&
-        hasPendingDeviceAuthorization(updated)
-      )
-        this.schedulePoll(updated.ref);
-      return updated;
-    },
-    async refreshAuthorization(
-      account: ProviderAccount,
-    ): Promise<ProviderAccount> {
-      const pendingDeviceAuthorization = hasPendingDeviceAuthorization(account);
-      if (
-        !pendingDeviceAuthorization &&
-        !accountAllows(account, "REFRESH_AUTHORIZATION")
-      ) {
-        this.stopPolling(account.ref);
-        return account;
-      }
-      const generation = pollGenerations.get(account.ref) ?? 0;
-      const updated = await this.execute(account.ref, () =>
-        pendingDeviceAuthorization
-          ? pollDeviceAuthorization(account)
-          : startProviderLifecycle(
-              account,
-              { action: "VERIFY" },
-              window.sessionStorage,
-              requestSignal(),
-            ).then((result) => result.account),
-      );
-      if (generation === (pollGenerations.get(account.ref) ?? 0)) {
-        if (hasPendingDeviceAuthorization(updated))
-          this.schedulePoll(updated.ref);
-        else this.stopPolling(updated.ref);
-      }
-      return updated;
-    },
-    async authorizeApiKey(
-      account: ProviderAccount,
-      apiKey: string,
-    ): Promise<ProviderAccount> {
-      if (!accountAllows(account, "CONFIGURE_CREDENTIAL")) return account;
-      return this.execute(account.ref, () =>
-        authorizeProviderApiKey(account, apiKey),
-      );
-    },
-    async setEnabled(
-      account: ProviderAccount,
-      enabled: boolean,
-    ): Promise<ProviderAccount> {
-      const action: ProviderAccountAction = enabled ? "ENABLE" : "DISABLE";
-      if (!accountAllows(account, action)) return account;
-      return this.execute(account.ref, () =>
-        setProviderAccountEnabled(account, enabled),
-      );
-    },
-    async revoke(account: ProviderAccount): Promise<ProviderAccount> {
-      if (!accountAllows(account, "REVOKE")) return account;
-      this.stopPolling(account.ref);
-      return this.execute(account.ref, () => revokeProviderAccount(account));
-    },
-    async remove(account: ProviderAccount): Promise<ProviderAccount> {
-      if (!accountAllows(account, "DELETE")) return account;
-      this.stopPolling(account.ref);
-      return this.execute(account.ref, () =>
-        startProviderLifecycle(
-          account,
-          { action: "DELETE" },
-          window.sessionStorage,
-          requestSignal(),
-        ).then((result) => result.account),
-      );
-    },
-    resumeDeviceAuthorizationPolling(): void {
-      const observable = new Set(
-        this.accounts
-          .filter((account) => hasPendingDeviceAuthorization(account))
-          .map((account) => account.ref),
-      );
-      for (const accountRef of this.pollingRefs) {
-        if (!observable.has(accountRef)) this.stopPolling(accountRef);
-      }
-      for (const account of this.accounts) {
-        if (!observable.has(account.ref)) continue;
-        this.schedulePoll(
-          account.ref,
-          isPendingDeviceAuthorization(account) ? devicePollDelayMs : 0,
-        );
-      }
-    },
-    schedulePoll(accountRef: string, delayMs = devicePollDelayMs): void {
-      this.stopPolling(accountRef);
-      this.pollingRefs = [...new Set([...this.pollingRefs, accountRef])];
-      pollTimers.set(
-        accountRef,
-        setTimeout(() => {
-          pollTimers.delete(accountRef);
-          const account = this.accounts.find((item) => item.ref === accountRef);
-          if (!account || !hasPendingDeviceAuthorization(account)) {
-            this.stopPolling(accountRef);
-            return;
-          }
-          void this.refreshAuthorization(account).catch(() => {
-            this.stopPolling(accountRef);
-          });
-        }, delayMs),
-      );
-    },
-    stopPolling(accountRef: string): void {
-      pollGenerations.set(
-        accountRef,
-        (pollGenerations.get(accountRef) ?? 0) + 1,
-      );
-      const timer = pollTimers.get(accountRef);
-      if (timer !== undefined) clearTimeout(timer);
-      pollTimers.delete(accountRef);
-      this.pollingRefs = this.pollingRefs.filter((ref) => ref !== accountRef);
-    },
-    stopAllPolling(): void {
-      for (const accountRef of new Set([...this.pollingRefs, ...this.busyRefs]))
-        this.stopPolling(accountRef);
-    },
-    async execute(
-      busyRef: string,
-      operation: () => Promise<ProviderAccount>,
-    ): Promise<ProviderAccount> {
-      if (this.busyRefs.includes(busyRef))
-        throw new Error("Provider account mutation is already in progress");
-      this.busyRefs = [...new Set([...this.busyRefs, busyRef])];
-      this.problem = undefined;
-      try {
-        const account = await operation();
-        this.accounts = upsertProviderAccount(this.accounts, account);
-        return account;
-      } catch (error) {
-        if (error instanceof KnownMutationRejection && error.status === 412) {
-          const signal = requestSignal();
-          try {
-            const current = await loadProviderAccount(busyRef, signal);
-            signal.throwIfAborted();
-            if (current.ref !== busyRef)
-              throw new Error("Provider refresh scope changed");
-            this.accounts = upsertProviderAccount(this.accounts, current);
-          } catch (refreshError) {
-            if (!signal.aborted) {
-              this.accounts = this.accounts.filter(
-                (item) => item.ref !== busyRef,
-              );
-              this.problem = asProblem(refreshError);
-            }
-            throw refreshError;
-          }
+        } finally {
+          this.definitionsLoadingMore = false;
         }
-        this.problem = asProblem(error);
-        throw this.problem;
-      } finally {
-        this.busyRefs = this.busyRefs.filter((ref) => ref !== busyRef);
-      }
+      },
+      async load(
+        query?: string,
+        accountPageSize = 20,
+        definitionPageSize = 20,
+      ): Promise<void> {
+        this.query = (query ?? this.query).trim();
+        if (!this.query && this.snapshotReady) {
+          this.restoreSnapshot();
+          return;
+        }
+        this.loading = true;
+        this.problem = undefined;
+        loadController?.abort();
+        const controller = new AbortController();
+        loadController = controller;
+        const generation = ++loadGeneration;
+        try {
+          const [definitions, accounts] = await Promise.all([
+            loadProviderDefinitions(
+              "",
+              undefined,
+              controller.signal,
+              definitionPageSize,
+            ),
+            loadProviderAccounts(
+              this.query,
+              undefined,
+              controller.signal,
+              undefined,
+              undefined,
+              accountPageSize,
+              personal,
+            ),
+          ]);
+          if (controller.signal.aborted || generation !== loadGeneration)
+            return;
+          this.definitions = definitions.items;
+          this.definitionsNextPageToken = definitions.nextPageToken;
+          this.accounts = accounts.items;
+          this.accountsNextPageToken = accounts.nextPageToken;
+          this.pageNextActions = accounts.nextActions;
+          if (!this.query) {
+            this.snapshotDefinitions = [...definitions.items];
+            this.snapshotDefinitionsNextPageToken = definitions.nextPageToken;
+            this.snapshotAccounts = [...accounts.items];
+            this.snapshotAccountsNextPageToken = accounts.nextPageToken;
+            this.snapshotNextActions = [...accounts.nextActions];
+          }
+          this.resumeDeviceAuthorizationPolling();
+        } catch (error) {
+          if (controller.signal.aborted || generation !== loadGeneration)
+            return;
+          this.problem = asProblem(error);
+        } finally {
+          if (generation === loadGeneration) this.loading = false;
+          if (loadController === controller) loadController = undefined;
+        }
+      },
+      async loadMore(pageSize = 20): Promise<void> {
+        if (!this.accountsNextPageToken || this.loadingMore) return;
+        this.loadingMore = true;
+        this.problem = undefined;
+        const token = this.accountsNextPageToken;
+        const generation = loadGeneration;
+        const query = this.query;
+        try {
+          const page = await loadProviderAccounts(
+            query,
+            token,
+            requestSignal(),
+            undefined,
+            undefined,
+            pageSize,
+            personal,
+          );
+          if (generation !== loadGeneration || query !== this.query) return;
+          for (const account of page.items)
+            this.accounts = upsertProviderAccount(this.accounts, account);
+          this.accountsNextPageToken = page.nextPageToken;
+          this.pageNextActions = page.nextActions;
+          if (!query) {
+            this.snapshotAccounts = [...this.accounts];
+            this.snapshotAccountsNextPageToken = page.nextPageToken;
+            this.snapshotNextActions = [...page.nextActions];
+          }
+        } catch (error) {
+          if (generation === loadGeneration && query === this.query)
+            this.problem = asProblem(error);
+        } finally {
+          this.loadingMore = false;
+        }
+      },
+      async create(
+        input: ProviderAccountCreateInput,
+      ): Promise<ProviderAccount> {
+        if (!pageAllowsAccountCreation(this.pageNextActions))
+          throw new Error("Provider account creation is unavailable");
+        return this.execute("create", () =>
+          createProviderAccount(
+            personal ? { ...input, personal: true } : input,
+          ),
+        );
+      },
+      async startDevice(
+        account: ProviderAccount,
+        reauthorize = false,
+      ): Promise<ProviderAccount> {
+        if (!accountAllows(account, "CONFIGURE_CREDENTIAL")) return account;
+        const generation = pollGenerations.get(account.ref) ?? 0;
+        const updated = await this.execute(account.ref, () =>
+          startProviderLifecycle(
+            account,
+            {
+              action:
+                reauthorize || account.state === "REAUTHORIZATION_REQUIRED"
+                  ? "REAUTHORIZE"
+                  : "START_DEVICE",
+            },
+            window.sessionStorage,
+            requestSignal(),
+          ).then((result) => result.account),
+        );
+        if (
+          generation === (pollGenerations.get(account.ref) ?? 0) &&
+          hasPendingDeviceAuthorization(updated)
+        )
+          this.schedulePoll(updated.ref);
+        return updated;
+      },
+      async refreshAuthorization(
+        account: ProviderAccount,
+      ): Promise<ProviderAccount> {
+        const pendingDeviceAuthorization =
+          hasPendingDeviceAuthorization(account);
+        if (
+          !pendingDeviceAuthorization &&
+          !accountAllows(account, "REFRESH_AUTHORIZATION")
+        ) {
+          this.stopPolling(account.ref);
+          return account;
+        }
+        const generation = pollGenerations.get(account.ref) ?? 0;
+        const updated = await this.execute(account.ref, () =>
+          pendingDeviceAuthorization
+            ? pollDeviceAuthorization(account)
+            : startProviderLifecycle(
+                account,
+                { action: "VERIFY" },
+                window.sessionStorage,
+                requestSignal(),
+              ).then((result) => result.account),
+        );
+        if (generation === (pollGenerations.get(account.ref) ?? 0)) {
+          if (hasPendingDeviceAuthorization(updated))
+            this.schedulePoll(updated.ref);
+          else this.stopPolling(updated.ref);
+        }
+        return updated;
+      },
+      async authorizeApiKey(
+        account: ProviderAccount,
+        apiKey: string,
+      ): Promise<ProviderAccount> {
+        if (!accountAllows(account, "CONFIGURE_CREDENTIAL")) return account;
+        return this.execute(account.ref, () =>
+          authorizeProviderApiKey(account, apiKey),
+        );
+      },
+      async setEnabled(
+        account: ProviderAccount,
+        enabled: boolean,
+      ): Promise<ProviderAccount> {
+        const action: ProviderAccountAction = enabled ? "ENABLE" : "DISABLE";
+        if (!accountAllows(account, action)) return account;
+        return this.execute(account.ref, () =>
+          setProviderAccountEnabled(account, enabled),
+        );
+      },
+      async revoke(account: ProviderAccount): Promise<ProviderAccount> {
+        if (!accountAllows(account, "REVOKE")) return account;
+        this.stopPolling(account.ref);
+        return this.execute(account.ref, () => revokeProviderAccount(account));
+      },
+      async remove(account: ProviderAccount): Promise<ProviderAccount> {
+        if (!accountAllows(account, "DELETE")) return account;
+        this.stopPolling(account.ref);
+        return this.execute(account.ref, () =>
+          startProviderLifecycle(
+            account,
+            { action: "DELETE" },
+            window.sessionStorage,
+            requestSignal(),
+          ).then((result) => result.account),
+        );
+      },
+      resumeDeviceAuthorizationPolling(): void {
+        const observable = new Set(
+          this.accounts
+            .filter((account) => hasPendingDeviceAuthorization(account))
+            .map((account) => account.ref),
+        );
+        for (const accountRef of this.pollingRefs) {
+          if (!observable.has(accountRef)) this.stopPolling(accountRef);
+        }
+        for (const account of this.accounts) {
+          if (!observable.has(account.ref)) continue;
+          this.schedulePoll(
+            account.ref,
+            isPendingDeviceAuthorization(account) ? devicePollDelayMs : 0,
+          );
+        }
+      },
+      schedulePoll(accountRef: string, delayMs = devicePollDelayMs): void {
+        this.stopPolling(accountRef);
+        this.pollingRefs = [...new Set([...this.pollingRefs, accountRef])];
+        pollTimers.set(
+          accountRef,
+          setTimeout(() => {
+            pollTimers.delete(accountRef);
+            const account = this.accounts.find(
+              (item) => item.ref === accountRef,
+            );
+            if (!account || !hasPendingDeviceAuthorization(account)) {
+              this.stopPolling(accountRef);
+              return;
+            }
+            void this.refreshAuthorization(account).catch(() => {
+              this.stopPolling(accountRef);
+            });
+          }, delayMs),
+        );
+      },
+      stopPolling(accountRef: string): void {
+        pollGenerations.set(
+          accountRef,
+          (pollGenerations.get(accountRef) ?? 0) + 1,
+        );
+        const timer = pollTimers.get(accountRef);
+        if (timer !== undefined) clearTimeout(timer);
+        pollTimers.delete(accountRef);
+        this.pollingRefs = this.pollingRefs.filter((ref) => ref !== accountRef);
+      },
+      stopAllPolling(): void {
+        for (const accountRef of new Set([
+          ...this.pollingRefs,
+          ...this.busyRefs,
+        ]))
+          this.stopPolling(accountRef);
+      },
+      async execute(
+        busyRef: string,
+        operation: () => Promise<ProviderAccount>,
+      ): Promise<ProviderAccount> {
+        if (this.busyRefs.includes(busyRef))
+          throw new Error("Provider account mutation is already in progress");
+        this.busyRefs = [...new Set([...this.busyRefs, busyRef])];
+        this.problem = undefined;
+        try {
+          const account = await operation();
+          this.accounts = upsertProviderAccount(this.accounts, account);
+          return account;
+        } catch (error) {
+          if (error instanceof KnownMutationRejection && error.status === 412) {
+            const signal = requestSignal();
+            try {
+              const current = await loadProviderAccount(busyRef, signal);
+              signal.throwIfAborted();
+              if (current.ref !== busyRef)
+                throw new Error("Provider refresh scope changed");
+              this.accounts = upsertProviderAccount(this.accounts, current);
+            } catch (refreshError) {
+              if (!signal.aborted) {
+                this.accounts = this.accounts.filter(
+                  (item) => item.ref !== busyRef,
+                );
+                this.problem = asProblem(refreshError);
+              }
+              throw refreshError;
+            }
+          }
+          this.problem = asProblem(error);
+          throw this.problem;
+        } finally {
+          this.busyRefs = this.busyRefs.filter((ref) => ref !== busyRef);
+        }
+      },
     },
-  },
-});
+  });
+}
+
+export const useProvidersStore = defineProviderAccountsStore(
+  "providers",
+  false,
+);
+export const usePersonalProviderAccountsStore = defineProviderAccountsStore(
+  "personal-providers",
+  true,
+);

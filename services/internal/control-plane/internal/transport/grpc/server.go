@@ -331,6 +331,8 @@ func transportError(err error) error {
 		return statusErrorWithReason(codes.FailedPrecondition, "Kubernetes staging reconciliation is required", managedkubernetes.ProjectStagingReconciliationReason)
 	case errors.Is(err, errs.ErrResourceInUse):
 		return statusErrorWithReason(codes.FailedPrecondition, "resource is in use", resourceInUseReason)
+	case errors.Is(err, errs.ErrPersonalModelAccountRequired):
+		return statusErrorWithReason(codes.FailedPrecondition, errs.ErrPersonalModelAccountRequired.Error(), "PERSONAL_MODEL_ACCOUNT_REQUIRED")
 	case errors.Is(err, errs.ErrCapabilityRequired):
 		return status.Error(codes.FailedPrecondition, "required capability is not enabled")
 	case errors.Is(err, errs.ErrAlreadyResolved):

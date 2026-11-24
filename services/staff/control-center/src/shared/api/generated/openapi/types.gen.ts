@@ -1493,7 +1493,7 @@ export type ProviderAccountCandidateInput = {
 export type ProviderAccountPolicyVersion = {
     ref: OpaqueRef;
     version: number;
-    mode: 'FIXED' | 'LEAST_USED' | 'WEIGHTED';
+    mode: 'FIXED' | 'LEAST_USED' | 'WEIGHTED' | 'PERSONAL';
     accountCandidates: Array<ProviderAccountCandidate>;
     digest: string;
     createdAt: Timestamp;
@@ -1514,7 +1514,7 @@ export type AgentRuntimeConfiguration = {
 export type AgentRuntimeConfigurationInput = {
     runtimeProfileRef: OpaqueRef;
     model: string;
-    providerPolicyMode: 'FIXED' | 'LEAST_USED' | 'WEIGHTED';
+    providerPolicyMode: 'FIXED' | 'LEAST_USED' | 'WEIGHTED' | 'PERSONAL';
     providerAccounts: Array<ProviderAccountCandidateInput>;
 };
 
@@ -4385,6 +4385,7 @@ export type ProviderAuthorization = {
 };
 
 export type ProviderAccount = {
+    personal?: boolean;
     ref: OpaqueRef;
     version: number;
     definitionKey: string;
@@ -4586,6 +4587,7 @@ export type ProviderAccountPage = {
 };
 
 export type ProviderAccountCreateInput = {
+    personal?: boolean;
     definitionKey: string;
     name: string;
 };
@@ -8431,6 +8433,10 @@ export type ListProviderAccountsData = {
         usageModel?: string;
         usageReasoningEffort?: string;
         state?: 'PENDING_AUTHORIZATION' | 'AUTHORIZED' | 'REAUTHORIZATION_REQUIRED' | 'REVOKED' | 'DISABLED' | 'DELETING' | 'DELETED';
+        /**
+         * Вернуть только личные аккаунты текущего пользователя.
+         */
+        personal?: boolean;
         definitionKey?: string;
         query?: string;
         pageSize?: number;
@@ -8450,7 +8456,7 @@ export type ListProviderAccountsError = ListProviderAccountsErrors[keyof ListPro
 
 export type ListProviderAccountsResponses = {
     /**
-     * Provider accounts текущей organization без credential values
+     * Системные или личные аккаунты без значений ключей
      */
     200: ProviderAccountPage;
 };

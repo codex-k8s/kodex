@@ -38,6 +38,7 @@ LEFT JOIN LATERAL (
   ORDER BY observation.created_at DESC, observation.id DESC LIMIT 1
 ) success ON true
 WHERE (@provider_definition_key = '' OR definition.stable_key = @provider_definition_key)
-  AND (@provider_account_ref = '' OR account.ref = @provider_account_ref)
+  AND ((@provider_account_ref = '' AND account.personal_owner_subject_id IS NULL)
+    OR account.ref = @provider_account_ref)
 ORDER BY definition.stable_key, account.ref
 LIMIT 4097;

@@ -33,6 +33,7 @@ JOIN LATERAL (
         ) auth_attempt ON true
         WHERE candidate.organization_id = runtime.organization_id
           AND candidate.definition_key = runtime_config.provider
+          AND candidate.personal_owner_subject_id IS NULL
           AND candidate.current_credential_revision_id IS NOT NULL
           AND candidate.enabled AND candidate.state = 'AUTHORIZED'
     )

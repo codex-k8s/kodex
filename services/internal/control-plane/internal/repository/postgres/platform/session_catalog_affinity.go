@@ -69,7 +69,8 @@ type sessionCatalogBinding struct {
 // caller rollback; helper не авторизует actor и не выполняет commit.
 func bindSessionModelCatalog(ctx context.Context, tx pgx.Tx, organizationID, sessionID, agentRef string) error {
 	var accountRef string
-	if err := tx.QueryRow(ctx, queryRuntimeCatalogSessionAccount, sessionID, organizationID).Scan(&accountRef); err != nil {
+	var personal bool
+	if err := tx.QueryRow(ctx, queryRuntimeCatalogSessionAccount, sessionID, organizationID).Scan(&accountRef, &personal); err != nil {
 		return errs.ErrConflict
 	}
 	configuration, overlay, err := readRuntimeCatalogConfiguration(ctx, tx, organizationID, agentRef, "")
@@ -84,6 +85,9 @@ func bindSessionModelCatalog(ctx context.Context, tx pgx.Tx, organizationID, ses
 		if candidate.AccountRef == accountRef {
 			selected = append(selected, candidate)
 		}
+	}
+	if personal && configuration.ProviderPolicy.Mode == "PERSONAL" {
+		selected = []entity.ProviderAccountCandidate{{AccountRef: accountRef, Weight: 1}}
 	}
 	if len(selected) != 1 {
 		return errs.ErrConflict
@@ -237,7 +241,8 @@ func resolveSessionModelCatalogCandidate(accountRef string, configuration entity
 // errors передаются далее. Проверяет в caller transaction без изменения binding либо commit.
 func validateSessionRuntimeCatalog(ctx context.Context, tx pgx.Tx, organizationID, sessionID, agentRef string) error {
 	var accountRef string
-	if err := tx.QueryRow(ctx, queryRuntimeCatalogSessionAccount, sessionID, organizationID).Scan(&accountRef); err != nil {
+	var personal bool
+	if err := tx.QueryRow(ctx, queryRuntimeCatalogSessionAccount, sessionID, organizationID).Scan(&accountRef, &personal); err != nil {
 		return errs.ErrConflict
 	}
 	configuration, overlay, err := readRuntimeCatalogConfiguration(ctx, tx, organizationID, agentRef, "")
@@ -246,6 +251,9 @@ func validateSessionRuntimeCatalog(ctx context.Context, tx pgx.Tx, organizationI
 	}
 	if err := requireCurrentRuntimeOverlayImageFeature(ctx, tx, organizationID, agentRef, overlay); err != nil {
 		return err
+	}
+	if personal != (configuration.ProviderPolicy.Mode == "PERSONAL") {
+		return errs.ErrConflict
 	}
 	_, _, err = checkedSessionModelCatalog(ctx, tx, organizationID, sessionID, accountRef, configuration, overlay)
 	return err

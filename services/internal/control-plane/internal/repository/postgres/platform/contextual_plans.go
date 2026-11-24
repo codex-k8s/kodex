@@ -764,16 +764,17 @@ func (repository *Repository) validateAssistantLaunchReadiness(
 	if !runtimeContractReady {
 		return errs.ErrConflict
 	}
+	personalSubjectID := interactiveModelAccountSubject(payload.Source, scope.actorID)
 	if payload.SessionRef != "" {
 		var sessionID string
 		err := tx.QueryRow(ctx, queryCommandsLaunchrunSelectSessionsOrganizationIdProjectIdRef,
-			scope.organizationID, projectID, payload.SessionRef, payload.Target.Type, payload.Target.Ref).Scan(&sessionID)
+			scope.organizationID, projectID, payload.SessionRef, payload.Target.Type, payload.Target.Ref, personalSubjectID).Scan(&sessionID)
 		if err != nil {
 			return errs.ErrConflict
 		}
 		return validateSessionRuntimeCatalog(ctx, tx, scope.organizationID, sessionID, targetAgentRefs[0])
 	}
-	_, err = repository.selectReadyProviderAccountForAgent(ctx, tx, scope.organizationID, targetAgentRefs[0])
+	_, err = repository.preflightModelAccountsForLaunch(ctx, tx, scope.organizationID, targetAgentRefs, personalSubjectID)
 	return err
 }
 

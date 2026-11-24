@@ -287,7 +287,7 @@ func readRuntimeCatalogConfiguration(ctx context.Context, tx pgx.Tx, organizatio
 	var config entity.AgentRuntimeConfiguration
 	var raw []byte
 	var overlay string
-	if err := tx.QueryRow(ctx, queryRuntimeCatalogReadConfiguration, organizationID, agentRef, configID).Scan(&config.Provider, &config.Model, &config.RuntimeProfileRef, &raw, &overlay); err != nil {
+	if err := tx.QueryRow(ctx, queryRuntimeCatalogReadConfiguration, organizationID, agentRef, configID).Scan(&config.Provider, &config.Model, &config.RuntimeProfileRef, &raw, &overlay, &config.ProviderPolicy.Mode); err != nil {
 		return config, "", errs.ErrUnavailable
 	}
 	if decodeStrict(raw, &config.ProviderPolicy.AccountCandidates) != nil {

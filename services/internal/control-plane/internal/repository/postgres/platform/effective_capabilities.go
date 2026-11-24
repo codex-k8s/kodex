@@ -140,7 +140,7 @@ func (repository *Repository) GetAgentEffectiveCapabilities(ctx context.Context,
 	// внутренних полей из public view; повторная проверка очищенного image неверна.
 	result.RuntimeReady = enabled && view.Environment.Ready
 	if result.RuntimeReady {
-		result.RuntimeReady, err = capabilityCatalogReady(ctx, tx, current, view.Configuration)
+		result.RuntimeReady, err = capabilityCatalogReady(ctx, tx, current, view.Configuration, view.PublishedOverlay.Content)
 		if err != nil {
 			return result, err
 		}
@@ -199,7 +199,11 @@ func (repository *Repository) GetAgentEffectiveCapabilities(ctx context.Context,
 // текущими ревизией и хешем каталога либо хешем возможностей модели и доступной пригодной моделью.
 // Отсутствующий каталог означает неготовность, другая ошибка возвращается. Провайдера не
 // опрашивает, ёмкость не резервирует и запуск не авторизует.
-func capabilityCatalogReady(ctx context.Context, tx pgx.Tx, current scope, configuration entity.AgentRuntimeConfiguration) (bool, error) {
+func capabilityCatalogReady(ctx context.Context, tx pgx.Tx, current scope, configuration entity.AgentRuntimeConfiguration, overlay string) (bool, error) {
+	if configuration.ProviderPolicy.Mode == "PERSONAL" {
+		accounts, err := readyPersonalModelAccounts(ctx, tx, current, configuration, overlay)
+		return len(accounts) > 0, err
+	}
 	if len(configuration.ProviderPolicy.AccountCandidates) == 0 {
 		return false, nil
 	}

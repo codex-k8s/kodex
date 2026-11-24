@@ -75,6 +75,7 @@ export async function loadProviderAccounts(
   definitionKey?: ProviderDefinitionKey,
   usageContext?: ProviderAccountUsageContext,
   pageSize = 20,
+  personal = false,
 ): Promise<ProviderAccountPage> {
   return (
     await unwrap(
@@ -82,6 +83,7 @@ export async function loadProviderAccounts(
         query: {
           pageSize,
           ...usageQuery(usageContext),
+          ...(personal ? { personal: true } : {}),
           ...(definitionKey ? { definitionKey } : {}),
           ...(query.trim() ? { query: query.trim() } : {}),
           ...(pageToken ? { pageToken } : {}),

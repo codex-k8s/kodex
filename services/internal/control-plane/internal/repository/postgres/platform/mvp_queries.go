@@ -170,6 +170,15 @@ func (repository *Repository) ListModelCapabilities(ctx context.Context, princip
 	if err != nil {
 		return entity.ModelCatalog{}, err
 	}
+	if accountRef != "" {
+		personal, err := personalModelAccount(ctx, tx, current, accountRef)
+		if err != nil {
+			return entity.ModelCatalog{}, err
+		}
+		if personal && principal.CallerWorkload != "control-api-gateway" {
+			return entity.ModelCatalog{}, errs.ErrNotFound
+		}
+	}
 	catalog, err := readModelCatalogTx(ctx, tx, current, definitionKey, accountRef)
 	if err != nil {
 		return entity.ModelCatalog{}, err
@@ -380,9 +389,25 @@ func modelCatalogActorFilter(current scope, queryValue string) string {
 // скрывает финансовые данные до commit. Сохраняет изоляцию чтения вызывающего, при ошибке не
 // возвращает частичную страницу.
 func (repository *Repository) ListProviderAccounts(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.ProviderAccount, string, []string, error) {
-	current, tx, err := repository.providerUsageRead(ctx, principal, func(current scope) entity.AccessScope {
-		return entity.AccessScope{Kind: "RESOURCE_KIND", ResourceKind: "PROVIDER_ACCOUNT"}
-	})
+	var current scope
+	var tx pgx.Tx
+	var err error
+	personalOwner := ""
+	if filter.PersonalProviderAccounts {
+		if principal.CallerWorkload != "control-api-gateway" {
+			return nil, "", nil, errs.ErrNotFound
+		}
+		current, tx, err = repository.beginScopedSnapshotRead(ctx, principal)
+		if err == nil && (current.authorityProjectID != "" || current.role == "SYSTEM") {
+			_ = tx.Rollback(ctx)
+			return nil, "", nil, errs.ErrNotFound
+		}
+		personalOwner = current.actorID
+	} else {
+		current, tx, err = repository.providerUsageRead(ctx, principal, func(scope) entity.AccessScope {
+			return providerAccountCollectionTarget()
+		})
+	}
 	if err != nil {
 		return nil, "", nil, err
 	}
@@ -391,7 +416,7 @@ func (repository *Repository) ListProviderAccounts(ctx context.Context, principa
 	if err != nil {
 		return nil, "", nil, err
 	}
-	usageAccounts, err := readProviderUsageAccounts(ctx, tx, current.organizationID, nil, false)
+	usageAccounts, err := readProviderUsageAccounts(ctx, tx, current.organizationID, nil, false, &personalOwner)
 	if err != nil {
 		return nil, "", nil, err
 	}
@@ -409,7 +434,7 @@ func (repository *Repository) ListProviderAccounts(ctx context.Context, principa
 		"organization_id": current.organizationID, "query": strings.TrimSpace(filter.Query),
 		"state": strings.TrimSpace(filter.State), "definition_key": strings.TrimSpace(filter.DefinitionKey),
 		"cursor_time": cursorTime, "cursor_ref": cursorRef,
-		"page_size": limit + 1,
+		"page_size": limit + 1, "personal_owner": personalOwner,
 	})
 	if err != nil {
 		return nil, "", nil, errs.ErrUnavailable
@@ -438,7 +463,7 @@ func (repository *Repository) ListProviderAccounts(ctx context.Context, principa
 		refs = append(refs, item.Ref)
 	}
 	if len(refs) > 0 {
-		withModels, readErr := readProviderUsageAccounts(ctx, tx, current.organizationID, refs, true)
+		withModels, readErr := readProviderUsageAccounts(ctx, tx, current.organizationID, refs, true, &personalOwner)
 		if readErr != nil {
 			return nil, "", nil, readErr
 		}
@@ -468,6 +493,9 @@ func (repository *Repository) ListProviderAccounts(ctx context.Context, principa
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, "", nil, errs.ErrConflict
+	}
+	if filter.PersonalProviderAccounts {
+		collectionActions = []string{"CREATE_CONNECTION"}
 	}
 	return items, next, collectionActions, nil
 }
@@ -506,7 +534,7 @@ func (repository *Repository) GetProviderAccountWithUsage(ctx context.Context, p
 	if err != nil {
 		return entity.ProviderAccount{}, err
 	}
-	accounts, err := readProviderUsageAccounts(ctx, tx, current.organizationID, []string{ref}, true)
+	accounts, err := readProviderUsageAccounts(ctx, tx, current.organizationID, []string{ref}, true, nil)
 	if err != nil {
 		return entity.ProviderAccount{}, err
 	}
@@ -546,7 +574,8 @@ func scanProviderAccount(row rowScanner) (entity.ProviderAccount, error) {
 	if err := row.Scan(&item.Ref, &item.DefinitionKey, &item.Name, &item.ExternalAccountMasked,
 		&item.State, &item.Enabled, &item.Version, &item.CreatedAt, &item.UpdatedAt,
 		&authorization.Ref, &authorization.Method, &authorization.State, &authorization.VerificationURI,
-		&authorization.UserCode, &expiresAt, &authorization.SafeFailureCode, &authorization.MaterializerAttemptRef, &item.MaximumConcurrentExecutions, &financial, &receivedAt); err != nil {
+		&authorization.UserCode, &expiresAt, &authorization.SafeFailureCode, &authorization.MaterializerAttemptRef,
+		&item.MaximumConcurrentExecutions, &financial, &receivedAt, &item.Personal); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.ProviderAccount{}, errs.ErrNotFound
 		}
@@ -759,6 +788,16 @@ func (repository *Repository) authorizeProviderAccountActions(
 		collectionActions = append(collectionActions, "CREATE_CONNECTION")
 	}
 	for index := range items {
+		if items[index].Personal {
+			personal, err := personalModelAccount(ctx, tx, current, items[index].Ref)
+			if err != nil || !personal {
+				return nil, nil, errs.ErrNotFound
+			}
+			items[index].FinancialSummary = nil
+			items[index].FinancialEligible = false
+			items[index].NextActions = providerAccountActions(items[index], true, true, true, false)
+			continue
+		}
 		target := entity.AccessScope{
 			Kind: "RESOURCE_INSTANCE", ResourceKind: "PROVIDER_ACCOUNT", ResourceRef: items[index].Ref,
 		}

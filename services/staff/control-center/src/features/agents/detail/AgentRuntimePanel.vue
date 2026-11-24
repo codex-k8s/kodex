@@ -116,10 +116,23 @@ const alternativeReady = computed(
     !alternative.value ||
     Boolean(alternativeCandidate.value && !alternativeAccountDuplicate.value),
 );
-const providerPolicyModes = ["FIXED", "LEAST_USED", "WEIGHTED"] as const;
+const providerPolicyModes = [
+  "FIXED",
+  "LEAST_USED",
+  "WEIGHTED",
+  "PERSONAL",
+] as const;
 type ProviderPolicyMode = (typeof providerPolicyModes)[number];
 const reasoningEffortId = useId();
 const providerPolicyModeId = useId();
+const personalPolicy = computed(() => form.providerPolicyMode === "PERSONAL");
+const runtimeAccountReady = computed(() =>
+  personalPolicy.value
+    ? Boolean(form.model.trim())
+    : modelAvailable.value &&
+      form.providerAccounts.length > 0 &&
+      providerSubmissionAllowed.value,
+);
 
 function isProviderPolicyMode(value: string): value is ProviderPolicyMode {
   return providerPolicyModes.some((mode) => mode === value);
@@ -490,6 +503,7 @@ function chooseProviderPolicy(event: Event): void {
   const value = target instanceof HTMLSelectElement ? target.value : undefined;
   if (!value || !isProviderPolicyMode(value)) return;
   form.providerPolicyMode = value;
+  if (value === "PERSONAL") form.providerAccounts = [];
   notify(runtimeDirty.value ? "DRAFT" : "APPLIED");
 }
 
@@ -572,17 +586,14 @@ async function saveRuntime(): Promise<void> {
     !current ||
     !props.canEdit ||
     (!runtimeDirty.value && !catalogPinsChanged.value) ||
-    !modelAvailable.value ||
-    !providerSubmissionAllowed.value ||
+    !runtimeAccountReady.value ||
     !alternativeReady.value
   )
     return;
   await execute(() => {
-    const input = pinnedRuntimeInput(
-      form,
-      modelSelection.value,
-      selectedProvider.value,
-    );
+    const input = personalPolicy.value
+      ? { ...form, model: form.model.trim(), providerAccounts: [] }
+      : pinnedRuntimeInput(form, modelSelection.value, selectedProvider.value);
     if (
       form.providerPolicyMode === "FIXED" &&
       alternative.value &&
@@ -689,7 +700,16 @@ onBeforeUnmount(reset);
           </label>
           <div class="field">
             <span>{{ $t("agents.model") }}</span>
+            <input
+              v-if="personalPolicy"
+              v-model="form.model"
+              name="personal-provider-model"
+              maxlength="128"
+              :aria-label="$t('agents.model')"
+              :disabled="!canEdit || busy"
+            />
             <ProviderModelSelector
+              v-else
               :model-value="form.model"
               :definition-key="selectedProvider"
               :account-refs="
@@ -813,7 +833,13 @@ onBeforeUnmount(reset);
             <dd>{{ form.providerAccounts.length }}</dd>
           </div>
         </dl>
-        <section class="runtime-panel__account-capability">
+        <p v-if="personalPolicy">
+          {{ $t("runtime.personalAccountHelp") }}
+          <RouterLink :to="{ name: 'personal-provider-accounts' }">
+            {{ $t("providers.personalTitle") }}
+          </RouterLink>
+        </p>
+        <section v-else class="runtime-panel__account-capability">
           <div class="runtime-panel__account-heading">
             <div>
               <strong>{{ $t("runtime.accounts") }}</strong>
@@ -902,10 +928,8 @@ onBeforeUnmount(reset);
               (!runtimeDirty && !catalogPinsChanged) ||
               !form.runtimeProfileRef ||
               !form.model ||
-              !modelAvailable ||
               !selectedRuntime?.ready ||
-              !form.providerAccounts.length ||
-              !providerSubmissionAllowed ||
+              !runtimeAccountReady ||
               !alternativeReady
             "
             @click="saveRuntime"

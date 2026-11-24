@@ -37,7 +37,8 @@ func (server *Server) PublishAgentRuntimeConfiguration(writer http.ResponseWrite
 		return
 	}
 	candidates, valid := providerAccountCandidates(body.ProviderAccounts)
-	if !valid {
+	personal := string(body.ProviderPolicyMode) == "PERSONAL"
+	if (!personal && !valid) || (personal && len(body.ProviderAccounts) != 0) {
 		writeLocalProblem(writer, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return
 	}

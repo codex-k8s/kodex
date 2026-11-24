@@ -24,7 +24,11 @@ export type ProviderAccountCandidate = Pick<
   "accountRef" | "weight"
 >;
 export type ProviderAccountAction = NextAction;
-export type ProviderPolicyMode = "FIXED" | "LEAST_USED" | "WEIGHTED";
+export type ProviderPolicyMode =
+  | "FIXED"
+  | "LEAST_USED"
+  | "WEIGHTED"
+  | "PERSONAL";
 
 export function accountAllows(
   account: Pick<ProviderAccount, "nextActions">,

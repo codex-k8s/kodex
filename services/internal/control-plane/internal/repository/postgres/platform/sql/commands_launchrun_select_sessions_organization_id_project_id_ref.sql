@@ -7,6 +7,11 @@ WHERE session.organization_id = $1::uuid
   AND session.target_type = $4
   AND session.target_ref = $5
   AND session.state = 'ACTIVE'
+  AND EXISTS (
+    SELECT 1 FROM control_plane.provider_accounts account
+    WHERE account.id = session.provider_account_id AND account.organization_id = session.organization_id
+      AND (account.personal_owner_subject_id IS NULL OR account.personal_owner_subject_id = NULLIF($6, '')::uuid)
+  )
   AND NOT EXISTS (
     SELECT 1
     FROM control_plane.session_turns AS active_turn
