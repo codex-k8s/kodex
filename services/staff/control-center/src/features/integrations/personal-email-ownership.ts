@@ -47,11 +47,15 @@ export function useEmailMailboxOwnership(
   let generation = 0,
     disposed = false;
   let controller: AbortController | undefined;
-  const matched = computed(
-    () =>
-      ownership.value?.connectionRef === connection().ref &&
-      ownership.value?.connectionVersion === connection().version,
-  );
+  const matched = computed(() => {
+    const current = ownership.value;
+    const selected = connection();
+    return (
+      current !== undefined &&
+      current.connectionRef === selected.ref &&
+      current.connectionVersion === selected.version
+    );
+  });
   const canConfigure = computed(
     () =>
       matched.value &&

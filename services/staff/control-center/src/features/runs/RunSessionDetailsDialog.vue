@@ -33,7 +33,7 @@ import { usageCompleteness } from "./token-usage";
 const props = withDefaults(
   defineProps<{
     run: Run;
-    rootRun?: Run;
+    viewedRun?: Run;
     node: RunNode;
     nodes: RunNode[];
     events: PresentedRunEvent[];
@@ -42,7 +42,7 @@ const props = withDefaults(
     agent?: Agent;
     executionLabel?: "ASSISTANT" | "EMPLOYEE" | "SESSION";
   }>(),
-  { rootRun: undefined, agent: undefined, historyProblem: undefined },
+  { viewedRun: undefined, agent: undefined, historyProblem: undefined },
 );
 const emit = defineEmits<{ close: []; download: [artifact: Artifact] }>();
 const { locale, t } = useI18n();
@@ -71,12 +71,14 @@ const ownedNodeRefs = computed(
 const nodeEvents = computed(() =>
   props.events
     .filter((event) => {
-      if (props.rootRun && props.run.ref !== props.rootRun.ref) {
+      if (props.node.runRef !== props.run.ref) return false;
+      const rootRef = props.run.rootRunRef;
+      if (props.run.ref !== rootRef) {
         const execution = event.execution;
         return Boolean(
-          props.run.rootRunRef === props.rootRun.ref &&
-          props.run.projectRef === props.rootRun.projectRef &&
-          props.node.runRef === props.run.ref &&
+          props.viewedRun &&
+          props.viewedRun.rootRunRef === rootRef &&
+          props.viewedRun.projectRef === props.run.projectRef &&
           execution &&
           execution.runRef === props.run.ref &&
           execution.sessionRef === props.run.sessionRef &&
@@ -89,7 +91,7 @@ const nodeEvents = computed(() =>
           event.run.version >= 1 &&
           isGraphChildExecutionBound(event, {
             nodes: props.nodes,
-            graphRootRunRef: props.rootRun.ref,
+            graphRootRunRef: rootRef,
           }),
         );
       }
@@ -105,7 +107,7 @@ const nodeEvents = computed(() =>
 const transcriptItems = computed(() =>
   buildRunTranscriptItems(nodeEvents.value, {
     nodes: props.nodes,
-    graphRootRunRef: props.rootRun?.ref ?? props.run.rootRunRef,
+    graphRootRunRef: props.run.rootRunRef,
     initiator: props.run.initiator.displayName,
     target: props.node.displayName,
     platform: t("runs.platformActor"),
@@ -296,11 +298,15 @@ function formatTokenCount(value: number): string {
                 <dd>{{ run.title }}</dd>
               </div>
               <div
-                v-if="rootRun && rootRun.ref !== run.ref"
+                v-if="
+                  viewedRun &&
+                  viewedRun.ref === run.rootRunRef &&
+                  viewedRun.ref !== run.ref
+                "
                 class="session-details__long-field"
               >
                 <dt>{{ $t("runs.graph") }}</dt>
-                <dd>{{ rootRun.title }}</dd>
+                <dd>{{ viewedRun.title }}</dd>
               </div>
               <div>
                 <dt>{{ $t("decisions.requestedBy") }}</dt>

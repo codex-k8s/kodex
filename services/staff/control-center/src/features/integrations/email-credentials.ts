@@ -55,7 +55,6 @@ export function mailboxCredentialOwnerEligible(
     !!ownership &&
     ownership.connectionRef === connection.ref &&
     ownership.connectionVersion === connection.version &&
-    ownership.deliveryKind === "MAILBOX_CONFIGURATION" &&
     ownership.ownerEligible &&
     ownership.state === "ACTIVE" &&
     Number.isSafeInteger(ownership.generation) &&

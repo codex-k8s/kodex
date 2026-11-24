@@ -1,6 +1,5 @@
 import { installSyntheticCsrf } from "./fixtures/browser-session";
 import { expect, test, type Page, type WebSocketRoute } from "@playwright/test";
-import { syntheticProviderFinancialOverview } from "./fixtures/provider-financial";
 import type {
   ProviderAccount,
   ProviderAccountBlocker,
@@ -140,7 +139,6 @@ async function install(page: Page, failedDeletion = false) {
         ...(mode === "DELTA" ? { eventName: "PROVIDER_ACCOUNT_CHANGED" } : {}),
         snapshot: {
           catalog: {
-            financialSummary: syntheticProviderFinancialOverview([account]),
             accounts: [account],
             page: { total: 1 },
             nextActions: [],

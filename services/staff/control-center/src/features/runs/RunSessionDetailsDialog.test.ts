@@ -43,14 +43,14 @@ async function renderActivity(
   currentRun: Run = run,
   currentNode: RunNode = node,
   additionalNodes: RunNode[] = [],
-  rootRun?: Run,
+  viewedRun?: Run,
   historyProblem?: AppProblem,
 ): Promise<string> {
   const app = createSSRApp({
     render: () =>
       h(RunSessionDetailsDialog, {
         run: currentRun,
-        rootRun,
+        viewedRun,
         historyProblem,
         node: currentNode,
         nodes: [currentNode, toolNode, ...additionalNodes],
@@ -249,6 +249,24 @@ describe("RunSessionDetailsDialog", () => {
     const render = (value: PresentedRunEvent, nodes = [parentNode]) =>
       renderActivity([value], childRun, childNode, nodes, run);
     expect(await render(childEvent)).toContain("CHILD_COMMENTARY_SENTINEL");
+    expect(
+      await renderActivity(
+        [childEvent],
+        childRun,
+        childNode,
+        [parentNode],
+        childRun,
+      ),
+    ).toContain("CHILD_COMMENTARY_SENTINEL");
+    expect(
+      await renderActivity(
+        [childEvent],
+        run,
+        childNode,
+        [parentNode],
+        childRun,
+      ),
+    ).not.toContain("CHILD_COMMENTARY_SENTINEL");
     const childHistory = await renderActivity(
       [
         childEvent,

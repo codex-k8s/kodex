@@ -35,7 +35,7 @@ export function useKubernetesFileCleanup(
       !busy.value &&
       !uncertain.value &&
       current.value?.cleanupView.repairAvailable === true &&
-      current.value?.cleanupView.cleanup.eligibleExhaustedCount === 1,
+      current.value.cleanupView.cleanup.eligibleExhaustedCount === 1,
   );
   function cancel() {
     generation++;

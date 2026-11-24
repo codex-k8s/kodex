@@ -47,7 +47,11 @@ function read(storage: RecoveryStorage): MailboxCredentialAttempt[] {
     })
   )
     throw new Error(invalidMailboxCredentialStorage);
-  const result = (entries as MailboxCredentialAttempt[]).map((value) => ({
+  const result = (
+    entries as (Omit<MailboxCredentialAttempt, "ownerGeneration"> & {
+      ownerGeneration?: number;
+    })[]
+  ).map((value) => ({
     ...value,
     ownerGeneration: value.ownerGeneration ?? 0,
   }));

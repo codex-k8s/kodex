@@ -13,6 +13,8 @@ import { etag, mutate } from "@/shared/api/mutation";
 import { unwrap } from "@/shared/api/problem";
 import { isRecord, hasExactKeys } from "@/shared/lib/exact-object";
 
+const isRevokeOperation = (operation: unknown): operation is "REVOKE" =>
+  operation === "REVOKE";
 const invalidMailboxResponse = "Personal mailbox response is invalid";
 const reference = (value: unknown): value is string =>
   typeof value === "string" && /^[A-Za-z][A-Za-z0-9_-]{7,95}$/.test(value);
@@ -23,7 +25,7 @@ export function validPersonalEmailName(value: unknown): value is string {
   return (
     typeof value === "string" &&
     !!value.trim() &&
-    [...value].length <= 160 &&
+    Array.from(value).length <= 160 &&
     !/[\0\r\n]/.test(value) &&
     new TextDecoder().decode(new TextEncoder().encode(value)) === value
   );
@@ -75,8 +77,8 @@ export function checkedMailboxOwnership(
     state: value.state as EmailMailboxOwnership["state"],
     generation: value.generation,
     ownerEligible: value.ownerEligible,
-    ...(value.serviceSubjectRef
-      ? { serviceSubjectRef: String(value.serviceSubjectRef) }
+    ...(typeof value.serviceSubjectRef === "string"
+      ? { serviceSubjectRef: value.serviceSubjectRef }
       : {}),
   };
 }
@@ -241,8 +243,9 @@ export async function writeMailboxSetup(
       result.serviceSubjectRef !== body.serviceSubjectRef
     )
       throw new Error(invalidMailboxResponse);
-  } else if (attempt.operation === "REVOKE") {
-    if (body !== undefined) throw new Error("Mailbox setup request is invalid");
+  } else {
+    if (body !== undefined || !isRevokeOperation(attempt.operation))
+      throw new Error("Mailbox setup request is invalid");
     result = checkedMailboxOwnership(
       (
         await mutate(
@@ -263,7 +266,7 @@ export async function writeMailboxSetup(
     );
     if (result.state !== "REVOKED" || result.ownerEligible)
       throw new Error(invalidMailboxResponse);
-  } else throw new Error("Mailbox setup request is invalid");
+  }
   if (result.connectionVersion !== attempt.connectionVersion + 1)
     throw new Error(invalidMailboxResponse);
   return { operation: attempt.operation, ownership: result };

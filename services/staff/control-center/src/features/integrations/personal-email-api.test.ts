@@ -144,9 +144,11 @@ describe("отдельная mailbox API boundary", () => {
       mailbox,
     });
     expect(sdk.createPersonalEmailMailboxConnection).toHaveBeenCalledOnce();
-    expect(
-      sdk.getPersonalEmailMailboxMutationReceipt.mock.calls[0]?.[0].query,
-    ).toEqual({ operation: "CREATE", idempotencyKey: key });
+    expect(sdk.getPersonalEmailMailboxMutationReceipt).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: { operation: "CREATE", idempotencyKey: key },
+      }),
+    );
   });
   it("REVOKE receipt связывает exact connection/version и не превращает исторический ACTIVE в текущую власть", async () => {
     const attempt = {
