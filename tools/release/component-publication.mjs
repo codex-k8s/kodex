@@ -12,7 +12,8 @@ import {promisify} from 'node:util';
 import {fingerprint} from './stable-inventory.mjs';
 import {validatedStablePublication,sourceArchiveHash} from './stable-image-publication.mjs';
 import {componentMigrationConfiguration,componentMigrationPublication,componentImageLockBudget,componentPublicationMaxBytes} from './portable-component-migration.mjs';
-import {qualifyComponentNodeImages} from './component-node-qualification.mjs';
+import {promotedServicePullRegistry,qualifyComponentNodeImages} from './component-node-qualification.mjs';
+import {logicalRegistryHost} from './stable-node-registry-model.mjs';
 import {createPrivatePrettyJSONSync} from './private-json-write.mjs';
 
 const execute=promisify(execFile),root=fileURLToPath(new URL('../../',import.meta.url));
@@ -45,12 +46,16 @@ async function privateDocument(path,lines=false,maximum=1<<20){
 
 export function validateComponentPublicationConfiguration(config){
   const profile=componentMigrationConfiguration(config?.profile);
+  const useService=Object.hasOwn(config,'pullRegistry');
   requireValue(exact(config,['schema','profile','sourceSHA','context','clusterUID','namespaceUID','baseSourceSHA','baseReleaseLockSHA256',
-    'baseReleaseLock','sourceCheckout','baseSchemaHeads','schemaHeadsBefore','schemaHeadsAfter','nodes','components',...(profile.introduced?['introducedReceiver']:[])])&&
+    'baseReleaseLock','sourceCheckout','baseSchemaHeads','schemaHeadsBefore','schemaHeadsAfter','nodes','components',
+    ...(useService?['pullRegistry']:[]),...(profile.introduced?['introducedReceiver']:[])])&&
     config.schema==='kodex.component-publication-config/v1'&&/^[a-f0-9]{40}$/.test(config.sourceSHA??'')&&
     config.sourceSHA!=='0'.repeat(40)&&/^[a-f0-9]{40}$/.test(config.baseSourceSHA??'')&&
     /^[a-f0-9]{64}$/.test(config.baseReleaseLockSHA256??'')&&/^k3d-[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(config.context??''),
     'COMPONENT_PUBLICATION_CONFIGURATION_INVALID');
+  requireValue(!useService||(!profile.introduced&&config.pullRegistry===promotedServicePullRegistry),
+    'COMPONENT_PUBLICATION_PULL_REGISTRY_INVALID');
   if(profile.introduced)validateTelegramIntroducedReceiverProof(config.introducedReceiver,config.sourceSHA);
   const uid=v=>/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(v??'');
   requireValue(uid(config.clusterUID)&&uid(config.namespaceUID)&&Array.isArray(config.nodes)&&config.nodes.length>0&&config.nodes.length<=8&&
@@ -67,8 +72,11 @@ export function validateComponentPublicationConfiguration(config){
   const privatePath=v=>typeof v==='string'&&v.startsWith('/')&&!/[\r\n\0]/.test(v);
   requireValue(privatePath(config.sourceCheckout)&&privatePath(config.baseReleaseLock)&&Array.isArray(config.components)&&same(config.components.map(c=>c.name),profile.components)&&
     config.components.every(c=>exact(c,['name','expectedImageRef','anchor','buildReceipt','publicationPlan','publicationEvidence'])&&
-      /^registry\.local\.kodex\/kodex\/[a-z-]+@sha256:[a-f0-9]{64}$/.test(c.expectedImageRef??'')&&
-      c.expectedImageRef.startsWith(`registry.local.kodex/kodex/${c.name}@`)&&
+      typeof c.expectedImageRef==='string'&&
+      /^[a-z0-9][a-z0-9.-]*(?::[1-9][0-9]{0,4})?\/[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$/.test(c.expectedImageRef)&&
+      c.expectedImageRef.split('/').every(part=>part!==''&&part!=='.'&&part!=='..')&&
+      c.expectedImageRef.split('@')[0].endsWith('/'+c.name)&&
+      (useService||c.expectedImageRef.startsWith(`${logicalRegistryHost}/kodex/${c.name}@`))&&
       typeof c.anchor==='string'&&c.anchor.startsWith(profile.sources[c.name])&&/^[A-Za-z0-9_./-]+$/.test(c.anchor)&&
       !c.anchor.split('/').includes('..')&&[c.buildReceipt,c.publicationPlan,c.publicationEvidence].every(privatePath)),
     'COMPONENT_PUBLICATION_COMPONENTS_INVALID');
@@ -80,11 +88,14 @@ export function validateComponentPublicationConfiguration(config){
 export function createComponentImageLock(config,component,evidence,sourceEvidence){
   const profile=validateComponentPublicationConfiguration(config);
   requireValue(config.components.some(c=>same(c,component)),'COMPONENT_PUBLICATION_COMPONENTS_INVALID');
-  const plan=evidence.publicationPlan,imageRef=validatedStablePublication(config.sourceSHA,evidence,component.name);
+  const plan=evidence.publicationPlan;
+  const publishedRef=validatedStablePublication(config.sourceSHA,evidence,component.name);
+  const imageRef=config.pullRegistry?`${config.pullRegistry}/kodex/${component.name}@${plan.image.digest}`:publishedRef;
   requireValue(plan.context===config.context&&plan.clusterUID===config.clusterUID&&plan.namespaceUID===config.namespaceUID&&
     plan.source===config.sourceSHA&&same(plan.receipt,sourceEvidence.receipt)&&
     plan.receipt.contextSHA256===sourceEvidence.contextSHA256&&
-    (profile.introduced===component.name?imageRef===component.expectedImageRef&&imageRef===config.introducedReceiver.imageRef:imageRef!==component.expectedImageRef),
+    (profile.introduced===component.name?imageRef===component.expectedImageRef&&imageRef===config.introducedReceiver.imageRef:
+      plan.image.digest!==component.expectedImageRef.split('@')[1]),
     'COMPONENT_PUBLICATION_SOURCE_MISMATCH');
   const changed=sourceEvidence.changedFiles;
   requireValue(Array.isArray(changed)&&changed.length>0&&changed.length<=4096&&same(changed,[...new Set(changed)].sort())&&
@@ -136,7 +147,7 @@ async function prepare(config){
   const publication={schema:profile.schema,profile:config.profile,context:config.context,clusterUID:config.clusterUID,namespaceUID:config.namespaceUID,
     baseSourceSHA:config.baseSourceSHA,baseReleaseLockSHA256:config.baseReleaseLockSHA256,
     ...(profile.schema.endsWith('/v2')?{baseSchemaHeads:config.baseSchemaHeads}:{}),...(profile.introduced?{introducedReceiver:config.introducedReceiver}:{}),schemaHeadsBefore:config.schemaHeadsBefore,
-    schemaHeadsAfter:config.schemaHeadsAfter,runtimeABI:5,runnerInput:'v10',registry:'registry.local.kodex',repositoryPrefix:'kodex',
+    schemaHeadsAfter:config.schemaHeadsAfter,runtimeABI:5,runnerInput:'v10',registry:config.pullRegistry??logicalRegistryHost,repositoryPrefix:'kodex',
     nodeUIDs:config.nodes.map(n=>n.uid),components};
   return {schema:'kodex.component-publication-prepared/v1',sourceSHA:config.sourceSHA,configuration:config,publication};
 }

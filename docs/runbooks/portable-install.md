@@ -819,9 +819,15 @@ executor отдельно, проверяет оба при apply/readback. Эт
 `publicationEvidence` к настоящим результатам штатного publisher. Последний —
 JSONL с подтверждёнными INTENT/PASS. Inputs — owned regular0600 без ссылок,
 canonical compact либо pretty JSON с LF; duplicate keys отклоняются.
-Registry этого producer фиксирован штатным publisher:
-`registry.local.kodex/kodex`. Другой registry нельзя объявить опубликованным
-путём изменения строки в config.
+По умолчанию узлы проверяют образы по `registry.local.kodex/kodex`. Для
+установок с уже настроенным доступом узлов к Service добавьте в config
+`pullRegistry: kodex-image-registry-pull.kodex-system.svc.cluster.local`.
+Параметр доступен профилям обновления существующих Deployment. Он закрепляет
+внутренний Service для загрузки и CRI readback тех же опубликованных digest.
+`expectedImageRef` хранит точную текущую ссылку каждого Deployment, включая
+исходный registry и repository. `qualify` проверяет разрешённый Service,
+принадлежность узлов и точное совпадение digest. `readback` проверяет те же
+ссылки в локальном CRI-кэше.
 
 ```bash
 node tools/release/component-publication.mjs prepare \

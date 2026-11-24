@@ -2,7 +2,9 @@ import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {resolve} from 'node:path';
 import {fingerprint} from './stable-inventory.mjs';
-import {validateNodeContainer} from './stable-node-registry-model.mjs';
+import {logicalRegistryHost,validateNodeContainer} from './stable-node-registry-model.mjs';
+
+export const promotedServicePullRegistry = 'kodex-image-registry-pull.kodex-system.svc.cluster.local';
 
 const fail=ok=>{if(!ok)throw Error('COMPONENT_NODE_QUALIFICATION_REJECTED');};
 const same=(a,b)=>fingerprint(a)===fingerprint(b);
@@ -35,8 +37,11 @@ export async function readComponentNodeTarget(target,kubeconfig,operation=run){
 // Единственный effect — CRI pull exact digest в уже принадлежащие target узлы.
 // Потерянный pull ACK не выдаётся за PASS; readback не повторяет download.
 export async function qualifyComponentNodeImages({target,kubeconfig,images,mode,expectedBinding},operation=run){
+ const registry=target?.pullRegistry??logicalRegistryHost;
+ fail([logicalRegistryHost,promotedServicePullRegistry].includes(registry));
  fail(['qualify','readback'].includes(mode)&&Array.isArray(images)&&images.length>0&&images.length<=32&&new Set(images).size===images.length&&
-  images.every(image=>/^registry\.local\.kodex\/kodex\/[a-z-]+@sha256:[a-f0-9]{64}$/.test(image)&&!image.endsWith('0'.repeat(64))));
+  images.every(image=>typeof image==='string'&&image.startsWith(registry+'/')&&
+    /^kodex\/[a-z-]+@sha256:[a-f0-9]{64}$/.test(image.slice(registry.length+1))&&!image.endsWith('0'.repeat(64))));
  const snapshot=()=>readComponentNodeTarget(target,kubeconfig,operation),before=await snapshot();
  fail(!expectedBinding||same(before,expectedBinding));
  const results=[];
