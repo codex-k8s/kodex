@@ -120,7 +120,9 @@ async function fixture(
         await route.fulfill({ json: value });
         return;
       }
-      expect(request.headers()["if-match"]).toBe(`"${connection.version}"`);
+      expect(request.headers()["if-match"]).toBe(
+        `"${String(connection.version)}"`,
+      );
       expect(request.headers()["x-csrf-token"]).toBe("m".repeat(43));
       if (request.method() === "PUT") {
         const body = request.postDataJSON() as {
@@ -164,7 +166,9 @@ async function fixture(
       };
       credentials.push(body);
       expect(Object.keys(body).sort()).toEqual(["kind", "value"]);
-      expect(request.headers()["if-match"]).toBe(`"${connection.version}"`);
+      expect(request.headers()["if-match"]).toBe(
+        `"${String(connection.version)}"`,
+      );
       connection = { ...connection, version: connection.version + 1 };
       owner = { ...owner, connectionVersion: connection.version };
       credentialReceipt = {
@@ -240,9 +244,7 @@ test("личный mailbox: lost create ACK сверяется без повто
     page.getByRole("button", { name: "Проверить квитанцию" }),
   ).toBeVisible();
   expect(state.creates).toHaveLength(1);
-  const stored = await page.evaluate(() =>
-    JSON.stringify({ ...sessionStorage }),
-  );
+  const stored = await page.evaluate(() => JSON.stringify(sessionStorage));
   expect(stored).not.toContain("owner@example.test");
   expect(stored).not.toContain("Мой новый ящик");
   await page.getByRole("button", { name: "Проверить квитанцию" }).click();
@@ -384,7 +386,7 @@ test("write-only credential: lost ACK после reload восстанавлив
   ).toBeVisible();
   expect(state.credentials).toHaveLength(1);
   expect(
-    await page.evaluate(() => JSON.stringify({ ...sessionStorage })),
+    await page.evaluate(() => JSON.stringify(sessionStorage)),
   ).not.toContain("synthetic-app-password");
   await page.reload();
   await page

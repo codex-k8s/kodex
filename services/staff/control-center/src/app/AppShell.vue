@@ -40,7 +40,6 @@ import {
 } from "@/app/navigation-context";
 import { resolveShellRealtimeState } from "@/app/realtime-presentation";
 import { synchronizeSessionBootstrap } from "@/app/session-bootstrap";
-import ProviderFinancialSummary from "@/features/providers/ProviderFinancialSummary.vue";
 import AssistantWorkspace from "@/features/assistant/components/AssistantWorkspace.vue";
 import { resolveAssistantContext } from "@/features/assistant/context";
 import { useAssistantStore } from "@/features/assistant/store";
@@ -823,7 +822,6 @@ onBeforeUnmount(() => {
       class="app-content"
       :class="{ 'app-content--run-workspace': fullBleedRunWorkspace }"
     >
-      <ProviderFinancialSummary :live="realtimeState === 'live'" />
       <nav class="breadcrumbs" :aria-label="$t('app.breadcrumbs')">
         <ol>
           <li v-for="item in breadcrumbs" :key="`${item.path}:${item.label}`">

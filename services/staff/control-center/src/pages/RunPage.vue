@@ -1357,7 +1357,7 @@ onBeforeUnmount(() => {
         <RunSessionDetailsDialog
           v-if="selectedNode && nodeDetailsOpen"
           :run="selectedRun ?? run"
-          :root-run="run"
+          :viewed-run="run"
           :node="selectedNode"
           :nodes="allRunNodes"
           :events="eventList"

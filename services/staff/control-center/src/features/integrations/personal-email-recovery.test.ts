@@ -108,7 +108,7 @@ describe("квитанции личного mailbox setup", () => {
     cache.removeItem(mailboxSetupRecoveryKey);
     for (let index = 0; index < 20; index++)
       rememberMailboxSetup(
-        { ...attempt, connectionRef: `int_mailbox_owner_${index}` },
+        { ...attempt, connectionRef: `int_mailbox_owner_${String(index)}` },
         cache,
       );
     expect(() =>

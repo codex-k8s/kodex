@@ -53,7 +53,7 @@ function cache() {
 describe("mailbox owner UI: свежая eligibility", () => {
   it("ACTIVE без eligibility не открывает health и не подменяется generic token action", async () => {
     const selected = ref({ ...connection }),
-      observed = vi.fn(),
+      observed = vi.fn<(value: EmailMailboxOwnership | undefined) => void>(),
       port = {
         readMailboxOwnership: vi
           .fn()
@@ -80,11 +80,11 @@ describe("mailbox owner UI: свежая eligibility", () => {
     await model.test();
     expect(port.checkMailboxHealth).not.toHaveBeenCalled();
     expect(model.canConfigure.value).toBe(false);
-    expect(observed.mock.lastCall?.[0].ownerEligible).toBe(false);
+    expect(observed.mock.lastCall?.[0]?.ownerEligible).toBe(false);
   });
   it("поздний owner read старой version не восстанавливает редактор текущей версии", async () => {
     const selected = ref({ ...connection }),
-      observed = vi.fn();
+      observed = vi.fn<(value: EmailMailboxOwnership | undefined) => void>();
     let oldRead!: (value: EmailMailboxOwnership) => void;
     const port = {
       readMailboxOwnership: vi
