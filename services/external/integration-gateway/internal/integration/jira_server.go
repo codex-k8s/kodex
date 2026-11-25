@@ -70,7 +70,8 @@ func jiraServerLiteral(value string) (string, bool) {
 func (adapter *Adapter) jiraServerJSON(ctx context.Context, request Request, capability integrationpackage.Capability,
 	configuration map[string]string, method, path string, query url.Values, body any, effect string) ([]byte, error) {
 	prefix, err := atlassianServerContext(configuration)
-	if err != nil || !jiraServerProjectKey(configuration["project_key"]) {
+	project := configuration["project_key"]
+	if err != nil || !jiraServerProjectKey(project) && !(project == "" && configuration["scope_kind"] == "INSTANCE" && method == http.MethodGet) {
 		return nil, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
 	}
 	return adapter.configuredProviderJSON(ctx, request, capability, configuration, method, prefix+"/rest/api/2"+path, query, body, effect)
@@ -79,12 +80,27 @@ func (adapter *Adapter) jiraServerJSON(ctx context.Context, request Request, cap
 // jiraServerProject checks the real provider project key before exposing metadata or reporting connection health.
 // jiraServerProject проверяет реальный ключ проекта перед выдачей metadata либо сообщением о здоровье подключения.
 func (adapter *Adapter) jiraServerProject(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string) (map[string]any, error) {
-	body, err := adapter.jiraServerJSON(ctx, request, capability, configuration, http.MethodGet, "/project/"+url.PathEscape(configuration["project_key"]), nil, nil, "")
+	projectKey := configuration["project_key"]
+	path := "/project"
+	if projectKey != "" {
+		path += "/" + url.PathEscape(projectKey)
+	}
+	body, err := adapter.jiraServerJSON(ctx, request, capability, configuration, http.MethodGet, path, nil, nil, "")
 	if err != nil {
 		return nil, err
 	}
-	var value struct{ ID, Key, Name string }
-	if decodeProviderJSON(body, &value) != nil || value.ID == "" || value.Key != configuration["project_key"] || value.Name == "" {
+	type project struct{ ID, Key, Name string }
+	var value project
+	if projectKey == "" {
+		var projects []project
+		if decodeProviderJSON(body, &projects) != nil || len(projects) == 0 {
+			return nil, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+		}
+		value = projects[0]
+	} else if decodeProviderJSON(body, &value) != nil || value.Key != projectKey {
+		return nil, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+	}
+	if value.ID == "" || !jiraServerProjectKey(value.Key) || value.Name == "" {
 		return nil, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
 	}
 	return map[string]any{"id": value.ID, "key": value.Key, "name": value.Name}, nil
@@ -130,7 +146,9 @@ func (adapter *Adapter) jiraServerSearch(ctx context.Context, request Request, c
 	}
 	seen := make(map[string]bool, len(page.Issues))
 	for _, issue := range page.Issues {
-		if issue.ID == "" || !jiraIssueInProject(issue.Key, configuration["project_key"]) || issue.Fields.Project.Key != configuration["project_key"] || seen[issue.Key] {
+		project := issue.Fields.Project.Key
+		if issue.ID == "" || !jiraServerProjectKey(project) || !jiraIssueInProject(issue.Key, project) ||
+			(configuration["project_key"] != "" && project != configuration["project_key"]) || seen[issue.Key] {
 			return page, "", &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
 		}
 		seen[issue.Key] = true
@@ -141,8 +159,9 @@ func (adapter *Adapter) jiraServerSearch(ctx context.Context, request Request, c
 // executeJiraServer exposes only the separately shipped limited Server/DC surface; it never falls back to a Cloud operation.
 // executeJiraServer исполняет только отдельную ограниченную Server/DC поверхность и не делает fallback на Cloud.
 func (adapter *Adapter) executeJiraServer(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string, input []byte) (Result, error) {
-	if _, err := atlassianServerContext(configuration); err != nil || !jiraServerProjectKey(configuration["project_key"]) {
-		return Result{}, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
+	configuration, err := capability.ResolveAtlassianServerTarget(request.ApprovalPolicy, configuration, input)
+	if err != nil {
+		return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
 	}
 	switch request.Operation {
 	case "jira.identity.read":
@@ -178,9 +197,12 @@ func (adapter *Adapter) executeJiraServer(ctx context.Context, request Request, 
 		if err != nil || !valid || value.Limit < 1 || value.Limit > 50 {
 			return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
 		}
-		jql := fmt.Sprintf(`project = "%s"`, configuration["project_key"])
+		var filters []string
+		if project := configuration["project_key"]; project != "" {
+			filters = append(filters, fmt.Sprintf(`project = "%s"`, project))
+		}
 		if text != "" {
-			jql += fmt.Sprintf(` AND text ~ "%s"`, text)
+			filters = append(filters, fmt.Sprintf(`text ~ "%s"`, text))
 		}
 		fields := "project,summary,status"
 		if value.AssigneeUsername != "" {
@@ -188,10 +210,14 @@ func (adapter *Adapter) executeJiraServer(ctx context.Context, request Request, 
 			if !valid || strings.TrimSpace(value.AssigneeUsername) == "" || len(value.AssigneeUsername) > 255 {
 				return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
 			}
-			jql += fmt.Sprintf(` AND assignee = "%s"`, assignee)
+			filters = append(filters, fmt.Sprintf(`assignee = "%s"`, assignee))
 			fields += ",assignee"
 		}
-		page, next, err := adapter.jiraServerSearch(ctx, request, capability, configuration, jql+" ORDER BY key ASC", fields, offset, value.Limit)
+		jql := "ORDER BY key ASC"
+		if len(filters) != 0 {
+			jql = strings.Join(filters, " AND ") + " " + jql
+		}
+		page, next, err := adapter.jiraServerSearch(ctx, request, capability, configuration, jql, fields, offset, value.Limit)
 		if err != nil {
 			return Result{}, err
 		}
@@ -290,7 +316,7 @@ func (adapter *Adapter) createJiraServerIssue(ctx context.Context, request Reque
 	if value.Description != "" {
 		fields["description"] = value.Description
 	}
-	if configuration["issue_create_fields"] != "" || value.FieldsJSON != "" || value.ReporterSelf {
+	if configuration["scope_kind"] == "INSTANCE" || configuration["issue_create_fields"] != "" || value.FieldsJSON != "" || value.ReporterSelf {
 		if err := adapter.prepareJiraCreateFields(ctx, request, capability, configuration, value, fields); err != nil {
 			return Result{}, err
 		}

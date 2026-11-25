@@ -985,6 +985,11 @@ func (repository *Repository) changeIntegrationGrant(ctx context.Context, tx pgx
 	if json.Unmarshal(encodedConfiguration, &configuration) != nil || definition.ValidateConfiguration(configuration) != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
+	if payload.Enabled && configuration["scope_kind"] == "INSTANCE" &&
+		(definitionKey == "jira-server-dc" || definitionKey == "confluence-server-dc") &&
+		capability.Risk != "READ" && payload.ApprovalPolicy != "HUMAN_EACH_EFFECT" {
+		return commandOutcome{}, errs.ErrInvalid
+	}
 	resourceScope, err := capability.ResourceScopeValues(configuration)
 	if capability.ResourceScope.Kind == "KUBERNETES_TARGET" {
 		resourceScope, err = capability.KubernetesResourceScope(configuration, payload.KubernetesNamespace)

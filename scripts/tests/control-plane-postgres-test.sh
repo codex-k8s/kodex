@@ -624,7 +624,7 @@ fi
     fail 'current SSH owner profile requires schema 051'
   fi
   case "$schema_version" in
-    20261124000100|20261125000100|20261125000200)
+    20261124000100|20261125000100|20261125000200|20261125000300)
       schema_proof=workflow-file-provenance-migration-postcondition.sql
       schema_verifier=validateCurrentMigrationFixture
       expected_history=$(printf '0\n'; find "$repository_root/services/internal/control-plane/cmd/cli/migrations" -maxdepth 1 -name '*.sql' -printf '%f\n' | cut -d_ -f1 | sort)
@@ -688,6 +688,7 @@ fi
         20261124000100: "aa75f206a40fb6f7fe333798b7e90eb434cb8a8b79fd1c9a3425bf14fdede0ad",
         20261125000100: "a04adb5753bf6aba49a6f3320261edc388f5d43737cd745f0f7e4bdaac086c3e",
         20261125000200: "574c1da3cbcbf9be071397c68f642ab098547e8521d206bf10bc38a6c516eed4",
+        20261125000300: "31e6a555e81bbd0d872a50ce72e5e0065dd492f7752f632694e2400af47ef8a4",
       };
       const currentFixture = process.argv[2] === "validateCurrentMigrationFixture";
       const valid = currentFixture

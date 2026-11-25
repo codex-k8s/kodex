@@ -88,6 +88,10 @@ func (adapter *Adapter) recoverAtlassianServer(ctx context.Context, request Requ
 	if request.PersonalCredentialAdmission && request.ResourcePermissionProfile != integrationpackage.CredentialResourcePermissionProfile(definition, capability) {
 		return Result{}, &UnknownOutcomeError{}
 	}
+	configuration, err := capability.ResolveAtlassianServerTarget(request.ApprovalPolicy, configuration, input)
+	if err != nil {
+		return Result{}, &UnknownOutcomeError{}
+	}
 	key, err := adapter.readAtlassianRecoveryIdentity(ctx, request, capability, configuration)
 	if err != nil {
 		return Result{}, err

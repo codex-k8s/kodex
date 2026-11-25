@@ -17,9 +17,9 @@ var historicalPolicyRevisions = map[string]struct {
 	"gitlab":               {"2.1.0", "GITLAB", []string{"1.2.1", "2.0.0"}},
 	"github":               {"6.5.0", "GITHUB", []string{"6.0.0", "6.1.0", "6.2.0", "6.3.0", "6.4.0"}},
 	"jira":                 {"1.3.0", "JIRA", []string{"1.2.1"}},
-	"jira-server-dc":       {"1.4.0", "JIRA", []string{"1.0.0", "1.1.0", "1.2.0", "1.3.0"}},
+	"jira-server-dc":       {"1.5.0", "JIRA", []string{"1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0"}},
 	"confluence":           {"1.3.0", "CONFLUENCE", []string{"1.2.1"}},
-	"confluence-server-dc": {"1.3.0", "CONFLUENCE", []string{"1.0.0", "1.1.0", "1.2.0"}},
+	"confluence-server-dc": {"1.4.0", "CONFLUENCE", []string{"1.0.0", "1.1.0", "1.2.0", "1.3.0"}},
 	"context7":             {"1.1.0", "CONTEXT7", []string{"1.0.0"}},
 	"https-json":           {"1.1.0", "HTTPS_JSON_READ", []string{"1.0.1"}},
 }

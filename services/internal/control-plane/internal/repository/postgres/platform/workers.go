@@ -1518,6 +1518,11 @@ func (repository *Repository) resolveIntegrationInvocationTx(ctx context.Context
 	if json.Unmarshal(encodedScope, &resourceScope) != nil {
 		return nil, errs.ErrUnavailable
 	}
+	if resourceScope["scope_kind"] == "INSTANCE" && (definitionKey == "jira-server-dc" || definitionKey == "confluence-server-dc") {
+		if _, err := capability.ResolveAtlassianServerTarget(approvalPolicy, resourceScope, canonicalInput); err != nil {
+			return nil, errs.ErrInvalid
+		}
+	}
 	invocationRef, _ := newRef("inv")
 	inputDigest := sha256.Sum256(canonicalInput)
 	inputDigestHex := hex.EncodeToString(inputDigest[:])

@@ -2,7 +2,7 @@ apiVersion: integrations.kodex.io/v1
 kind: IntegrationPackage
 metadata:
   key: confluence-server-dc
-  version: 1.3.0
+  version: 1.4.0
   origin: SHIPPED
 spec:
   name: Confluence Server / Data Center
@@ -40,10 +40,16 @@ spec:
     format: PLAIN
     required: false
     maximumLength: 256
+  - key: scope_kind
+    type: STRING
+    format: IDENTIFIER
+    required: false
+    maximumLength: 8
+    allowedValues: [SPACE, INSTANCE]
   - key: space_key
     type: STRING
     format: IDENTIFIER
-    required: true
+    required: false
     maximumLength: 64
   networkDestinations:
   - key: confluence_api
@@ -69,6 +75,7 @@ spec:
       limits: {durationSeconds: 604800, maxEffects: 10000}
     resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, context_path, space_key]}
     inputFields:
+    - {key: space_key, type: STRING, format: IDENTIFIER, required: false, maximumLength: 64}
     - {key: page_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 64}
     - {key: limit, type: INTEGER, required: false, minimum: 1, maximum: 20}
     - {key: cursor, type: STRING, format: PLAIN, required: false, maximumLength: 16}
@@ -90,6 +97,7 @@ spec:
       limits: {durationSeconds: 604800, maxEffects: 10000}
     resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, context_path, space_key]}
     inputFields:
+    - {key: space_key, type: STRING, format: IDENTIFIER, required: false, maximumLength: 64}
     - {key: page_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 64}
     - {key: body, type: STRING, format: PLAIN, required: true, maximumLength: 8192}
     outputFields:
@@ -156,7 +164,8 @@ spec:
       - base_url
       - context_path
       - space_key
-    inputFields: []
+    inputFields:
+    - {key: space_key, type: STRING, format: IDENTIFIER, required: false, maximumLength: 64}
     outputFields:
     - key: id
       type: STRING
@@ -197,6 +206,7 @@ spec:
       - context_path
       - space_key
     inputFields:
+    - {key: space_key, type: STRING, format: IDENTIFIER, required: false, maximumLength: 64}
     - key: title
       type: STRING
       format: PLAIN
@@ -253,12 +263,14 @@ spec:
       - context_path
       - space_key
     inputFields:
+    - {key: space_key, type: STRING, format: IDENTIFIER, required: false, maximumLength: 64}
     - key: page_id
       type: STRING
       format: IDENTIFIER
       required: true
       maximumLength: 64
     outputFields:
+    - {key: space_key, type: STRING, format: IDENTIFIER, required: false, maximumLength: 64}
     - key: id
       type: STRING
       format: IDENTIFIER
@@ -309,6 +321,7 @@ spec:
       - context_path
       - space_key
     inputFields:
+    - {key: space_key, type: STRING, format: IDENTIFIER, required: false, maximumLength: 64}
     - key: title
       type: STRING
       format: PLAIN
@@ -371,6 +384,7 @@ spec:
       - context_path
       - space_key
     inputFields:
+    - {key: space_key, type: STRING, format: IDENTIFIER, required: false, maximumLength: 64}
     - key: page_id
       type: STRING
       format: IDENTIFIER

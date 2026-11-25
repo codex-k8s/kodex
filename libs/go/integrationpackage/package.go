@@ -367,6 +367,13 @@ func (definition Package) validateConfiguration(configuration map[string]string,
 		if _, err := ParseJiraCreateFields(configuration["issue_create_fields"]); err != nil {
 			return err
 		}
+		if !validAtlassianServerScope(configuration, "project_key") ||
+			configuration["scope_kind"] != "INSTANCE" && configuration["issue_type"] == "" {
+			return errors.New("invalid Jira Server scope")
+		}
+	}
+	if definition.Metadata.Key == "confluence-server-dc" && !validAtlassianServerScope(configuration, "space_key") {
+		return errors.New("invalid Confluence Server scope")
 	}
 	for _, capability := range definition.Spec.Capabilities {
 		if capability.ResourceScope.Kind == "GITHUB_SCOPE" {
@@ -400,6 +407,12 @@ func (definition Package) validateConfiguration(configuration map[string]string,
 	return nil
 }
 
+// validAtlassianServerScope requires an explicit choice before omitting an existing project or space selector.
+// validAtlassianServerScope требует явного выбора режима перед снятием ограничения проекта или пространства.
+func validAtlassianServerScope(configuration map[string]string, selector string) bool {
+	return (configuration["scope_kind"] == "INSTANCE") == (configuration[selector] == "")
+}
+
 // ResourceScopeValues derives every required resource locator from validated connection configuration;
 // absent or empty fields close the operation rather than broadening its scope.
 // ResourceScopeValues выводит все требуемые координаты ресурса из проверенной конфигурации;
@@ -411,6 +424,12 @@ func (capability Capability) ResourceScopeValues(configuration map[string]string
 	}
 	if capability.ResourceScope.Kind == "GITLAB_SCOPE" {
 		return capability.gitLabScopeValues(configuration)
+	}
+	if configuration["scope_kind"] == "INSTANCE" &&
+		(capability.ResourceScope.Kind == "JIRA_PROJECT" || capability.ResourceScope.Kind == "CONFLUENCE_SPACE") &&
+		configuration["base_url"] != "" && configuration["context_path"] != "" &&
+		configuration["project_key"] == "" && configuration["space_key"] == "" {
+		return map[string]string{"base_url": configuration["base_url"], "context_path": configuration["context_path"], "scope_kind": "INSTANCE"}, nil
 	}
 	result := make(map[string]string, len(capability.ResourceScope.ConnectionFields))
 	for _, key := range capability.ResourceScope.ConnectionFields {

@@ -44,7 +44,7 @@ type confluenceServerPages struct {
 // confluenceServerSpaceKey rejects path/query delimiters and controls while permitting ordinary and personal space keys.
 // confluenceServerSpaceKey отклоняет разделители пути/query и controls, допуская обычные и personal space keys.
 func confluenceServerSpaceKey(value string) bool {
-	if len(value) == 0 || len(value) > 64 {
+	if len(value) == 0 || len(value) > 64 || value == "." || value == ".." {
 		return false
 	}
 	for _, character := range value {
@@ -61,7 +61,8 @@ func confluenceServerSpaceKey(value string) bool {
 func (adapter *Adapter) confluenceServerJSON(ctx context.Context, request Request, capability integrationpackage.Capability,
 	configuration map[string]string, method, path string, query url.Values, body any, effect string) ([]byte, error) {
 	prefix, err := atlassianServerContext(configuration)
-	if err != nil || !confluenceServerSpaceKey(configuration["space_key"]) {
+	space := configuration["space_key"]
+	if err != nil || !confluenceServerSpaceKey(space) && !(space == "" && configuration["scope_kind"] == "INSTANCE" && method == http.MethodGet) {
 		return nil, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
 	}
 	return adapter.configuredProviderJSON(ctx, request, capability, configuration, method, prefix+"/rest/api"+path, query, body, effect)
@@ -70,20 +71,34 @@ func (adapter *Adapter) confluenceServerJSON(ctx context.Context, request Reques
 // confluenceServerSpace reads the configured key and verifies the Server numeric ID before producing metadata or health.
 // confluenceServerSpace читает заданный ключ и проверяет Server numeric ID перед metadata либо health.
 func (adapter *Adapter) confluenceServerSpace(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string) (map[string]any, error) {
-	body, err := adapter.confluenceServerJSON(ctx, request, capability, configuration, http.MethodGet,
-		"/space/"+url.PathEscape(configuration["space_key"]), nil, nil, "")
+	spaceKey := configuration["space_key"]
+	path := "/space"
+	var query url.Values
+	if spaceKey == "" {
+		query = url.Values{"limit": {"1"}}
+	} else {
+		path += "/" + url.PathEscape(spaceKey)
+	}
+	body, err := adapter.confluenceServerJSON(ctx, request, capability, configuration, http.MethodGet, path, query, nil, "")
 	if err != nil {
 		return nil, err
 	}
-	var value struct {
+	type space struct {
 		ID        json.Number
 		Key, Name string
 	}
-	if decodeProviderJSON(body, &value) != nil {
+	var value space
+	if spaceKey == "" {
+		var page struct{ Results []space }
+		if decodeProviderJSON(body, &page) != nil || len(page.Results) != 1 {
+			return nil, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+		}
+		value = page.Results[0]
+	} else if decodeProviderJSON(body, &value) != nil || value.Key != spaceKey {
 		return nil, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
 	}
 	id, err := value.ID.Int64()
-	if err != nil || id < 1 || value.Key != configuration["space_key"] || value.Name == "" {
+	if err != nil || id < 1 || !confluenceServerSpaceKey(value.Key) || value.Name == "" {
 		return nil, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
 	}
 	return map[string]any{"id": strconv.FormatInt(id, 10), "key": value.Key, "name": value.Name}, nil
@@ -92,8 +107,11 @@ func (adapter *Adapter) confluenceServerSpace(ctx context.Context, request Reque
 // eligibleConfluenceServerPage requires a real current page, exact space and bounded version before body or writes are exposed.
 // eligibleConfluenceServerPage требует current page, точное пространство и ограниченную версию до выдачи тела либо записи.
 func eligibleConfluenceServerPage(page confluenceServerPage, configuration map[string]string) bool {
+	space := configuration["space_key"]
 	return decimalID(page.ID) && page.Type == "page" && page.Status == "current" && page.Title != "" &&
-		page.Space.Key == configuration["space_key"] && page.Version.Number > 0 && page.Version.Number <= 2147483647
+		confluenceServerSpaceKey(page.Space.Key) &&
+		(page.Space.Key == space || space == "" && configuration["scope_kind"] == "INSTANCE") &&
+		page.Version.Number > 0 && page.Version.Number <= 2147483647
 }
 
 // readConfluenceServerPage fetches metadata first; storage content is requested only after the page passes space eligibility.
@@ -124,6 +142,7 @@ func (adapter *Adapter) readConfluenceServerPage(ctx context.Context, request Re
 			return confluenceServerPage{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
 		}
 		if decodeProviderJSON(body, &observed) != nil || observed.ID != pageID || !eligibleConfluenceServerPage(observed, configuration) ||
+			(page.ID != "" && observed.Space.Key != page.Space.Key) ||
 			strings.Contains(expand, "body.storage") && observed.Body.Storage.Representation != "storage" {
 			return confluenceServerPage{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
 		}
@@ -199,8 +218,11 @@ func (adapter *Adapter) searchConfluenceServerPages(ctx context.Context, request
 	if includeProvenance {
 		expand += ",history"
 	}
-	query := url.Values{"spaceKey": {configuration["space_key"]}, "type": {"page"}, "status": {"current"},
+	query := url.Values{"type": {"page"}, "status": {"current"},
 		"start": {strconv.Itoa(offset)}, "limit": {strconv.Itoa(limit)}, "expand": {expand}}
+	if space := configuration["space_key"]; space != "" {
+		query.Set("spaceKey", space)
+	}
 	if title != "" {
 		query.Set("title", title)
 	}
@@ -237,6 +259,9 @@ func (adapter *Adapter) searchConfluenceServerPages(ctx context.Context, request
 // CRLF возвращаемого storage text; исходная страница сохраняется для write recovery.
 func confluenceServerPageResult(request Request, page confluenceServerPage, includeBody bool) (Result, error) {
 	output := map[string]any{"id": page.ID, "title": page.Title, "version": page.Version.Number, "status": page.Status}
+	if includeBody && request.ResourceScope["scope_kind"] == "INSTANCE" {
+		output["space_key"] = page.Space.Key
+	}
 	if includeBody {
 		output["body"] = strings.ReplaceAll(page.Body.Storage.Value, "\r\n", "\n")
 	}
@@ -254,8 +279,9 @@ func confluenceServerMarker(request Request) string {
 // executeConfluenceServer использует только отдельную Server v1 поверхность с current-page и exact-space проверками.
 func (adapter *Adapter) executeConfluenceServer(ctx context.Context, request Request, capability integrationpackage.Capability,
 	configuration map[string]string, input []byte) (Result, error) {
-	if _, err := atlassianServerContext(configuration); err != nil || !confluenceServerSpaceKey(configuration["space_key"]) {
-		return Result{}, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
+	configuration, err := capability.ResolveAtlassianServerTarget(request.ApprovalPolicy, configuration, input)
+	if err != nil {
+		return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
 	}
 	switch request.Operation {
 	case "confluence.identity.read":
@@ -295,7 +321,11 @@ func (adapter *Adapter) executeConfluenceServer(ctx context.Context, request Req
 		}
 		pages := make([]map[string]string, 0, len(page.Results))
 		for _, item := range page.Results {
-			pages = append(pages, map[string]string{"id": item.ID, "title": item.Title, "status": item.Status})
+			record := map[string]string{"id": item.ID, "title": item.Title, "status": item.Status}
+			if configuration["scope_kind"] == "INSTANCE" {
+				record["space_key"] = item.Space.Key
+			}
+			pages = append(pages, record)
 		}
 		encoded, _ := json.Marshal(pages)
 		output := map[string]any{"pages": string(encoded), "count": len(pages)}

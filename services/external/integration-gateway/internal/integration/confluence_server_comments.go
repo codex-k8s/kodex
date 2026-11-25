@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"html"
+	"maps"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -45,11 +46,16 @@ func (adapter *Adapter) executeConfluenceServerComment(ctx context.Context, requ
 	if decodeProviderJSON(input, &value) != nil || !decimalID(value.PageID) {
 		return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
 	}
-	if _, err := adapter.readConfluenceServerPage(ctx, request, capability, configuration, value.PageID, false); err != nil {
+	parent, err := adapter.readConfluenceServerPage(ctx, request, capability, configuration, value.PageID, false)
+	if err != nil {
 		return Result{}, err
 	}
 	if request.Operation == "confluence.page.comment.create" {
 		return adapter.createConfluenceServerComment(ctx, request, capability, configuration, value.PageID, value.Body)
+	}
+	if configuration["space_key"] == "" {
+		configuration = maps.Clone(configuration)
+		configuration["space_key"] = parent.Space.Key
 	}
 	limit := value.Limit
 	if limit == 0 {

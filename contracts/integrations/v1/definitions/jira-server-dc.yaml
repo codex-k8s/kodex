@@ -2,7 +2,7 @@ apiVersion: integrations.kodex.io/v1
 kind: IntegrationPackage
 metadata:
   key: jira-server-dc
-  version: 1.4.0
+  version: 1.5.0
   origin: SHIPPED
 spec:
   name: Jira Server / Data Center
@@ -40,15 +40,21 @@ spec:
     format: PLAIN
     required: false
     maximumLength: 256
+  - key: scope_kind
+    type: STRING
+    format: IDENTIFIER
+    required: false
+    maximumLength: 8
+    allowedValues: [PROJECT, INSTANCE]
   - key: project_key
     type: STRING
     format: IDENTIFIER
-    required: true
+    required: false
     maximumLength: 64
   - key: issue_type
     type: STRING
     format: PLAIN
-    required: true
+    required: false
     maximumLength: 120
   - key: issue_create_fields
     type: STRING
@@ -125,7 +131,8 @@ spec:
       - base_url
       - context_path
       - project_key
-    inputFields: []
+    inputFields:
+    - {key: project_key, type: STRING, format: IDENTIFIER, required: false, maximumLength: 64}
     outputFields:
     - key: id
       type: STRING
@@ -166,6 +173,7 @@ spec:
       - context_path
       - project_key
     inputFields:
+    - {key: project_key, type: STRING, format: IDENTIFIER, required: false, maximumLength: 64}
     - key: text
       type: STRING
       format: PLAIN
@@ -279,6 +287,8 @@ spec:
       - context_path
       - project_key
     inputFields:
+    - {key: project_key, type: STRING, format: IDENTIFIER, required: false, maximumLength: 64}
+    - {key: issue_type, type: STRING, format: PLAIN, required: false, maximumLength: 128}
     - key: summary
       type: STRING
       format: PLAIN
