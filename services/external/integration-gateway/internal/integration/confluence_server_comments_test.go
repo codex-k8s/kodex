@@ -81,17 +81,22 @@ func TestConfluenceServerCommentWriteIsSingleAttempt(t *testing.T) {
 	}
 }
 
-// TestConfluenceServerCommentReadbackChecksExactObject covers a partial successful acknowledgment and a rejected write.
-// TestConfluenceServerCommentReadbackChecksExactObject проверяет неполную квитанцию и явный отказ провайдера.
+// TestConfluenceServerCommentReadbackChecksExactObject checks acknowledged identity, parent and text, including provider removal of the HTML marker.
+// TestConfluenceServerCommentReadbackChecksExactObject проверяет подтверждённый ID, страницу и текст, в том числе при удалении провайдером HTML-маркера.
 func TestConfluenceServerCommentReadbackChecksExactObject(t *testing.T) {
 	for _, scenario := range []struct {
-		name, parent string
-		status       int
-		valid        bool
+		name, id, parent, storage string
+		status                    int
+		full, valid               bool
 	}{
-		{"sparse acknowledgment", "101", http.StatusCreated, true},
-		{"wrong readback parent", "999", http.StatusCreated, false},
-		{"forbidden", "", http.StatusForbidden, false},
+		{name: "sparse acknowledgment", id: "104", parent: "101", storage: "<p>Comment &lt;not markup&gt;</p>\n{marker}", status: http.StatusCreated, valid: true},
+		{name: "provider removes marker", id: "104", parent: "101", storage: "<p>Comment &lt;not markup&gt;</p>", status: http.StatusCreated, valid: true},
+		{name: "full acknowledgment without marker", id: "104", parent: "101", storage: "<p>Comment &lt;not markup&gt;</p>", status: http.StatusCreated, full: true, valid: true},
+		{name: "wrong readback parent", id: "104", parent: "999", storage: "<p>Comment &lt;not markup&gt;</p>", status: http.StatusCreated},
+		{name: "different readback ID", id: "105", parent: "101", storage: "<p>Comment &lt;not markup&gt;</p>", status: http.StatusCreated},
+		{name: "wrong body despite correct marker", id: "104", parent: "101", storage: "<p>Changed</p>\n{marker}", status: http.StatusCreated},
+		{name: "wrong marker despite correct body", id: "104", parent: "101", storage: "<p>Comment &lt;not markup&gt;</p>\n<!-- foreign -->", status: http.StatusCreated},
+		{name: "forbidden", status: http.StatusForbidden},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			adapter := testAdapter(t)
@@ -99,6 +104,7 @@ func TestConfluenceServerCommentReadbackChecksExactObject(t *testing.T) {
 			operation := "confluence.page.comment.create"
 			request := atlassianServerInvocation(t, adapter, confluenceServerDefinition, operation, atlassianServerInput(operation), credential)
 			writes, readbacks := 0, 0
+			storage := strings.ReplaceAll(scenario.storage, "{marker}", confluenceServerMarker(request))
 			adapter.providerHTTPClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 				var body any
 				status := http.StatusOK
@@ -106,10 +112,13 @@ func TestConfluenceServerCommentReadbackChecksExactObject(t *testing.T) {
 				case r.Method == http.MethodPost:
 					writes++
 					body = map[string]string{"id": "104", "type": "comment"}
+					if scenario.full {
+						body = confluenceServerCommentFixture(scenario.id, scenario.parent, storage)
+					}
 					status = scenario.status
 				case strings.HasSuffix(r.URL.Path, "/content/104"):
 					readbacks++
-					body = confluenceServerCommentFixture("104", scenario.parent, "<p>Fixture</p>\n"+confluenceServerMarker(request))
+					body = confluenceServerCommentFixture(scenario.id, scenario.parent, storage)
 				default:
 					return atlassianServerResponse(t, request, r), nil
 				}
@@ -117,7 +126,7 @@ func TestConfluenceServerCommentReadbackChecksExactObject(t *testing.T) {
 				return &http.Response{StatusCode: status, Header: http.Header{"Content-Type": {"application/json"}}, Body: io.NopCloser(strings.NewReader(string(raw))), Request: r}, nil
 			})}
 			result, err := adapter.Execute(t.Context(), request)
-			if (err == nil) != scenario.valid || writes != 1 || (readbacks == 1) != (scenario.status == http.StatusCreated) {
+			if (err == nil) != scenario.valid || writes != 1 || (readbacks == 1) != (scenario.status == http.StatusCreated && !scenario.full) {
 				t.Fatalf("writes=%d readbacks=%d: %v", writes, readbacks, err)
 			}
 			if scenario.valid && result.Receipt.ProviderEffectRef != "confluence-comment:104" {

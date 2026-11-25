@@ -110,7 +110,9 @@ func (adapter *Adapter) createConfluenceServerComment(ctx context.Context, reque
 		return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
 	}
 	text := strings.ReplaceAll(strings.ReplaceAll(body, "\r\n", "\n"), "\r", "\n")
-	storage := "<p>" + strings.ReplaceAll(html.EscapeString(text), "\n", "<br />") + "</p>\n" + confluenceServerMarker(request)
+	expected := "<p>" + strings.ReplaceAll(html.EscapeString(text), "\n", "<br />") + "</p>"
+	marker := confluenceServerMarker(request)
+	storage := expected + "\n" + marker
 	payload := map[string]any{"type": "comment", "container": map[string]string{"id": pageID, "type": "page"},
 		"body": map[string]any{"storage": map[string]string{"representation": "storage", "value": storage}}}
 	response, err := adapter.confluenceServerJSON(ctx, request, capability, configuration, http.MethodPost, "/content",
@@ -122,23 +124,24 @@ func (adapter *Adapter) createConfluenceServerComment(ctx context.Context, reque
 	if decodeProviderJSON(response, &comment) != nil || !decimalID(comment.ID) || comment.ID == pageID || comment.Type != "comment" {
 		return Result{}, &UnknownOutcomeError{}
 	}
-	marker := confluenceServerMarker(request)
-	if !comment.matchesCreate(pageID, marker) {
+	if !comment.matchesCreate(pageID, expected, marker) {
 		id := comment.ID
 		// Server/DC may omit expansions in the acknowledgment. Verify its exact object once, without replaying the write.
 		// Server/DC может опустить expanded поля в ответе. Сверяем точный объект отдельным чтением без повтора записи.
 		observed, err := adapter.confluenceServerJSON(ctx, request, capability, configuration, http.MethodGet, "/content/"+id,
 			url.Values{"expand": {"container,version,body.storage"}}, nil, "")
 		comment = confluenceServerFooterComment{}
-		if err != nil || decodeProviderJSON(observed, &comment) != nil || comment.ID != id || !comment.matchesCreate(pageID, marker) {
+		if err != nil || decodeProviderJSON(observed, &comment) != nil || comment.ID != id || !comment.matchesCreate(pageID, expected, marker) {
 			return Result{}, &UnknownOutcomeError{}
 		}
 	}
 	return providerResult(request, "confluence-comment:"+comment.ID, map[string]any{"id": comment.ID, "page_id": pageID, "version": comment.Version.Number})
 }
 
-// matchesCreate verifies the first version with the exact parent and effect marker before returning a write receipt.
-// matchesCreate проверяет первую версию, контейнер и маркер эффекта до возврата квитанции записи.
-func (comment confluenceServerFooterComment) matchesCreate(pageID, marker string) bool {
-	return comment.validForPage(pageID) && comment.Version.Number == 1 && strings.HasSuffix(comment.Body.Storage.Value, marker)
+// matchesCreate verifies the acknowledged comment's parent, first version and exact body. Confluence may strip the HTML marker.
+// matchesCreate сверяет страницу, первую версию и точный текст комментария из ответа Confluence. Он может удалить HTML-маркер.
+func (comment confluenceServerFooterComment) matchesCreate(pageID, expected, marker string) bool {
+	storage := strings.TrimSpace(comment.Body.Storage.Value)
+	body := strings.TrimSpace(strings.TrimSuffix(storage, marker))
+	return comment.validForPage(pageID) && comment.Version.Number == 1 && body == expected
 }
