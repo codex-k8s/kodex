@@ -74,6 +74,15 @@ func (adapter *Adapter) jiraServerJSON(ctx context.Context, request Request, cap
 	if err != nil || !jiraServerProjectKey(project) && !(project == "" && configuration["scope_kind"] == "INSTANCE" && method == http.MethodGet) {
 		return nil, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
 	}
+	if project == "" && path == "/project" && capability.Operation == "jira.project.read" {
+		// Server/DC returns all visible projects in one response. The caller projects one project.
+		// Server/DC возвращает видимые проекты одним ответом. Вызывающий выдаёт проекцию одного проекта.
+		return adapter.callProvider(ctx, providerCall{
+			BaseURL: configuration["base_url"], Method: http.MethodGet, Path: prefix + "/rest/api/2/project",
+			AuthScheme: configuration["auth_scheme"], Username: configuration["username"], Credential: request.Credential,
+			Capability: capability, Client: adapter.nativeHTTPClient, responseBodyLimit: maximumTypedListWireBytes,
+		})
+	}
 	return adapter.configuredProviderJSON(ctx, request, capability, configuration, method, prefix+"/rest/api/2"+path, query, body, effect)
 }
 

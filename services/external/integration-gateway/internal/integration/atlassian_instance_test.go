@@ -86,3 +86,27 @@ func TestAtlassianInstanceReads(t *testing.T) {
 		}
 	})
 }
+
+// TestJiraInstanceProjectCatalogProjectsBoundedWire allows native catalogs larger than one tool response before projecting a single project.
+// TestJiraInstanceProjectCatalogProjectsBoundedWire допускает каталог больше одного ответа инструмента до проекции одного проекта.
+func TestJiraInstanceProjectCatalogProjectsBoundedWire(t *testing.T) {
+	adapter := testAdapter(t)
+	request := atlassianInstanceInvocation(t, adapter, jiraServerDefinition, "jira.project.read", map[string]any{})
+	raw, err := json.Marshal([]map[string]string{
+		{"id": "101", "key": "DEMO", "name": "Visible project", "description": strings.Repeat("fixture ", 14000)},
+		{"id": "102", "key": "OTHER", "name": "Second project"},
+	})
+	if err != nil || len(raw) <= maximumResponseBytes {
+		t.Fatal("fixture did not exceed the standard wire budget")
+	}
+	adapter.providerHTTPClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		if r.Method != http.MethodGet || r.URL.Path != "/tracker/rest/api/2/project" || r.Header.Get("Authorization") != "Bearer fixture-token" {
+			t.Fatal("unexpected project catalog request")
+		}
+		return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": {"application/json"}}, Body: io.NopCloser(strings.NewReader(string(raw)))}, nil
+	})}
+	result, err := adapter.Execute(t.Context(), request)
+	if err != nil || !strings.Contains(result.Summary, "DEMO") || strings.Contains(result.Summary, "OTHER") || len(result.Summary) > 256 {
+		t.Fatalf("project catalog was not reduced to one bounded projection: %v", err)
+	}
+}
