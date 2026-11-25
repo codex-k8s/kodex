@@ -36,9 +36,9 @@ func TestAtlassianServerDefinitionsComponent(t *testing.T) {
 	for _, key := range []string{"jira-server-dc", "confluence-server-dc"} {
 		t.Run(key, func(t *testing.T) {
 			definition, exists := repository.integrationDefinitions[key]
-			expectedVersion := "1.3.0"
+			expectedVersion := "1.4.0"
 			if key == "jira-server-dc" {
-				expectedVersion = "1.4.0"
+				expectedVersion = "1.5.0"
 			}
 			if !exists || definition.Metadata.Version != expectedVersion {
 				t.Fatal("Server definition missing from owner registry")
@@ -79,6 +79,17 @@ func TestAtlassianServerDefinitionsComponent(t *testing.T) {
 				if err == nil || invalid.Connection != nil {
 					t.Fatal("Server connection accepted an implicit context")
 				}
+			}
+			instance := map[string]any{"base_url": "https://api.example.invalid", "context_path": "/", "auth_scheme": "BEARER", "scope_kind": "INSTANCE"}
+			created, err := service.Execute(ctx, command.Command{Kind: command.CreateConnection, Principal: owner,
+				Mutation: value.Mutation{IdempotencyKey: "server-instance-" + key},
+				Payload:  command.ConnectionInput{DefinitionKey: key, Name: "Instance " + key, PublicConfiguration: instance}})
+			if err != nil || created.Connection == nil {
+				t.Fatalf("explicit instance connection failed: %v", err)
+			}
+			if created.Connection.PublicConfiguration["scope_kind"] != "INSTANCE" ||
+				created.Connection.DefinitionDigest != definition.Digest || len(created.Connection.Grants) != 0 {
+				t.Fatal("new connection lost its exact mode and package or inherited rights")
 			}
 		})
 	}
